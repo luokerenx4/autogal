@@ -3,21 +3,25 @@ import type {
   ComposedState,
   Game,
   Module,
+  RunFunction,
   StateDelta,
 } from "./types";
 import { baselineModule } from "./modules/baseline";
-import { trainingPreset } from "./presets/training";
+import { runtimeModule } from "./modules/runtime";
+import { trainingPreset, trainingRun } from "./presets/training";
+import { vnRun } from "./presets/vn/run";
 
 export function defaultModules(): Module[] {
-  return [baselineModule];
+  return [baselineModule, runtimeModule];
 }
 
-// Resolve the full module list for a game. Always includes the baseline
-// module. Auto-includes the training preset when game.training is
-// configured. Then layers user-provided modules on top. User modules
-// cannot replace baseline/training presets (matched by id).
+// Resolve the full module list for a game. Always includes baseline +
+// runtime (transient narration queue, etc.). Auto-includes the
+// training preset when game.training is configured. Then layers
+// user-provided modules on top. User modules cannot replace built-in
+// modules (matched by id).
 export function resolveModules(game: Game): Module[] {
-  const builtin: Module[] = [baselineModule];
+  const builtin: Module[] = [baselineModule, runtimeModule];
   if (game.training) builtin.push(trainingPreset);
   const seen = new Set(builtin.map((m) => m.id));
   const game_modules = (game.modules ?? []).filter((m) => !seen.has(m.id));
@@ -33,7 +37,10 @@ export function createInitialState(
     ? { title: "", characters: arg, scripts: [] }
     : arg;
   const modules = resolveModules(game);
-  const composed: ComposedState = { baseline: undefined as never };
+  const composed: ComposedState = {
+    baseline: undefined as never,
+    runtime: undefined as never,
+  };
   for (const mod of modules) {
     if (!mod.initialize) continue;
     const slice = mod.initialize(game);
@@ -86,4 +93,23 @@ export function cloneState(state: ComposedState): ComposedState {
 
 export function hydrateState(serialized: string): ComposedState {
   return JSON.parse(serialized) as ComposedState;
+}
+
+// Pick the main-loop generator for a game. Priority:
+//   1. game.runFn (set by the CLI loader after a path-based preset
+//      was dynamically imported)
+//   2. game.preset string → built-in preset by name
+//   3. auto-detect: training when game.training is set, else vn
+export function resolveRunFn(game: Game): RunFunction {
+  if (game.runFn) return game.runFn;
+  if (game.preset === "training") return trainingRun;
+  if (game.preset === "vn") return vnRun;
+  if (game.preset !== undefined) {
+    throw new Error(
+      `state.resolveRunFn: unknown preset "${game.preset}". ` +
+        `Built-in: "vn" / "training". Relative paths must be resolved ` +
+        `by the CLI loader into game.runFn.`,
+    );
+  }
+  return game.training ? trainingRun : vnRun;
 }

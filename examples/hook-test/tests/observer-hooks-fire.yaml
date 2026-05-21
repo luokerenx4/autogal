@@ -1,0 +1,70 @@
+name: observer 类 hook 全部 fire 在预期顺序
+description: |
+  Play through intro script + one noop action. Assert hook-tracker.log
+  contains the expected lifecycle events in the right shape and order.
+inputs:
+  # Hub appears (game.training set), pick the intro script.
+  - { type: doActivity, id: "script:intro" }
+  - { type: next }   # narration beat
+  - { type: next }   # dialogue beat
+  - { type: choose, index: 0 }  # option A → +dev → trigger fires + queues narration
+  - { type: next }   # @dev Picked A. (script continues at branch_a)
+  - { type: next }   # drain the trigger's queued narration after script ends
+  # script ends; back at hub, do the noop action
+  - { type: doActivity, id: "action:noop" }
+assertions:
+  # onSessionStart fires once at engine.run() entry
+  - kind: state
+    path: hook-tracker.log
+    includes: onSessionStart
+  # onHubBuild fires when the hub renders (at least once before doActivity)
+  - kind: state
+    path: hook-tracker.log
+    includes: onHubBuild
+  # onScriptSelect fires when player picks intro
+  - kind: state
+    path: hook-tracker.log
+    includes: onScriptSelect:intro
+  # onScriptStart fires before first beat
+  - kind: state
+    path: hook-tracker.log
+    includes: onScriptStart:intro
+  # Beat lifecycle: onBeatBefore + onBeatAfter for at least the narration beat
+  - kind: state
+    path: hook-tracker.log
+    includes: onBeatBefore:intro:0:narration
+  - kind: state
+    path: hook-tracker.log
+    includes: onBeatAfter:intro:0:narration
+  # Choice fires onChoicePresented (with options count) then onChoiceResolved
+  - kind: state
+    path: hook-tracker.log
+    includes: onChoicePresented:intro:2:3
+  - kind: state
+    path: hook-tracker.log
+    includes: onChoiceResolved:intro:2:0
+  # Choice option A had `+dev` → mutateState source="choice"
+  - kind: state
+    path: hook-tracker.log
+    includes: onStateMutated:choice
+  # goto branch_a fires onLabelEnter
+  - kind: state
+    path: hook-tracker.log
+    includes: onLabelEnter:intro:branch_a
+  # script reaches [end] → onScriptComplete + onActionComplete (for 1-slot)
+  - kind: state
+    path: hook-tracker.log
+    includes: onScriptComplete:intro
+  - kind: state
+    path: hook-tracker.log
+    includes: onActionComplete:intro
+  # Then we do the noop action: dispatch + applyDelta + complete
+  - kind: state
+    path: hook-tracker.log
+    includes: onActionDispatch:noop
+  - kind: state
+    path: hook-tracker.log
+    includes: onStateMutated:action
+  - kind: state
+    path: hook-tracker.log
+    includes: onActionComplete:noop

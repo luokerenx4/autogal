@@ -38,5 +38,5 @@ assertions:
     path: training.stats.sword_power
     gte: 52
   - kind: state
-    path: training.pendingNarrations
+    path: runtime.pendingNarrations
     length: 0

@@ -23,5 +23,6 @@ export function buildGame(
   if (actions && actions.length > 0) game.actions = actions;
   if (manifest.training) game.training = manifest.training;
   if (modules && modules.length > 0) game.modules = modules;
+  if (manifest.preset) game.preset = manifest.preset;
   return game;
 }

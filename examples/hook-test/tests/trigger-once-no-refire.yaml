@@ -1,0 +1,31 @@
+name: 带 once 的 trigger 只 fire 一次
+description: |
+  Seed dev.affection=2 (already above the dev-first-bond threshold).
+  At session start checkTriggers runs and fires the trigger once,
+  pushing to firedTriggers. The intro choice gives `+dev` again
+  (dev=3) — mutateState fires checkTriggers, the trigger's `when` is
+  still true, but the once-flag + firedTriggers entry blocks re-fire.
+state:
+  baseline:
+    characters:
+      dev: { affection: 2, custom: {} }
+inputs:
+  # Trigger fires at session start (dev=2 already satisfies when) and
+  # queues a narration; drain it first.
+  - { type: next }
+  - { type: doActivity, id: "script:intro" }
+  - { type: next }
+  - { type: next }
+  - { type: choose, index: 0 }  # +dev (now 3) — does NOT re-fire
+  - { type: next }
+  - { type: next }
+  - { type: next }
+assertions:
+  # Trigger marked as fired
+  - kind: state
+    path: runtime.firedTriggers
+    includes: dev-first-bond
+  # Second +dev landed (proves trigger didn't somehow eat the mutation)
+  - kind: state
+    path: baseline.characters.dev.affection
+    eq: 3

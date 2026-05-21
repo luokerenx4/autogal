@@ -5,6 +5,7 @@ import type {
   CharacterDef,
   Game,
   Module,
+  RunFunction,
   Script,
 } from "@autogal/engine";
 import {
@@ -39,7 +40,28 @@ export async function loadGame(dir: string): Promise<Game> {
 
   const modules = await loadModules(dir, manifest.modules ?? []);
 
-  return buildGame(manifest, characters, scripts, actions, modules);
+  const game = buildGame(manifest, characters, scripts, actions, modules);
+
+  // If game.yaml's preset: is a relative path (the ejected-preset case),
+  // dynamic-import the file and attach its default-exported RunFunction
+  // to game.runFn. Engine prefers game.runFn over the preset name.
+  if (manifest.preset && isRelativePath(manifest.preset)) {
+    const abs = path.resolve(dir, manifest.preset);
+    const imported = (await import(abs)) as { default?: unknown };
+    const fn = imported.default;
+    if (typeof fn !== "function") {
+      throw new Error(
+        `Preset at ${manifest.preset} must default-export a RunFunction (got ${typeof fn})`,
+      );
+    }
+    game.runFn = fn as RunFunction;
+  }
+
+  return game;
+}
+
+function isRelativePath(s: string): boolean {
+  return s.startsWith("./") || s.startsWith("../");
 }
 
 async function loadModules(

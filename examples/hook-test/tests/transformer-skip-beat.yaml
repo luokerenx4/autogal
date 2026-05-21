@@ -1,0 +1,30 @@
+name: onBeatBefore 返回 skip 跳过 beat
+description: |
+  Seed flag `skipBeatIdx: 1` (the dialogue beat). onBeatBefore returns
+  `{ skip: true }` for that beat — the engine should advance beatIndex
+  without yielding the dialogue, and the player only sees narration +
+  choice (no dialogue).
+state:
+  baseline:
+    flags:
+      skipBeatIdx: 1
+inputs:
+  - { type: doActivity, id: "script:intro" }
+  - { type: next }   # narration (beat 0)
+  # beat 1 (dialogue) gets skipped — so the next yield should be the choice
+  - { type: choose, index: 0 }  # option A → goto branch_a
+  - { type: next }
+assertions:
+  # onBeatBefore fires for beat 1 (dialogue)
+  - kind: state
+    path: hook-tracker.log
+    includes: onBeatBefore:intro:1:dialogue
+  # but onBeatAfter for beat 1 fires with `dialogue` (we record the original
+  # beat type even when skipped)
+  - kind: state
+    path: hook-tracker.log
+    includes: onBeatAfter:intro:1:dialogue
+  # The choice beat (idx 2) DID fire (got past the skip)
+  - kind: state
+    path: hook-tracker.log
+    includes: onChoiceResolved:intro:2:0

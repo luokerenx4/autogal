@@ -38,10 +38,14 @@ COMMANDS
       Personas: greedy / charmer / rude / random
       Without -v, only prints the final JSON summary to stdout.
 
-  init     <dir> [--force]
+  init     <dir> [--preset vn|training] [--eject] [--force]
       Scaffold a minimal autogal game in <dir>. Creates game.yaml,
       a sample character, a sample script, a test fixture, README, .gitignore.
       Refuses if <dir> is non-empty unless --force.
+      --preset selects the game-loop shape: "vn" (default, pure visual
+      novel) or "training" (hub + day/slot/stats). --eject additionally
+      copies the preset's main-loop source into <dir>/preset/ with
+      imports rewritten so the author can edit run.ts directly.
 
 FLAGS
   --session NAME   Session id (folder under .autogal/sessions/). Default: "default"
@@ -162,11 +166,21 @@ async function runInit(args: string[]): Promise<void> {
     args,
     options: {
       force: { type: "boolean", default: false },
+      preset: { type: "string", default: "vn" },
+      eject: { type: "boolean", default: false },
     },
     allowPositionals: true,
   });
-  const dir = requirePositional(positionals, "autogal init <dir> [--force]");
-  await initCommand({ dir, force: Boolean(values.force) });
+  const dir = requirePositional(
+    positionals,
+    "autogal init <dir> [--preset vn|training] [--eject] [--force]",
+  );
+  await initCommand({
+    dir,
+    force: Boolean(values.force),
+    preset: String(values.preset ?? "vn"),
+    eject: Boolean(values.eject),
+  });
 }
 
 async function runAutoplay(args: string[]): Promise<void> {

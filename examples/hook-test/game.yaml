@@ -1,0 +1,18 @@
+title: hook-test
+modules:
+  - ./modules/tracker.ts
+training:
+  slotsPerDay: 2
+  slotNames: [morning, night]
+  startDay: 1
+  maxDay: 5
+  decayPerDay: 0
+  decayStatId: ""
+  sleepActionId: sleep
+  huntActionId: ""
+  stats:
+    - { id: marker, name: marker, min: 0, max: 100, start: 0 }
+  endConditions:
+    - reason: marker hit
+      when: { stat: { name: marker, min: 50 } }
+      goto: end_marker

@@ -14,6 +14,10 @@ export interface Manifest {
   // The loader dynamically imports each path and registers its default
   // export as a Module on the Game object.
   modules?: string[];
+  // Optional preset selector. Built-in: "vn" / "training". Path-based:
+  // a relative path the loader resolves via dynamic import (the
+  // ejected-preset case from `autogal init --eject`).
+  preset?: string;
 }
 
 export class ManifestParseError extends Error {}
@@ -43,6 +47,12 @@ export function parseManifest(content: string): Manifest {
       throw new ManifestParseError("`modules` must be an array of strings");
     }
     manifest.modules = obj.modules as string[];
+  }
+  if (obj.preset !== undefined) {
+    if (typeof obj.preset !== "string") {
+      throw new ManifestParseError("`preset` must be a string");
+    }
+    manifest.preset = obj.preset;
   }
   return manifest;
 }

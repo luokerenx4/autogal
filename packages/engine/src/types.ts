@@ -203,6 +203,7 @@ export interface StatSnapshot {
   value: number;
   min: number;
   max: number;
+  thresholds?: StatThreshold[];
 }
 
 export interface HubSnapshot {

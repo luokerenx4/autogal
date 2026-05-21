@@ -222,6 +222,7 @@ export class Engine {
         value: t.stats[sd.id] ?? 0,
         min: sd.min,
         max: t.statMax[sd.id] ?? sd.max,
+        ...(sd.thresholds ? { thresholds: sd.thresholds } : {}),
       })),
       affections: this.game.characters.map((c) => ({
         id: c.id,

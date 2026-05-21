@@ -11,10 +11,34 @@ training:
   sleepActionId: sleep
   huntActionId: hunt
   stats:
-    - { id: spectral,    name: 灵体化,   min: 0, max: 100, start: 5 }
+    - id: spectral
+      name: 灵体化
+      min: 0
+      max: 100
+      start: 5
+      thresholds:
+        - { min: 0,   label: 平稳,       color: green }
+        - { min: 20,  label: 觉醒,       color: cyan }
+        - { min: 50,  label: 危险,       color: yellow }
+        - { min: 80,  label: 失控,       color: red }
+        - { min: 100, label: 完全灵体化, color: red }
     - { id: sword_power, name: 妖刀威力, min: 0, max: 100, start: 3 }
-    - { id: physical,    name: 体力,     min: 0, max: 20,  start: 10 }
-    - { id: mental,      name: 精神,     min: 0, max: 10,  start: 5 }
+    - id: physical
+      name: 体力
+      min: 0
+      max: 20
+      start: 10
+      thresholds:
+        - { min: 0,  label: "", color: red }
+        - { min: 6,  label: "", color: green }
+    - id: mental
+      name: 精神
+      min: 0
+      max: 10
+      start: 5
+      thresholds:
+        - { min: 0, label: "", color: red }
+        - { min: 3, label: "", color: green }
     - { id: intellect,   name: 学识,     min: 0, max: 99,  start: 0 }
   endConditions:
     - reason: 灵体化结局

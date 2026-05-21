@@ -1,6 +1,11 @@
 import React from "react";
 import { Box, Text } from "ink";
-import type { HubActivity, HubSnapshot, StatSnapshot } from "@autogal/engine";
+import type {
+  HubActivity,
+  HubSnapshot,
+  StatSnapshot,
+  StatThreshold,
+} from "@autogal/engine";
 
 interface HubMenuProps {
   snapshot: HubSnapshot;
@@ -81,29 +86,25 @@ function StatRow({ stat }: { stat: StatSnapshot }) {
   );
 }
 
+// Pick the threshold with the highest `min` that stat.value is at or above.
+// Returns undefined when the stat has no thresholds declared or value is
+// below every threshold's min.
+function matchingThreshold(stat: StatSnapshot): StatThreshold | undefined {
+  if (!stat.thresholds || stat.thresholds.length === 0) return undefined;
+  let match: StatThreshold | undefined;
+  for (const t of stat.thresholds) {
+    if (stat.value >= t.min && (!match || t.min > match.min)) match = t;
+  }
+  return match;
+}
+
 function colorFor(stat: StatSnapshot): string {
-  if (stat.id === "spectral") {
-    if (stat.value >= 80) return "red";
-    if (stat.value >= 50) return "yellow";
-    if (stat.value >= 20) return "cyan";
-    return "green";
-  }
-  if (stat.id === "physical" || stat.id === "mental") {
-    if (stat.value <= stat.max * 0.3) return "red";
-    return "green";
-  }
-  return "white";
+  return matchingThreshold(stat)?.color ?? "white";
 }
 
 function statusFor(stat: StatSnapshot): string | null {
-  if (stat.id === "spectral") {
-    if (stat.value >= 100) return "完全灵体化";
-    if (stat.value >= 80) return "失控";
-    if (stat.value >= 50) return "危险";
-    if (stat.value >= 20) return "觉醒";
-    return "平稳";
-  }
-  return null;
+  const label = matchingThreshold(stat)?.label;
+  return label && label.length > 0 ? label : null;
 }
 
 function ActivityRow({

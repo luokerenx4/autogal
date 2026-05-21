@@ -24,6 +24,9 @@ export interface BaselineState {
   // the only declared weapon at init; multi-weapon games equip via
   // the equipWeapon primitive.
   equippedWeaponId: string | null;
+  // Skills the player has learned. Empty for games that declare no
+  // skills/ directory or for new sessions.
+  knownSkills: string[];
 }
 
 export interface TrainingState {
@@ -138,6 +141,28 @@ export interface WeaponState {
   power: number;
 }
 
+// Engine-level standard skill resource. Skills are learnable abilities
+// — distinct from actions in that they're owned by the player
+// (state.baseline.knownSkills) and gated by knowledge rather than
+// stat thresholds. The engine ships a default useSkill action
+// handler in the baseline module that validates ownership, applies
+// cost (in stats) and effects.
+export interface SkillDef {
+  id: string;
+  name: string;
+  description: string;
+  // Stat cost to use the skill (e.g. { intellect: -3 }). Optional —
+  // skills can be free.
+  cost?: StateDelta;
+  // What happens when the skill is used (applied alongside cost in
+  // one combined delta).
+  effects?: StateDelta;
+  // Optional gate on usability (e.g. `stat: { name: mental, min: 5 }`)
+  // — checked by the useSkill handler in addition to the knowledge
+  // check.
+  requires?: Condition;
+}
+
 export interface StatDef {
   id: string;
   name: string;
@@ -189,6 +214,7 @@ export type Condition =
         eq?: number;
       };
     }
+  | { knowsSkill: string }
   | { day: { min?: number; max?: number; eq?: number } }
   | { slot: { min?: number; max?: number; eq?: number } };
 
@@ -209,6 +235,10 @@ export interface StateDelta {
   // but does not delete weapons whose power hits 0 (weapons persist
   // even at 0 power, unlike inventory items at 0 count).
   weapons?: Record<string, Partial<WeaponState>>;
+  // Skill knowledge deltas. `learn: ["x"]` adds to knownSkills if not
+  // already present; `forget: ["x"]` removes. Order is learn-then-forget
+  // within one applyDelta call.
+  skills?: { learn?: string[]; forget?: string[] };
 }
 
 export type Beat =
@@ -244,7 +274,7 @@ export interface Action {
   slot?: "any" | "day" | "night";
   requires?: Condition;
   effects?: StateDelta;
-  kind?: "combat" | "sleep" | "plain" | "useItem";
+  kind?: "combat" | "sleep" | "plain" | "useItem" | "useSkill";
   // Required when kind === "useItem": id of the item this action
   // consumes. Resolved against ctx.itemMap by the bundled useItem
   // handler in baseline module.
@@ -253,6 +283,10 @@ export interface Action {
   // modules (game-provided) — engine does NOT dispatch on this field
   // directly. Resolved against ctx.enemyMap by combat handlers.
   enemyId?: string;
+  // Required when kind === "useSkill": id of the skill this action
+  // invokes. Resolved against ctx.skillMap by the bundled useSkill
+  // handler in baseline module.
+  skillId?: string;
 }
 
 // Where a state mutation came from. Passed to onStateMutated so
@@ -266,6 +300,7 @@ export type StateMutationSource =
   | "trigger" // a reactive trigger's do() ActionResult deltas
   | "item" // giveItem / consumeItem / useItem-handler-produced
   | "weapon" // weapon power / properties mutation
+  | "skill" // learnSkill / forgetSkill / useSkill-handler-produced
   | "external"; // anything else (manual game scripts, hot-reload, etc.)
 
 // Reactive trigger. Modules declare a list of these; the engine
@@ -478,6 +513,9 @@ export interface Game {
   // Engine-level weapon registry — see WeaponDef. Empty / absent for
   // games that declare no weapons/ directory.
   weapons?: WeaponDef[];
+  // Engine-level skill registry — see SkillDef. Empty / absent for
+  // games that declare no skills/ directory.
+  skills?: SkillDef[];
   training?: TrainingConfig;
   modules?: Module[];
   // Preset selector. Either a built-in name ("vn" / "training") or a
@@ -571,6 +609,7 @@ export interface PresetContext {
   itemMap: Map<string, ItemDef>;
   enemyMap: Map<string, EnemyDef>;
   weaponMap: Map<string, WeaponDef>;
+  skillMap: Map<string, SkillDef>;
   characterNameMap: Map<string, string>;
   // Injected RNG. Defaults to Math.random; tests can override for
   // deterministic combat / choice outcomes.

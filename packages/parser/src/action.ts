@@ -41,7 +41,8 @@ export function parseAction(content: string, source?: string): Action {
     obj.kind === "combat" ||
     obj.kind === "sleep" ||
     obj.kind === "plain" ||
-    obj.kind === "useItem"
+    obj.kind === "useItem" ||
+    obj.kind === "useSkill"
   ) {
     action.kind = obj.kind;
   }
@@ -51,9 +52,17 @@ export function parseAction(content: string, source?: string): Action {
   if (typeof obj.enemyId === "string") {
     action.enemyId = obj.enemyId;
   }
+  if (typeof obj.skillId === "string") {
+    action.skillId = obj.skillId;
+  }
   if (action.kind === "useItem" && !action.itemId) {
     throw new ActionParseError(
       `${source ?? action.id}: kind=useItem requires an \`itemId\` field`,
+    );
+  }
+  if (action.kind === "useSkill" && !action.skillId) {
+    throw new ActionParseError(
+      `${source ?? action.id}: kind=useSkill requires a \`skillId\` field`,
     );
   }
   const requires = parseCondition(obj.requires);
@@ -122,6 +131,14 @@ function parseEffectsObject(
       );
     }
     delta.weapons = obj.weapons as Record<string, { power?: number }>;
+  }
+  if (obj.skills !== undefined) {
+    if (typeof obj.skills !== "object" || obj.skills === null) {
+      throw new ActionParseError(
+        `${source ?? "action"}: effects.skills must be an object`,
+      );
+    }
+    delta.skills = obj.skills as { learn?: string[]; forget?: string[] };
   }
   return delta;
 }

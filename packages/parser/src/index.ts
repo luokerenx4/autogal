@@ -6,6 +6,7 @@ import type {
   ItemDef,
   Module,
   Script,
+  SkillDef,
   WeaponDef,
 } from "@autogal/engine";
 import type { Manifest } from "./manifest";
@@ -18,6 +19,7 @@ export { parseAction, ActionParseError } from "./action";
 export { parseItem, ItemParseError } from "./item";
 export { parseEnemy, EnemyParseError } from "./enemy";
 export { parseWeapon, WeaponParseError } from "./weapon";
+export { parseSkill, SkillParseError } from "./skill";
 export type { Manifest } from "./manifest";
 
 export function buildGame(
@@ -29,6 +31,7 @@ export function buildGame(
   items?: ItemDef[],
   enemies?: EnemyDef[],
   weapons?: WeaponDef[],
+  skills?: SkillDef[],
 ): Game {
   const game: Game = {
     title: manifest.title,
@@ -39,6 +42,7 @@ export function buildGame(
   if (items && items.length > 0) game.items = items;
   if (enemies && enemies.length > 0) game.enemies = enemies;
   if (weapons && weapons.length > 0) game.weapons = weapons;
+  if (skills && skills.length > 0) game.skills = skills;
   if (manifest.training) game.training = manifest.training;
   if (modules && modules.length > 0) game.modules = modules;
   if (manifest.preset) game.preset = manifest.preset;

@@ -103,6 +103,21 @@ export function applyDelta(state: ComposedState, delta: StateDelta): void {
       }
     }
   }
+  if (delta.skills) {
+    if (delta.skills.learn) {
+      for (const id of delta.skills.learn) {
+        if (!state.baseline.knownSkills.includes(id)) {
+          state.baseline.knownSkills.push(id);
+        }
+      }
+    }
+    if (delta.skills.forget) {
+      const drop = new Set(delta.skills.forget);
+      state.baseline.knownSkills = state.baseline.knownSkills.filter(
+        (id) => !drop.has(id),
+      );
+    }
+  }
 }
 
 export function clamp(n: number, min: number, max: number): number {

@@ -355,6 +355,12 @@ function parseEffectsObject(
     }
     delta.weapons = obj.weapons as Record<string, { power?: number }>;
   }
+  if (obj.skills !== undefined) {
+    if (typeof obj.skills !== "object" || obj.skills === null) {
+      throw new ScriptParseError("`skills` must be an object", source);
+    }
+    delta.skills = obj.skills as { learn?: string[]; forget?: string[] };
+  }
   return delta;
 }
 

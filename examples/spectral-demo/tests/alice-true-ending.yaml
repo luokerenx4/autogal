@@ -36,6 +36,8 @@ inputs:
   - { type: next }
   - { type: next }
   - { type: next }
+  # Day 11 daybreak narration (ejected preset emits one per new day).
+  - { type: next }
   # Day 11 morning. seal_ritual now unlocked. Pick it and walk through.
   - { type: doActivity, id: "script:006_seal_ritual" }
   - { type: next }

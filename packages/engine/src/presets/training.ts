@@ -47,7 +47,6 @@ export function createTrainingState(config: TrainingConfig): TrainingState {
     slot: 0,
     stats,
     statMax,
-    pendingNarrations: [],
   };
 }
 

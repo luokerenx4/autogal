@@ -18,11 +18,19 @@ export interface TrainingState {
   slot: number;
   stats: Record<string, number>;
   statMax: Record<string, number>;
-  pendingNarrations?: string[];
+}
+
+// Transient run-loop state. Lives outside any specific preset because
+// any preset's main loop may need to queue narrations across step()
+// boundaries. (Previously this was on TrainingState, which made it
+// unreachable for non-training presets.)
+export interface RuntimeState {
+  pendingNarrations: string[];
 }
 
 export interface ComposedState {
   baseline: BaselineState;
+  runtime: RuntimeState;
   training?: TrainingState;
   [namespace: string]: unknown;
 }
@@ -239,3 +247,30 @@ export type Input =
   | { type: "quit" };
 
 export const END_LABEL = "$end";
+
+// Context object threaded through preset run functions and primitives.
+// Engine constructs this once per run; primitives accept it as their
+// sole non-input argument so they can be tested in isolation without
+// instantiating an Engine.
+export interface PresetContext {
+  state: ComposedState;
+  game: Game;
+  modules: Module[];
+  // Aggregated action handler registry (action.kind → handler), built
+  // once from all modules' actionHandlers. Duplicate kinds error at
+  // construction time.
+  actionHandlerRegistry: Record<string, ActionHandler>;
+  // Precomputed lookup maps; cheap convenience, not authoritative.
+  scriptMap: Map<string, Script>;
+  actionMap: Map<string, Action>;
+  characterNameMap: Map<string, string>;
+  // Injected RNG. Defaults to Math.random; tests can override for
+  // deterministic combat / choice outcomes.
+  rng: () => number;
+}
+
+// A preset's main loop. Engine.run() resolves which one to call based
+// on game.preset (or auto-detection from game.training presence).
+export type RunFunction = (
+  ctx: PresetContext,
+) => AsyncGenerator<Output, void, Input>;

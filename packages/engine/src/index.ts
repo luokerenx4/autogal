@@ -23,6 +23,19 @@ export {
   BASELINE_NAMESPACE,
   createBaselineState,
 } from "./modules/baseline";
+export {
+  runtimeModule,
+  RUNTIME_NAMESPACE,
+  createRuntimeState,
+} from "./modules/runtime";
+export {
+  drainNarrations,
+  checkEndConditions,
+  applyActionResult,
+  runScript,
+  dispatchActivity,
+  fireHook,
+} from "./primitives";
 export { END_LABEL } from "./types";
 export type {
   Action,
@@ -44,7 +57,10 @@ export type {
   Input,
   Module,
   Output,
+  PresetContext,
   RenderedChoice,
+  RunFunction,
+  RuntimeState,
   Script,
   ScriptInfo,
   StatDef,

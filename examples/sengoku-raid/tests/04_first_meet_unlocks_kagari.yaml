@@ -1,0 +1,53 @@
+name: 邂逅：第一次进入 crossroads 触发 kagari 邂逅剧本，metCharacters 更新
+description: |
+  Player departs on kuro_swamp from a normal hub state. The spawn rule
+  in MAPS.kuro_swamp is chance=1.0 in zones [crossroads, ruined_hut],
+  so the encounter_kagari_first script will launch deterministically
+  on first move:crossroads — regardless of the underlying RNG (because
+  the spawn coin-flip is 100%).
+
+  The player chooses option 0 ("同業ということは……") for +2 affection.
+  Asserts metCharacters now lists kagari and the encounter script is
+  recorded in completedScripts.
+
+state:
+  baseline:
+    # Pre-skip intro so the test doesn't have to drain it.
+    completedScripts: [000_intro]
+    weapons:
+      ancestor_yaodao: { power: 4 }
+inputs:
+  - { type: doActivity, id: "hub:depart:kuro_swamp" }
+  - { type: next }          # raid-start narration
+  # We're at edge. Move to crossroads → spawn fires → script launches.
+  - { type: doActivity, id: "raid:move:crossroads" }
+  # Drain encounter script's narrations + dialogue
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  # First choice in encounter
+  - { type: choose, index: 0 }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+assertions:
+  - kind: state
+    path: sengoku-raid.metCharacters
+    includes: kagari
+  - kind: state
+    path: baseline.completedScripts
+    includes: encounter_kagari_first
+  - kind: state
+    path: baseline.characters.kagari.affection
+    eq: 2
+  # Mode is still "raid" — we're back at crossroads with control returned
+  # to the raid loop (the encounter script doesn't change mode).
+  - kind: state
+    path: sengoku-raid.mode
+    eq: raid

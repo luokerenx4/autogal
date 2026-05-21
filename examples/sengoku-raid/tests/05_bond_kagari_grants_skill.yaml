@@ -1,0 +1,44 @@
+name: 高羁绊 (affection ≥4) 触发 bond_kagari_02 → 学到鎮魂法
+description: |
+  Pre-seeds metCharacters with kagari + affection=4 + intro completed.
+  Hub menu should surface bond_kagari_02 as eligible. Dispatching it
+  walks through the scene; the script's effects block learns the
+  chinkonho skill.
+
+state:
+  baseline:
+    completedScripts: [000_intro, encounter_kagari_first]
+    characters:
+      kagari: { affection: 4, custom: {} }
+  sengoku-raid:
+    mode: hub
+    raid: null
+    metCharacters: [kagari]
+inputs:
+  - { type: doActivity, id: "script:bond_kagari_02" }
+  # Drain the scene
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+assertions:
+  - kind: state
+    path: baseline.knownSkills
+    includes: chinkonho
+  - kind: state
+    path: baseline.completedScripts
+    includes: bond_kagari_02
+  - kind: state
+    path: baseline.characters.kagari.affection
+    eq: 5
+  - kind: state
+    path: baseline.flags.learnedChinkonho
+    eq: true

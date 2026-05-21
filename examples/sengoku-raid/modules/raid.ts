@@ -14,7 +14,7 @@
 //   We want HP/spectral as free-form clampable numbers and we want our
 //   onHubBuild to win first-wins. Skipping game.training avoids both.
 
-import { checkTriggers } from "@autogal/engine";
+import { checkTriggers, evaluateCondition } from "@autogal/engine";
 import type {
   Game,
   HubActivity,
@@ -112,6 +112,7 @@ interface MapDef {
   description: string;
   spawnZoneId: string;
   zones: MapZoneDef[];
+  characterSpawns?: CharacterSpawnRule[];
 }
 
 interface MapZoneDef {
@@ -121,6 +122,16 @@ interface MapZoneDef {
   isExtract?: boolean;
   encounterTable?: { enemyId: string | null; weight: number }[];
   lootTable?: { itemId: string | null; min: number; max: number; weight: number }[];
+}
+
+interface CharacterSpawnRule {
+  characterId: string;
+  zones: string[];
+  chance: number;          // 0..1
+  encounterScriptId: string;
+  // Module evaluates: never re-spawn after first meeting (we check
+  // metCharacters). Additional gates could go here later (day count,
+  // weapon power, etc.) but vertical slice keeps it simple.
 }
 
 const MAPS: Record<string, MapDef> = {
@@ -195,6 +206,17 @@ const MAPS: Record<string, MapDef> = {
           { itemId: "soul_shard", min: 2, max: 3, weight: 70 },
           { itemId: "ryo", min: 20, max: 40, weight: 30 },
         ],
+      },
+    ],
+    characterSpawns: [
+      {
+        characterId: "kagari",
+        zones: ["crossroads", "ruined_hut"],
+        // 1.0 = guaranteed on first qualifying zone entry. Keeps the
+        // vertical slice's narrative pacing predictable; later maps can
+        // dial this back when there are multiple characters competing.
+        chance: 1.0,
+        encounterScriptId: "encounter_kagari_first",
       },
     ],
   },
@@ -306,7 +328,12 @@ function buildHubMenu(ctx: PresetContext): Output {
   const m = moduleState(ctx);
   const activities: HubActivity[] = [];
 
-  // Bond per met character
+  // Per-character bonding: hub-side gift + scripted bond scenes.
+  // The bond scripts are static files (scripts/bond_<id>_NN.md) with
+  // affection-gated `requires:` clauses. They're surfaced here as
+  // "script:" activities, dispatched through the engine's standard
+  // dispatch (NOT the raid module's prefix), so script completion
+  // hooks fire normally and the script gets logged to completedScripts.
   for (const charId of m.metCharacters) {
     const char = ctx.game.characters.find((c) => c.id === charId);
     if (!char) continue;
@@ -322,6 +349,26 @@ function buildHubMenu(ctx: PresetContext): Output {
       available: ryo >= 50,
       lockedReason: ryo < 50 ? "両が足りない" : undefined,
     });
+    // Surface eligible bond scripts. Engine evaluates the script's
+    // `requires:` block when it builds them in the hub menu; we just
+    // forward the unfilled ones for this character.
+    for (const script of ctx.game.scripts) {
+      if (!script.id.startsWith(`bond_${charId}_`)) continue;
+      if (ctx.state.baseline.completedScripts.includes(script.id)) continue;
+      // Check the script's requires manually since we're not going
+      // through the engine's hub builder (which would do this for us).
+      const reqs = script.requires;
+      const eligible = reqs === undefined || evaluateCondition(reqs, ctx.state);
+      if (!eligible) continue;
+      activities.push({
+        id: `script:${script.id}`,
+        kind: "script",
+        title: `${char.name} — ${script.title}`,
+        category: "social",
+        cost: 0,
+        available: true,
+      });
+    }
   }
 
   // Sell loot
@@ -370,6 +417,23 @@ function buildHubMenu(ctx: PresetContext): Output {
       category: "rest",
       cost: 0,
       available: true,
+    });
+  }
+
+  // Use chinkonho (skill granted by篝 bond) — drops spectral by 20.
+  // Only available in hub (combat is too tense per篝's teaching), and
+  // only when player actually has the skill.
+  if (ctx.state.baseline.knownSkills.includes("chinkonho")) {
+    const spec = getFlag(ctx, "spectral");
+    activities.push({
+      id: "hub:use_chinkonho",
+      kind: "action",
+      title: "鎮魂法を行う（霊体化 -20）",
+      description: "篝伝授の口伝。集中して長く息を吐く",
+      category: "spirit",
+      cost: 0,
+      available: spec >= 10,
+      lockedReason: spec >= 10 ? undefined : "霊体化が低すぎて鎮める意味がない",
     });
   }
 
@@ -591,6 +655,22 @@ function rollEncounter(
   if (pick.enemyId === null) return null;
   const hp = enemyHp(ctx, pick.enemyId);
   return { enemyId: pick.enemyId, enemyHp: hp, enemyHpMax: hp };
+}
+
+function rollCharacterSpawn(
+  ctx: PresetContext,
+  mapId: string,
+  zoneId: string,
+): CharacterSpawnRule | null {
+  const map = MAPS[mapId];
+  if (!map?.characterSpawns) return null;
+  const m = moduleState(ctx);
+  for (const rule of map.characterSpawns) {
+    if (m.metCharacters.includes(rule.characterId)) continue;
+    if (!rule.zones.includes(zoneId)) continue;
+    if (ctx.rng() <= rule.chance) return rule;
+  }
+  return null;
 }
 
 function rollLoot(ctx: PresetContext, zone: ZoneInstance): Record<string, number> {
@@ -844,6 +924,16 @@ async function* doDispatchRaidActivity(
     );
     return "ok";
   }
+  if (activityId === "hub:use_chinkonho") {
+    if (!ctx.state.baseline.knownSkills.includes("chinkonho")) return "ok";
+    const spec = getFlag(ctx, "spectral");
+    if (spec < 10) return "ok";
+    setFlag(ctx, "spectral", Math.max(0, spec - 20));
+    ctx.state.runtime.pendingNarrations.push(
+      `刀を逆手に取り、心臓の真上に当てる。長く、一度息を吐く。胸の奥でうねっていたものが、二十、押し戻された。`,
+    );
+    return "ok";
+  }
 
   // ────────── RAID-side ──────────
   if (activityId.startsWith("raid:move:")) {
@@ -859,6 +949,21 @@ async function* doDispatchRaidActivity(
       zone.visited = true;
       zone.pendingLoot = rollLoot(ctx, zone);
       zone.encounter = rollEncounter(ctx, zone);
+
+      // Character spawn check: rolls against character_spawns rules.
+      // If a rule fires, we launch the encounter script INSTEAD of
+      // narrating zone entry. The script runs in the preset's main
+      // loop the next iteration. Combat/loot interactions are deferred
+      // until the script returns control.
+      const spawnedChar = rollCharacterSpawn(ctx, m.raid.mapId, target);
+      if (spawnedChar) {
+        m.metCharacters.push(spawnedChar.characterId);
+        // Set the launch target; preset picks it up on next iter.
+        ctx.state.baseline.currentScriptId = spawnedChar.encounterScriptId;
+        ctx.state.baseline.beatIndex = 0;
+        return "ok";
+      }
+
       if (zone.encounter) {
         const intro = getEnemyNarration(ctx, zone.encounter.enemyId, "intro");
         if (intro) {

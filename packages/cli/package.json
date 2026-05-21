@@ -1,0 +1,25 @@
+{
+  "name": "@autogal/cli",
+  "version": "0.0.0",
+  "description": "Terminal frontend for autogal — ink + React.",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "bin": {
+    "autogal": "./src/bin.ts"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@autogal/engine": "workspace:*",
+    "@autogal/parser": "workspace:*",
+    "ink": "^5.0.1",
+    "react": "^18.3.1",
+    "yaml": "^2.6.1"
+  },
+  "peerDependencies": {
+    "react": "^18.3.1"
+  },
+  "license": "MIT"
+}

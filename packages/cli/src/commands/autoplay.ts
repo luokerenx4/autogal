@@ -1,0 +1,102 @@
+import { runLoop } from "@autogal/engine";
+import type { Output } from "@autogal/engine";
+import { loadGame } from "../loader";
+import { personaDescriptions, personas } from "../test/personas";
+
+interface Args {
+  gameDir: string;
+  persona: string;
+  verbose: boolean;
+  maxSteps: number;
+  seed?: number;
+}
+
+export async function autoplayCommand(args: Args): Promise<void> {
+  const game = await loadGame(args.gameDir);
+  const persona = personas[args.persona];
+  if (!persona) {
+    process.stderr.write(
+      `Unknown persona: ${args.persona}\n\nAvailable personas:\n`,
+    );
+    for (const [name, desc] of Object.entries(personaDescriptions)) {
+      process.stderr.write(`  ${name.padEnd(10)} — ${desc}\n`);
+    }
+    process.exit(2);
+  }
+  if (args.seed !== undefined) {
+    let s = args.seed;
+    Math.random = () => {
+      s = (s * 9301 + 49297) % 233280;
+      return s / 233280;
+    };
+  }
+
+  process.stderr.write(
+    `\n=== autoplay: ${game.title} (persona: ${args.persona}) ===\n\n`,
+  );
+
+  const result = await runLoop(game, undefined, persona, {
+    maxSteps: args.maxSteps,
+    onStep: args.verbose
+      ? (entry) => {
+          const line = formatOutput(entry.output);
+          if (line) process.stderr.write(line + "\n");
+        }
+      : undefined,
+  });
+
+  process.stderr.write(
+    `\n=== done: ${result.reason} in ${result.trace.length} steps ===\n`,
+  );
+  if (result.error) process.stderr.write(`error: ${result.error}\n`);
+
+  const ending = findEnding(result.finalState as { baseline: { completedScripts: string[] } });
+  if (ending) process.stderr.write(`ending: ${ending}\n`);
+
+  process.stdout.write(
+    JSON.stringify({
+      reason: result.reason,
+      steps: result.trace.length,
+      finalState: result.finalState,
+      ending,
+    }) + "\n",
+  );
+}
+
+function findEnding(state: { baseline: { completedScripts: string[] } }): string | null {
+  const completed = state.baseline.completedScripts;
+  for (let i = completed.length - 1; i >= 0; i--) {
+    const id = completed[i];
+    if (id && /^00[5-9]/.test(id)) return id;
+  }
+  return null;
+}
+
+function formatOutput(o: Output): string | null {
+  switch (o.type) {
+    case "narration":
+      return `  ${o.text}`;
+    case "dialogue":
+      return `  ${o.speakerName}: 「${o.text}」`;
+    case "choice":
+      return (
+        `  ? ${o.prompt ?? ""}\n` +
+        o.options
+          .map(
+            (opt, i) =>
+              `    ${i + 1}. ${opt.text}${
+                opt.available ? "" : "  (locked)"
+              }`,
+          )
+          .join("\n")
+      );
+    case "scriptComplete":
+      return `  ─── ${o.completedId ?? "(start)"} ─── next: ${
+        o.nextAvailable.map((s) => s.id).join(", ") || "(none)"
+      }`;
+    case "gameEnd":
+      return `  ═══ GAME END ═══`;
+    case "clear":
+      return `  ─── scene ───`;
+  }
+}

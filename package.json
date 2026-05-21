@@ -1,0 +1,23 @@
+{
+  "name": "autogal",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "autogal": "bun packages/cli/src/bin.ts",
+    "play": "bun packages/cli/src/bin.ts play examples/starter",
+    "test": "bun packages/cli/src/bin.ts test examples/starter",
+    "autoplay": "bun packages/cli/src/bin.ts autoplay examples/starter --persona greedy -v",
+    "typecheck": "bunx tsc -p packages/engine/tsconfig.json --noEmit && bunx tsc -p packages/parser/tsconfig.json --noEmit && bunx tsc -p packages/cli/tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@autogal/engine": "workspace:*",
+    "@autogal/cli": "workspace:*",
+    "@types/bun": "latest",
+    "@types/react": "^18.3.12",
+    "typescript": "^5.6.3"
+  }
+}

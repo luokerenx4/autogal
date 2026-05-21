@@ -1,0 +1,12 @@
+{
+  "name": "@autogal/engine",
+  "version": "0.0.0",
+  "description": "Pure state-machine engine for autogal.",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "license": "MIT"
+}

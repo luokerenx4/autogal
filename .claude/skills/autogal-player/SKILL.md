@@ -1,0 +1,161 @@
+---
+name: autogal-player
+description: Play an autogal GalGame from the shell. Use this skill when you're inside a folder containing game.yaml + characters/ + scripts/ (an autogal game), and the user wants you to play through the game — either as yourself or in character as a persona. Drives the game via the `autogal` CLI, reading stdout JSON and writing stdin one input at a time.
+---
+
+# autogal-player
+
+You're a player playing through an autogal game. You make decisions, the game advances, you reach an ending. You write no code — you only invoke the `autogal` CLI and react to its JSON output.
+
+## Before you start
+
+Check three things:
+
+1. **The `autogal` binary is available.** Run `which autogal` or `bun run autogal --help` from inside the autogal repo. If neither works, ask the user to install it (`brew install bun && bun link` inside `packages/cli/`).
+2. **You're at the right path.** Identify the game directory. It contains `game.yaml`, `characters/`, `scripts/`. Use an absolute or repo-relative path going forward (the CLI doesn't care).
+3. **Pick a session name.** A session is your save file. Pick something descriptive: `claude-thoughtful`, `playthrough-cautious`, `demo-2026-05-21`. Don't use someone else's session — that overwrites their save.
+
+```bash
+GAME="examples/starter"           # adjust to actual game dir
+SESSION="claude-$(date +%H%M%S)"  # or any unique name
+```
+
+## The loop (this is the whole skill)
+
+```
+[peek once] → read output → decide input → [step with input] → read output → repeat
+```
+
+### Step 1: See where you are
+
+```bash
+autogal peek "$GAME" --session "$SESSION"
+```
+
+Output is a single line of JSON:
+
+```json
+{
+  "output": { "type": "...", ... },
+  "done": false,
+  "state": { "baseline": { ... } }
+}
+```
+
+If `done` is `true`, the game is over. Read the final state and tell the user which ending you reached.
+
+### Step 2: Decide based on `output.type`
+
+| output.type | Meaning | Your input |
+|---|---|---|
+| `scriptComplete` | Between scripts — engine waits for you to pick one of `nextAvailable[]` | `{"type":"select","scriptId":"<id>"}` |
+| `narration` | Pure story text (no speaker) | `{"type":"next"}` |
+| `dialogue` | A character speaks (`speakerName` + `text`) | `{"type":"next"}` |
+| `choice` | Story branch — pick one of `options[]` (0-based index, only `available:true` ones) | `{"type":"choose","index":N}` |
+| `clear` | Scene break, just advance | `{"type":"next"}` |
+| `gameEnd` | You hit a terminal — no more scripts available | Stop. Report the ending. |
+
+### Step 3: Apply your decision
+
+```bash
+autogal step "$GAME" --session "$SESSION" --input '{"type":"choose","index":2}'
+```
+
+The output of `step` is the **next** event. You do NOT need to `peek` again — just react to what `step` printed.
+
+### Step 4: Loop until done
+
+Keep doing step 2 + step 3 until you see `gameEnd` or `done: true`.
+
+## Reading like a player, not like a parser
+
+Even when output is just narration or dialogue, **read the text**. The story is the point. Tell the human what's happening in your own words occasionally — don't just dump raw JSON or robotically advance.
+
+When the output is a `choice`, before sending input:
+
+1. State your interpretation of the situation in 1 sentence.
+2. List the options and what each one signals.
+3. Pick one and say why.
+
+Example:
+
+```
+> 现在的场景：薄樱在樱花树下画画，问我也喜欢樱花吗。
+> 选项：
+>   1. 嗯，很美 — 安全
+>   2. 只是路过 — 冷淡
+>   3. 我喜欢看你画 — 主动
+> 我选 3，因为这个 persona 是直接型，而且这个选项有 +2 affection
+```
+
+Then:
+
+```bash
+autogal step "$GAME" --session "$SESSION" --input '{"type":"choose","index":2}'
+```
+
+## Choosing in character
+
+If the user gave you a persona ("play as a cautious introvert" / "play as someone trying to reach the bea-good ending"), every choice should follow that persona. Don't break character to optimize.
+
+If the user said "just play your way", reveal your taste in the choices. Don't fake.
+
+## Locked options
+
+In a `choice`, options have `available: true` or `available: false`. Locked options cannot be picked — picking them is a no-op (engine yields the same choice again). When you see a locked option, mention it in your reasoning ("the bold option requires affection >= 2, I don't have that yet").
+
+## When the game ends
+
+```bash
+autogal peek "$GAME" --session "$SESSION"
+```
+
+The final state's `baseline.completedScripts[-1]` is the ending you reached. Tell the user:
+- Which ending
+- A 1-sentence reflection
+- (If they asked) how to read the log: `cat "$GAME/.autogal/sessions/$SESSION/log.jsonl"`
+
+## Fork your save
+
+A session is a directory. To branch and try a different choice:
+
+```bash
+cp -r "$GAME/.autogal/sessions/$SESSION" "$GAME/.autogal/sessions/${SESSION}-fork"
+# Continue with --session "${SESSION}-fork" from a previous state
+```
+
+You can't go "back" within a single session (engine is forward-only), but you can fork before a key decision and play both branches.
+
+## Hard rules
+
+- Never modify the game's `scripts/` or `characters/` files unless the user explicitly asks. The author wrote them.
+- Never run `step` against a session you don't own (sessions list at `<game>/.autogal/sessions/`).
+- The only `autogal` subcommands you should use for play: **peek, step**. (`sessions` is informational; `test` and `autoplay` are not for playing.)
+- If something errors with "ENOENT" or similar, you're probably in the wrong directory or used a wrong path. Don't keep retrying — check `pwd` and `ls`.
+
+## Example transcript (greedy persona, takes the first option every time)
+
+```bash
+$ autogal peek "$GAME" --session "$SESSION"
+{"output":{"type":"scriptComplete","completedId":null,"nextAvailable":[{"id":"001_meeting_alice","title":"樱花树下"}]},"done":false,"state":{...}}
+
+# Only one script available, select it.
+$ autogal step "$GAME" --session "$SESSION" --input '{"type":"select","scriptId":"001_meeting_alice"}'
+{"output":{"type":"narration","text":"四月的午后..."},...}
+
+$ autogal step "$GAME" --session "$SESSION" --input '{"type":"next"}'
+{"output":{"type":"narration","text":"那里有一棵很大的樱花树。"},...}
+
+# ... continue until choice
+$ autogal step "$GAME" --session "$SESSION" --input '{"type":"choose","index":0}'
+{"output":{"type":"narration","text":"她抬起头..."},...}
+
+# ... eventually
+$ autogal step "$GAME" --session "$SESSION" --input '{"type":"next"}'
+{"output":{"type":"gameEnd"},"done":true,...}
+
+# Report:
+> 通关。结局：005c_bea_good — 下学期碧河替我报了足球部。
+```
+
+That's it. The whole skill.

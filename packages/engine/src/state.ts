@@ -4,18 +4,24 @@ import type {
   Game,
   Module,
   StateDelta,
-  TrainingConfig,
-  TrainingState,
 } from "./types";
 import { baselineModule } from "./modules/baseline";
+import { trainingPreset } from "./presets/training";
 
 export function defaultModules(): Module[] {
   return [baselineModule];
 }
 
+// Resolve the full module list for a game. Always includes the baseline
+// module. Auto-includes the training preset when game.training is
+// configured. Then layers user-provided modules on top. User modules
+// cannot replace baseline/training presets (matched by id).
 export function resolveModules(game: Game): Module[] {
-  if (game.modules && game.modules.length > 0) return game.modules;
-  return defaultModules();
+  const builtin: Module[] = [baselineModule];
+  if (game.training) builtin.push(trainingPreset);
+  const seen = new Set(builtin.map((m) => m.id));
+  const game_modules = (game.modules ?? []).filter((m) => !seen.has(m.id));
+  return [...builtin, ...game_modules];
 }
 
 export function createInitialState(game: Game): ComposedState;
@@ -29,29 +35,11 @@ export function createInitialState(
   const modules = resolveModules(game);
   const composed: ComposedState = { baseline: undefined as never };
   for (const mod of modules) {
-    composed[mod.id] = mod.initialize(game);
-  }
-  if (game.training) {
-    composed.training = createTrainingState(game.training);
+    if (!mod.initialize) continue;
+    const slice = mod.initialize(game);
+    if (slice !== undefined) composed[mod.id] = slice;
   }
   return composed;
-}
-
-export function createTrainingState(config: TrainingConfig): TrainingState {
-  const stats: Record<string, number> = {};
-  const statMax: Record<string, number> = {};
-  for (const s of config.stats) {
-    stats[s.id] = s.start;
-    statMax[s.id] = s.max;
-  }
-  return {
-    day: config.startDay,
-    slot: 0,
-    stats,
-    statMax,
-    combatLog: [],
-    pendingNarrations: [],
-  };
 }
 
 export function applyDelta(state: ComposedState, delta: StateDelta): void {

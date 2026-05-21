@@ -8,4 +8,4 @@ requires:
   stat: { name: physical, min: 1 }
 effects:
   affection: { bea: 1 }
-  stats: { physical: -1 }
+  stats: { physical: -1, mental: 1 }

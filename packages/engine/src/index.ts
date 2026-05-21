@@ -26,12 +26,14 @@ export {
 export { END_LABEL } from "./types";
 export type {
   Action,
+  ActionContext,
+  ActionHandler,
+  ActionResult,
   Beat,
   BaselineState,
   CharacterDef,
   CharacterState,
   ChoiceOption,
-  CombatLogEntry,
   ComposedState,
   Condition,
   EndConditionSpec,
@@ -47,6 +49,7 @@ export type {
   ScriptInfo,
   StatDef,
   StatSnapshot,
+  StatThreshold,
   StateDelta,
   TrainingConfig,
   TrainingState,

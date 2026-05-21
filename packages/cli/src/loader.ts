@@ -1,6 +1,12 @@
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
-import type { Action, CharacterDef, Game, Script } from "@autogal/engine";
+import type {
+  Action,
+  CharacterDef,
+  Game,
+  Module,
+  Script,
+} from "@autogal/engine";
 import {
   buildGame,
   parseAction,
@@ -31,7 +37,28 @@ export async function loadGame(dir: string): Promise<Game> {
     (content, source) => parseAction(content, source),
   );
 
-  return buildGame(manifest, characters, scripts, actions);
+  const modules = await loadModules(dir, manifest.modules ?? []);
+
+  return buildGame(manifest, characters, scripts, actions, modules);
+}
+
+async function loadModules(
+  gameDir: string,
+  paths: string[],
+): Promise<Module[]> {
+  const modules: Module[] = [];
+  for (const rel of paths) {
+    const abs = path.resolve(gameDir, rel);
+    const imported = (await import(abs)) as { default?: unknown };
+    const mod = imported.default;
+    if (!mod || typeof mod !== "object" || typeof (mod as Module).id !== "string") {
+      throw new Error(
+        `Module at ${rel} must export a default Module with a string \`id\``,
+      );
+    }
+    modules.push(mod as Module);
+  }
+  return modules;
 }
 
 async function loadDir<T>(

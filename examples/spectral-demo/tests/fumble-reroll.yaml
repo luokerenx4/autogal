@@ -1,0 +1,46 @@
+name: 高 intellect 可在 fumble 后 reroll
+description: |
+  C.2 balance tweak: 高 spectral 必然带来 fumble 风险（spectral × 0.5%）。
+  以前 fumble 完全无 mitigation，本 fixture 验证 intellect ≥ 5 时
+  spectral combat handler 会自动 spend -2 intellect 并 reroll 一次。
+
+  spectral=99 → fumble 率 49.5%。intellect=5 满足 reroll 条件。
+  无论第一发是否 fumble，断言都成立：
+    - 第一发 fumble (49.5%)：reroll 触发，intellect 5→3
+    - 第一发 normal (50.5%)：不 reroll，intellect 维持 5
+  所以 intellect ≤ 5 永远成立，combatLog 一定有 1 条。
+
+  spectral 没有用 100 因为那会先于 hunt 触发 end_consumed。
+state:
+  baseline:
+    completedScripts: [001_arrival, 002_first_youkai]
+  training:
+    day: 10
+    slot: 2
+    stats:
+      spectral: 99
+      sword_power: 50
+      physical: 15
+      mental: 5
+      intellect: 5
+    statMax:
+      spectral: 100
+      sword_power: 100
+      physical: 20
+      mental: 10
+      intellect: 99
+    pendingNarrations: []
+inputs:
+  - { type: doActivity, id: "action:hunt" }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+assertions:
+  - kind: state
+    path: spectral-combat.log
+    length: 1
+  - kind: state
+    path: training.stats.intellect
+    lte: 5

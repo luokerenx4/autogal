@@ -1,19 +1,23 @@
 import { evaluateCondition } from "./condition";
-import { applyDelta, cloneState, createInitialState } from "./state";
+import {
+  applyDelta,
+  cloneState,
+  createInitialState,
+  resolveModules,
+} from "./state";
 import type {
   Action,
+  ActionHandler,
+  ActionResult,
   ComposedState,
   EndConditionSpec,
   Game,
-  HubActivity,
-  HubSnapshot,
   Input,
+  Module,
   Output,
   RenderedChoice,
   Script,
   ScriptInfo,
-  StateDelta,
-  TrainingConfig,
 } from "./types";
 import { END_LABEL } from "./types";
 
@@ -22,6 +26,13 @@ export class Engine {
   private readonly scriptMap: Map<string, Script>;
   private readonly actionMap: Map<string, Action>;
   private readonly characterNameMap: Map<string, string>;
+  // Registry of action.kind → handler, aggregated from all modules
+  // (built-in + game-provided). Duplicate kind across modules throws
+  // at construction time.
+  private readonly actionHandlerRegistry: Record<string, ActionHandler>;
+  // Resolved module list (defaults + training preset if game.training
+  // present + game-provided modules). Used for hub/lifecycle dispatch.
+  private readonly modules: Module[];
 
   constructor(
     private readonly game: Game,
@@ -31,6 +42,18 @@ export class Engine {
     this.scriptMap = new Map(game.scripts.map((s) => [s.id, s]));
     this.actionMap = new Map((game.actions ?? []).map((a) => [a.id, a]));
     this.characterNameMap = new Map(game.characters.map((c) => [c.id, c.name]));
+    this.modules = resolveModules(game);
+    this.actionHandlerRegistry = {};
+    for (const mod of this.modules) {
+      for (const [kind, handler] of Object.entries(mod.actionHandlers ?? {})) {
+        if (this.actionHandlerRegistry[kind]) {
+          throw new Error(
+            `Engine: duplicate action handler for kind "${kind}" (module ${mod.id})`,
+          );
+        }
+        this.actionHandlerRegistry[kind] = handler;
+      }
+    }
   }
 
   getState(): ComposedState {
@@ -101,8 +124,15 @@ export class Engine {
           this.state.baseline.completedScripts.push(script.id);
           this.state.baseline.currentScriptId = null;
           this.state.baseline.beatIndex = 0;
-          if (this.state.training) {
-            this.advanceTime(1);
+          // Scripts count as 1 slot when a preset is providing the hub
+          // (i.e. training mode). The preset's advanceAfterAction owns
+          // calendar bookkeeping.
+          for (const mod of this.modules) {
+            mod.advanceAfterAction?.(this.state, this.game, {
+              id: script.id,
+              title: script.title,
+              cost: 1,
+            });
           }
         } else {
           return;
@@ -110,8 +140,13 @@ export class Engine {
         continue;
       }
 
-      if (this.state.training && this.game.training) {
-        const input = yield this.buildHubMenu();
+      // Hub vs scriptComplete: ask each module if it provides a hub
+      // Output for the current state. First non-null wins (typically
+      // the training preset, when game.training is configured). Pure-VN
+      // games have no hub-providing module → fall through to scriptComplete.
+      const hubOutput = this.askModulesForHub();
+      if (hubOutput) {
+        const input = yield hubOutput;
         if (input.type === "quit") return;
         if (input.type !== "doActivity") continue;
         const dispatched = yield* this.dispatchActivity(input.id);
@@ -140,6 +175,14 @@ export class Engine {
     }
   }
 
+  private askModulesForHub(): Output | null {
+    for (const mod of this.modules) {
+      const out = mod.buildHubOutput?.(this.state, this.game);
+      if (out) return out;
+    }
+    return null;
+  }
+
   private checkEndConditions(): EndConditionSpec | null {
     if (!this.game.training) return null;
     for (const ec of this.game.training.endConditions) {
@@ -148,79 +191,6 @@ export class Engine {
       }
     }
     return null;
-  }
-
-  private buildHubMenu(): Output {
-    const cfg = this.game.training!;
-    const t = this.state.training!;
-    const slotName = cfg.slotNames[t.slot] ?? `slot ${t.slot}`;
-    const isNight = t.slot === cfg.slotsPerDay - 1;
-
-    const activities: HubActivity[] = [];
-
-    for (const s of this.game.scripts) {
-      if (this.state.baseline.completedScripts.includes(s.id)) continue;
-      const available =
-        s.requires === undefined ||
-        evaluateCondition(s.requires, this.state);
-      if (!available) continue;
-      const explicitlyEnding = this.isExplicitlyEndingScript(s.id);
-      if (explicitlyEnding) continue;
-      activities.push({
-        id: `script:${s.id}`,
-        kind: "script",
-        title: `📖 ${s.title}`,
-        cost: 1,
-        available: true,
-      });
-    }
-
-    for (const a of this.game.actions ?? []) {
-      if (a.slot === "day" && isNight) continue;
-      if (a.slot === "night" && !isNight) continue;
-      const available =
-        a.requires === undefined ||
-        evaluateCondition(a.requires, this.state);
-      activities.push({
-        id: `action:${a.id}`,
-        kind: "action",
-        title: a.title,
-        description: a.description,
-        category: a.category,
-        cost: a.cost,
-        effectsHint: formatEffectsHint(a.effects),
-        available,
-        lockedReason: available ? undefined : "条件未满足",
-      });
-    }
-
-    const snapshot: HubSnapshot = {
-      day: t.day,
-      maxDay: cfg.maxDay,
-      slot: t.slot,
-      slotName,
-      slotsPerDay: cfg.slotsPerDay,
-      stats: cfg.stats.map((sd) => ({
-        id: sd.id,
-        name: sd.name,
-        value: t.stats[sd.id] ?? 0,
-        min: sd.min,
-        max: t.statMax[sd.id] ?? sd.max,
-      })),
-      affections: this.game.characters.map((c) => ({
-        id: c.id,
-        name: c.name,
-        value: this.state.baseline.characters[c.id]?.affection ?? 0,
-      })),
-      activities,
-    };
-
-    return { type: "hubMenu", snapshot };
-  }
-
-  private isExplicitlyEndingScript(scriptId: string): boolean {
-    if (!this.game.training) return false;
-    return this.game.training.endConditions.some((ec) => ec.goto === scriptId);
   }
 
   private async *dispatchActivity(
@@ -251,117 +221,52 @@ export class Engine {
   private async *runAction(
     action: Action,
   ): AsyncGenerator<Output, "ok" | "quit", Input> {
-    if (action.kind === "combat") {
-      const combatResult = yield* this.runCombat(action);
-      if (combatResult === "quit") return "quit";
-    } else {
-      if (action.effects) applyDelta(this.state, action.effects);
-      if (action.kind === "sleep") {
-        const t = this.state.training!;
-        for (const statId of Object.keys(t.stats)) {
-          if (
-            statId === "physical" ||
-            statId === "energy" ||
-            statId === "stamina"
-          ) {
-            t.stats[statId] = t.statMax[statId] ?? t.stats[statId]!;
-          }
-        }
-      }
+    const handler = action.kind ? this.actionHandlerRegistry[action.kind] : undefined;
+    if (handler) {
+      this.applyActionResult(handler({
+        state: this.state,
+        action,
+        game: this.game,
+        rng: Math.random,
+      }));
+    } else if (action.effects) {
+      applyDelta(this.state, action.effects);
     }
-    this.advanceTime(action.cost);
+    // Notify every module that an action completed. The training preset
+    // uses this hook to advance slot/day and apply per-day decay; other
+    // modules can observe state transitions here. Engine itself is
+    // calendar-agnostic.
+    for (const mod of this.modules) {
+      mod.advanceAfterAction?.(this.state, this.game, action);
+    }
     return "ok";
   }
 
-  private async *runCombat(
-    action: Action,
-  ): AsyncGenerator<Output, "ok" | "quit", Input> {
-    // Resolve combat atomically: compute all rolls, apply all state deltas,
-    // then enqueue narrations into training.pendingNarrations. The main
-    // run() loop drains them across subsequent step() calls. This keeps
-    // combat coherent even when each step() creates a fresh engine.
-    const t = this.state.training!;
-    if (!t.pendingNarrations) t.pendingNarrations = [];
-    const swordPower = t.stats.sword_power ?? 0;
-    const spectral = t.stats.spectral ?? 0;
-    const day = t.day;
-
-    const enemyHp = Math.floor(6 + day * 1.5);
-    const variance = 0.8 + Math.random() * 0.4;
-    let damage = swordPower * (1 + spectral * 0.04) * variance;
-
-    const critRoll = Math.random() * 100;
-    const fumbleRoll = Math.random() * 100;
-    const isCrit = critRoll < spectral * 0.7;
-    const isFumble = !isCrit && fumbleRoll < spectral * 0.5;
-
-    if (isCrit) damage *= 2;
-    if (isFumble) damage = 0;
-    const finalDamage = Math.floor(damage);
-    const victory = finalDamage >= enemyHp;
-
-    const narrations: string[] = [];
-    narrations.push(
-      `夜风刺骨。一团扭曲的影子从巷子尽头爬出——HP ${enemyHp} 的妖怪。`,
-    );
-    if (isCrit) {
-      narrations.push(`妖刀震动，你斩出了双倍威力！(造成 ${finalDamage} 伤害)`);
-    } else if (isFumble) {
-      applyDelta(this.state, { stats: { physical: -3 } });
-      narrations.push(`妖力反噬。你被自己的刀气擦伤，体力 -3。`);
-    } else {
-      narrations.push(`你拔刀。冷光一闪，造成 ${finalDamage} 伤害。`);
-    }
-
-    let spectralDelta: number;
-    if (victory) {
-      const absorb = Math.floor(enemyHp / 2);
-      const swordGain = Math.max(2, Math.floor(enemyHp / 4));
-      spectralDelta = -absorb;
-      applyDelta(this.state, {
-        stats: { spectral: -absorb, sword_power: swordGain, mental: -2 },
-      });
-      narrations.push(
-        `妖怪化为光点散去。你把它的妖力封入刀里——灵体化 -${absorb}, 妖刀威力 +${swordGain}。`,
-      );
-    } else {
-      spectralDelta = 5;
-      applyDelta(this.state, {
-        stats: { spectral: 5, physical: -5, mental: -3 },
-      });
-      narrations.push(`妖怪逃了。它的妖力侵蚀了你——灵体化 +5, 体力 -5。`);
-    }
-
-    t.combatLog.push({
-      day,
-      enemyHp,
-      damage: finalDamage,
-      crit: isCrit,
-      fumble: isFumble,
-      victory,
-      spectralDelta,
-    });
-
-    if (action.effects) applyDelta(this.state, action.effects);
-    t.pendingNarrations.push(...narrations);
-    return "ok";
-  }
-
-  private advanceTime(slots: number): void {
-    if (!this.state.training || !this.game.training) return;
-    const cfg = this.game.training;
-    const t = this.state.training;
-    t.slot += slots;
-    while (t.slot >= cfg.slotsPerDay) {
-      t.slot -= cfg.slotsPerDay;
-      t.day += 1;
-      if (cfg.decayPerDay !== 0 && cfg.decayStatId) {
-        applyDelta(this.state, {
-          stats: { [cfg.decayStatId]: cfg.decayPerDay },
-        });
+  // Apply the atomic result of a module-provided ActionHandler:
+  //   - merge state deltas via applyDelta
+  //   - enqueue narrations for the run() loop to drain one per step
+  //   - append customLog entries to state[moduleId].log[]
+  private applyActionResult(result: ActionResult): void {
+    if (result.deltas) applyDelta(this.state, result.deltas);
+    if (result.narrations && result.narrations.length > 0) {
+      const t = this.state.training;
+      if (t) {
+        if (!t.pendingNarrations) t.pendingNarrations = [];
+        t.pendingNarrations.push(...result.narrations);
       }
     }
+    if (result.customLog) {
+      const { moduleId, entry } = result.customLog;
+      const existing = this.state[moduleId] as
+        | { log?: unknown[] }
+        | undefined;
+      const slot = existing ?? { log: [] };
+      if (!Array.isArray(slot.log)) slot.log = [];
+      slot.log.push(entry);
+      this.state[moduleId] = slot;
+    }
   }
+
 
   private async *runScript(
     script: Script,
@@ -460,23 +365,3 @@ function buildLabelMap(script: Script): Map<string, number> {
   return map;
 }
 
-function formatEffectsHint(effects: StateDelta | undefined): string | undefined {
-  if (!effects) return undefined;
-  const parts: string[] = [];
-  if (effects.affection) {
-    for (const [k, v] of Object.entries(effects.affection)) {
-      parts.push(`${k}${v >= 0 ? "+" : ""}${v}`);
-    }
-  }
-  if (effects.stats) {
-    for (const [k, v] of Object.entries(effects.stats)) {
-      parts.push(`${k}${v >= 0 ? "+" : ""}${v}`);
-    }
-  }
-  if (effects.flags) {
-    for (const [k, v] of Object.entries(effects.flags)) {
-      parts.push(`${k}=${v}`);
-    }
-  }
-  return parts.length > 0 ? parts.join(" ") : undefined;
-}

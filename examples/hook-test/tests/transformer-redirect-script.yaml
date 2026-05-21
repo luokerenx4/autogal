@@ -1,0 +1,25 @@
+name: onScriptSelect 把 intro 改路到 alt
+description: |
+  Seed flag `redirectScriptTo: alt`. When player picks intro, the
+  tracker module's onScriptSelect returns "alt" and the engine actually
+  enters the alt script.
+state:
+  baseline:
+    flags:
+      redirectScriptTo: alt
+inputs:
+  - { type: doActivity, id: "script:intro" }
+  - { type: next }
+assertions:
+  # alt should be in completedScripts (we walked through it)
+  - kind: state
+    path: baseline.completedScripts
+    includes: alt
+  # intro should NOT be in completedScripts (redirect bypassed it)
+  - kind: state
+    path: baseline.currentScriptId
+    eq: null
+  # tracker.log shows the script that actually ran was alt
+  - kind: state
+    path: hook-tracker.log
+    includes: onScriptStart:alt

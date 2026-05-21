@@ -3,4 +3,22 @@ export { checkEndConditions } from "./checkEndConditions";
 export { applyActionResult } from "./applyActionResult";
 export { runScript } from "./runScript";
 export { dispatchActivity } from "./dispatchActivity";
-export { fireHook } from "./hooks";
+export { mutateState } from "./mutateState";
+export {
+  fireHook,
+  fireOnSessionStart,
+  fireOnScriptStart,
+  fireOnScriptComplete,
+  fireOnScriptSelect,
+  fireOnBeatBefore,
+  fireOnBeatAfter,
+  fireOnChoicePresented,
+  fireOnChoiceResolved,
+  fireOnLabelEnter,
+  fireOnActionDispatch,
+  fireOnActionComplete,
+  fireOnStateMutated,
+  fireOnHubBuild,
+  fireOnEndConditionFire,
+  fireOnNarrationDrain,
+} from "./hooks";

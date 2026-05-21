@@ -1,0 +1,8 @@
+id: noop
+title: a kindless action
+description: used to exercise onActionDispatch / onActionComplete
+category: solo
+slot: any
+cost: 1
+effects:
+  stats: { marker: 1 }

@@ -1,0 +1,22 @@
+name: onActionDispatch 返回 cancel 跳过 action 体
+description: |
+  Seed flag `cancelActions: true`. doActivity action:noop hits tracker's
+  onActionDispatch which returns "cancel" — the action body (noop's
+  marker +1 effect) never applies. State.marker stays at 0.
+state:
+  baseline:
+    flags:
+      cancelActions: true
+inputs:
+  - { type: doActivity, id: "action:noop" }
+assertions:
+  - kind: state
+    path: hook-tracker.log
+    includes: onActionDispatch:noop
+  # action body never ran — no onActionComplete for noop
+  # (training preset still fires onActionComplete for SCRIPTS but not for
+  #  cancelled actions, since runAction returned before that fire-point)
+  # so the marker stat stays at 0
+  - kind: state
+    path: training.stats.marker
+    eq: 0

@@ -18,9 +18,8 @@
 // handlers via additional modules in game.yaml's `modules:` list.
 
 import { evaluateCondition } from "../condition";
-import { applyDelta } from "../state";
+import { mutateState } from "../primitives/mutateState";
 import type {
-  Action,
   ActionHandler,
   ComposedState,
   Game,
@@ -28,6 +27,7 @@ import type {
   HubSnapshot,
   Module,
   Output,
+  PresetContext,
   StateDelta,
   TrainingConfig,
   TrainingState,
@@ -144,8 +144,13 @@ function buildHubSnapshot(state: ComposedState, game: Game): Output {
 
 // Calendar advance: bump slot by `slots`; roll into next day with
 // per-day decay (the configured `decayStatId` shifts by decayPerDay
-// every rollover).
-function advanceCalendar(state: ComposedState, game: Game, slots: number): void {
+// every rollover). Uses mutateState so the per-day decay surfaces via
+// onStateMutated with source="decay".
+function advanceCalendar(
+  ctx: PresetContext,
+  slots: number,
+): void {
+  const { state, game } = ctx;
   if (!state.training || !game.training) return;
   const cfg = game.training;
   const t = state.training;
@@ -154,26 +159,41 @@ function advanceCalendar(state: ComposedState, game: Game, slots: number): void 
     t.slot -= cfg.slotsPerDay;
     t.day += 1;
     if (cfg.decayPerDay !== 0 && cfg.decayStatId) {
-      applyDelta(state, { stats: { [cfg.decayStatId]: cfg.decayPerDay } });
+      mutateState(ctx, { stats: { [cfg.decayStatId]: cfg.decayPerDay } }, "decay");
     }
   }
 }
 
 // "Sleep" action kind: restore physical-family stats to their max,
 // apply the action's own effects (mental/spectral deltas from yaml).
-// This is the canonical training-preset bundled action handler — games
-// using the training preset get sleep semantics for free without
-// needing to write a custom handler.
+// Returns a consolidated delta rather than mutating state directly,
+// so onStateMutated (C2) fires uniformly through applyActionResult.
 const sleepHandler: ActionHandler = ({ state, action }) => {
   const t = state.training;
   if (!t) return {};
-  if (action.effects) applyDelta(state, action.effects);
+
+  const stats: Record<string, number> = {};
+  // Pass through non-physical-family stat effects from action.effects.
+  for (const [k, v] of Object.entries(action.effects?.stats ?? {})) {
+    if (k === "physical" || k === "energy" || k === "stamina") continue;
+    stats[k] = v;
+  }
+  // Physical-family stats: delta-to-max (sleep restores regardless of
+  // action.effects intent for these slots).
   for (const statId of Object.keys(t.stats)) {
     if (statId === "physical" || statId === "energy" || statId === "stamina") {
-      t.stats[statId] = t.statMax[statId] ?? t.stats[statId]!;
+      const max = t.statMax[statId] ?? t.stats[statId]!;
+      const cur = t.stats[statId] ?? 0;
+      if (max > cur) stats[statId] = max - cur;
     }
   }
-  return {};
+
+  return {
+    deltas: {
+      ...(action.effects ?? {}),
+      stats,
+    },
+  };
 };
 
 export const trainingPreset: Module = {
@@ -186,11 +206,16 @@ export const trainingPreset: Module = {
   actionHandlers: {
     sleep: sleepHandler,
   },
-  advanceAfterAction: (state, game, action) => {
-    advanceCalendar(state, game, action.cost);
+  // Renamed from advanceAfterAction (PR #2) — same semantics, new
+  // unified hook name from C2.
+  onActionComplete: (ctx, action, _result) => {
+    advanceCalendar(ctx, action.cost);
   },
-  buildHubOutput: (state, game) => {
-    if (!state.training || !game.training) return null;
+  // Renamed from buildHubOutput (PR #2). First-wins: this preset
+  // claims the hub when game.training is configured.
+  onHubBuild: (ctx) => {
+    const { state, game } = ctx;
+    if (!state.training || !game.training) return undefined;
     return buildHubSnapshot(state, game);
   },
 };

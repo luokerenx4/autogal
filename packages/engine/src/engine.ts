@@ -4,6 +4,12 @@ import {
   checkEndConditions,
   dispatchActivity,
   drainNarrations,
+  fireOnActionComplete,
+  fireOnEndConditionFire,
+  fireOnHubBuild,
+  fireOnScriptComplete,
+  fireOnScriptSelect,
+  fireOnSessionStart,
   runScript,
 } from "./primitives";
 import type {
@@ -12,10 +18,8 @@ import type {
   ComposedState,
   Game,
   Input,
-  Module,
   Output,
   PresetContext,
-  Script,
   ScriptInfo,
 } from "./types";
 
@@ -77,27 +81,22 @@ export class Engine {
       .map((s) => ({ id: s.id, title: s.title }));
   }
 
-  // Main loop. Still inline for now (C1 only extracts primitives; C3
-  // moves this body into per-preset run.ts files). Each block delegates
-  // to a primitive that operates on this.ctx.
+  // Main loop. Inline for now — C3 will move this body into per-preset
+  // run.ts files. Each block delegates to a primitive that operates on
+  // this.ctx.
   async *run(): AsyncGenerator<Output, void, Input> {
+    fireOnSessionStart(this.ctx);
+
     while (true) {
       // 1. Drain any queued narrations (e.g. from a combat that ran
-      //    atomically last step). State persists across step() calls,
-      //    so this resumes correctly even when the engine is rebuilt
-      //    from disk between yields.
+      //    atomically last step).
       yield* drainNarrations(this.ctx);
 
-      // 2. Only check end conditions when no script is mid-flight.
-      //    Setting currentScriptId + beatIndex here used to clobber an
-      //    in-progress ending script every loop iteration; in step mode
-      //    (fresh engine per call, no in-memory continuation) that
-      //    meant the ending narration got stuck on beat 1 forever. Now
-      //    we queue the ending via the normal currentScriptId path and
-      //    let the existing resumption logic drive it.
+      // 2. End conditions check (only when no script mid-flight).
       if (this.state.baseline.currentScriptId === null) {
         const endCheck = checkEndConditions(this.ctx);
         if (endCheck) {
+          fireOnEndConditionFire(this.ctx, endCheck);
           if (
             endCheck.goto &&
             !this.state.baseline.completedScripts.includes(endCheck.goto) &&
@@ -124,20 +123,20 @@ export class Engine {
         }
         const finished = yield* runScript(this.ctx, script);
         if (finished) {
-          this.state.baseline.completedScripts.push(script.id);
+          const completedId = script.id;
+          this.state.baseline.completedScripts.push(completedId);
           this.state.baseline.currentScriptId = null;
           this.state.baseline.beatIndex = 0;
+          fireOnScriptComplete(this.ctx, completedId);
           // Scripts count as 1 slot when a preset is providing the hub
-          // (i.e. training mode). The preset's advanceAfterAction owns
-          // calendar bookkeeping.
+          // (i.e. training mode). The preset's onActionComplete hook
+          // owns calendar bookkeeping.
           const completedAction: Action = {
-            id: script.id,
+            id: completedId,
             title: script.title,
             cost: 1,
           };
-          for (const mod of this.ctx.modules) {
-            mod.advanceAfterAction?.(this.state, this.game, completedAction);
-          }
+          fireOnActionComplete(this.ctx, completedAction, undefined);
         } else {
           return;
         }
@@ -145,12 +144,10 @@ export class Engine {
       }
 
       // 4. Hub vs scriptComplete: ask each module if it provides a hub
-      //    Output for the current state. First non-null wins (typically
-      //    the training preset, when game.training is configured).
-      //    Pure-VN games have no hub-providing module → fall through to
-      //    scriptComplete.
-      const hubOutput = this.askModulesForHub();
-      if (hubOutput) {
+      //    Output for the current state. First non-undefined wins
+      //    (typically the training preset). Pure-VN games fall through.
+      const hubOutput = fireOnHubBuild(this.ctx);
+      if (hubOutput !== undefined) {
         const input = yield hubOutput;
         if (input.type === "quit") return;
         if (input.type !== "doActivity") continue;
@@ -173,18 +170,11 @@ export class Engine {
         };
         if (input.type === "quit") return;
         if (input.type !== "select") continue;
-        if (!this.ctx.scriptMap.has(input.scriptId)) continue;
-        this.state.baseline.currentScriptId = input.scriptId;
+        const finalId = fireOnScriptSelect(this.ctx, input.scriptId);
+        if (!this.ctx.scriptMap.has(finalId)) continue;
+        this.state.baseline.currentScriptId = finalId;
         this.state.baseline.beatIndex = 0;
       }
     }
-  }
-
-  private askModulesForHub(): Output | null {
-    for (const mod of this.ctx.modules) {
-      const out = mod.buildHubOutput?.(this.state, this.game);
-      if (out) return out;
-    }
-    return null;
   }
 }

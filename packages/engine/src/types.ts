@@ -129,25 +129,146 @@ export interface Action {
   kind?: "combat" | "sleep" | "plain";
 }
 
+// Where a state mutation came from. Passed to onStateMutated so
+// subscriber modules can filter cheaply without writing diff logic.
+export type StateMutationSource =
+  | "beat" // a script beat's effects: clause
+  | "choice" // a chosen choice's effects
+  | "action" // an action handler's returned deltas
+  | "decay" // training preset's per-day decay
+  | "endcondition" // an end-condition-triggered mutation
+  | "external"; // anything else (manual game scripts, hot-reload, etc.)
+
 export interface Module {
   id: string;
   version?: string;
   initialize?(game: Game): unknown;
+
   // Map of action.kind → handler. When the engine dispatches an Action
   // whose `kind` matches one of the keys, this handler is invoked.
   // Handlers MUST resolve atomically (see ActionHandler doc below).
   actionHandlers?: Record<string, ActionHandler>;
-  // Called by the engine after every action body completes. Preset
-  // modules use this to advance the calendar (slot/day/decay) — the
-  // engine itself no longer owns this concept. Reactor modules can use
-  // it to observe state transitions.
-  advanceAfterAction?(state: ComposedState, game: Game, action: Action): void;
-  // Called by the engine when it needs to render the hub. The first
-  // module returning a non-null Output wins (typically a hubMenu
-  // snapshot). Used by the training preset to provide its hub. Pure-VN
-  // games have no module returning a hub here, so the engine falls
-  // back to the inter-script "scriptComplete" flow.
-  buildHubOutput?(state: ComposedState, game: Game): Output | null;
+
+  // ============ LIFECYCLE HOOKS ============
+  // All hooks fire SYNC. To emit narrations, push into
+  // state.runtime.pendingNarrations — the run loop drains them on
+  // subsequent steps. Do NOT yield Output from hooks (they're not
+  // generators).
+  //
+  // Compose rules per hook (labelled in JSDoc, enforced by fireHook
+  // dispatcher):
+  //   - observer: every module called, returns ignored
+  //   - first-wins: every module called (so downstream observers see
+  //     the event), but only the first non-undefined return is used
+  //   - reducer: chain transforms (prev return fed into next)
+
+  /** observer: fires once at engine.run() entry, before any other work. */
+  onSessionStart?(ctx: PresetContext): void;
+
+  /** first-wins: return a different scriptId to redirect the selection. */
+  onScriptSelect?(ctx: PresetContext, scriptId: string): string | void;
+
+  /** observer: fires just before the first beat of a script yields. */
+  onScriptStart?(ctx: PresetContext, scriptId: string): void;
+
+  /**
+   * reducer: pre-process the beat about to run. Return value:
+   *   - `undefined` (or no return): use the original beat as-is
+   *   - `{ replace: Beat }`: substitute the beat
+   *   - `{ skip: true }`: don't yield this beat at all; advance beatIndex
+   *   - `Beat` (bare): same as `{ replace: <beat> }` for ergonomic
+   *     in-place edits like `{ ...beat, text: "..." }`
+   */
+  onBeatBefore?(
+    ctx: PresetContext,
+    scriptId: string,
+    beatIdx: number,
+    beat: Beat,
+  ): Beat | { replace: Beat } | { skip: true } | void;
+
+  /** observer: fires after each beat's input is processed (incl. skipped). */
+  onBeatAfter?(
+    ctx: PresetContext,
+    scriptId: string,
+    beatIdx: number,
+    beat: Beat,
+  ): void;
+
+  /** reducer: chain transforms over the rendered options array. */
+  onChoicePresented?(
+    ctx: PresetContext,
+    scriptId: string,
+    beatIdx: number,
+    options: RenderedChoice[],
+  ): RenderedChoice[] | void;
+
+  /** observer: fires after the player's choose input is processed. */
+  onChoiceResolved?(
+    ctx: PresetContext,
+    scriptId: string,
+    beatIdx: number,
+    choiceIdx: number,
+  ): void;
+
+  /** observer: fires when runScript jumps into a label. */
+  onLabelEnter?(
+    ctx: PresetContext,
+    scriptId: string,
+    labelName: string,
+  ): void;
+
+  /** observer: fires after a script reaches [end] or its last beat. */
+  onScriptComplete?(ctx: PresetContext, scriptId: string): void;
+
+  /**
+   * first-wins: pre-process or cancel an action dispatch. Return value:
+   *   - `Action`: dispatch the returned action instead of the original
+   *   - `"cancel"`: skip the dispatch entirely (action body doesn't run)
+   *   - `undefined`: pass through unchanged
+   */
+  onActionDispatch?(
+    ctx: PresetContext,
+    action: Action,
+  ): Action | "cancel" | void;
+
+  /**
+   * observer: fires after an action body and applyActionResult complete.
+   * `result` is undefined when the engine treats a script completion as
+   * a "1-slot action" for calendar bookkeeping. Replaces the
+   * advanceAfterAction hook from PR #2.
+   */
+  onActionComplete?(
+    ctx: PresetContext,
+    action: Action,
+    result: ActionResult | undefined,
+  ): void;
+
+  /**
+   * observer: fires after every applyDelta-style mutation. `source`
+   * lets subscribers filter without diffing state. High-volume — keep
+   * implementations cheap.
+   */
+  onStateMutated?(
+    ctx: PresetContext,
+    delta: StateDelta,
+    source: StateMutationSource,
+  ): void;
+
+  /**
+   * first-wins: provide a hub Output for the current state. Used by
+   * presets that have a hub (e.g. training). Replaces the
+   * buildHubOutput hook from PR #2.
+   */
+  onHubBuild?(ctx: PresetContext): Output | undefined;
+
+  /** observer: fires when an end-condition first matches and triggers. */
+  onEndConditionFire?(
+    ctx: PresetContext,
+    ec: EndConditionSpec,
+  ): void;
+
+  /** observer: fires when one narration is shifted off the queue. */
+  onNarrationDrain?(ctx: PresetContext, text: string): void;
 }
 
 // ActionHandler invariant: must resolve ATOMICALLY. The handler computes

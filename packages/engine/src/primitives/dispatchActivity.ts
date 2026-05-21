@@ -1,26 +1,34 @@
 import { evaluateCondition } from "../condition";
-import { applyDelta } from "../state";
-import type { Action, Input, Output, PresetContext } from "../types";
+import type {
+  Action,
+  ActionResult,
+  Input,
+  Output,
+  PresetContext,
+} from "../types";
 import { applyActionResult } from "./applyActionResult";
+import {
+  fireOnActionComplete,
+  fireOnActionDispatch,
+  fireOnScriptSelect,
+} from "./hooks";
+import { mutateState } from "./mutateState";
 
 // Dispatch a hub-menu activity by its full id (e.g. "script:001_arrival",
 // "action:hunt"). Handles the two activity prefixes:
-//   - "script:" → set baseline.currentScriptId so the run loop's
-//     subsequent iteration enters that script
+//   - "script:" → fire onScriptSelect (modules may redirect), then set
+//     baseline.currentScriptId so the run loop enters that script
 //   - "action:" → resolve to a registered Action, check requires(),
-//     dispatch via the action handler registry (kind-based) or just
-//     apply action.effects if no handler is registered
-//
-// Returns "ok" on completion, "quit" if a yielded sub-flow received
-// a quit input. Today no action body yields, but the return type
-// allows future preset modules to register multi-yield handlers if
-// they own the resumption state themselves.
+//     fire onActionDispatch (modules may substitute or cancel), then
+//     dispatch via the action handler registry, then fire
+//     onActionComplete
 export async function* dispatchActivity(
   ctx: PresetContext,
   activityId: string,
 ): AsyncGenerator<Output, "ok" | "quit", Input> {
   if (activityId.startsWith("script:")) {
-    const scriptId = activityId.slice("script:".length);
+    const requested = activityId.slice("script:".length);
+    const scriptId = fireOnScriptSelect(ctx, requested);
     if (!ctx.scriptMap.has(scriptId)) return "ok";
     if (ctx.state.baseline.completedScripts.includes(scriptId)) return "ok";
     ctx.state.baseline.currentScriptId = scriptId;
@@ -29,13 +37,15 @@ export async function* dispatchActivity(
   }
   if (activityId.startsWith("action:")) {
     const actionId = activityId.slice("action:".length);
-    const action = ctx.actionMap.get(actionId);
-    if (!action) return "ok";
+    const original = ctx.actionMap.get(actionId);
+    if (!original) return "ok";
     const available =
-      action.requires === undefined ||
-      evaluateCondition(action.requires, ctx.state);
+      original.requires === undefined ||
+      evaluateCondition(original.requires, ctx.state);
     if (!available) return "ok";
-    return yield* runAction(ctx, action);
+    const dispatched = fireOnActionDispatch(ctx, original);
+    if (dispatched === "cancel") return "ok";
+    return yield* runAction(ctx, dispatched);
   }
   return "ok";
 }
@@ -52,24 +62,18 @@ async function* runAction(
   const handler = action.kind
     ? ctx.actionHandlerRegistry[action.kind]
     : undefined;
+  let result: ActionResult | undefined;
   if (handler) {
-    applyActionResult(
-      ctx,
-      handler({
-        state: ctx.state,
-        action,
-        game: ctx.game,
-        rng: ctx.rng,
-      }),
-    );
+    result = handler({
+      state: ctx.state,
+      action,
+      game: ctx.game,
+      rng: ctx.rng,
+    });
+    applyActionResult(ctx, result);
   } else if (action.effects) {
-    applyDelta(ctx.state, action.effects);
+    mutateState(ctx, action.effects, "action");
   }
-  // Notify every module that an action completed. The training preset
-  // uses this hook (named advanceAfterAction today, renamed to
-  // onActionComplete in C2) to advance slot/day and apply per-day decay.
-  for (const mod of ctx.modules) {
-    mod.advanceAfterAction?.(ctx.state, ctx.game, action);
-  }
+  fireOnActionComplete(ctx, action, result);
   return "ok";
 }

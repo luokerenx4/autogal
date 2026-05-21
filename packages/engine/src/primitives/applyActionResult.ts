@@ -1,8 +1,9 @@
-import { applyDelta } from "../state";
 import type { ActionResult, PresetContext } from "../types";
+import { mutateState } from "./mutateState";
 
 // Apply the atomic result of a module-provided ActionHandler:
-//   - merge state deltas via applyDelta
+//   - merge state deltas via mutateState (fires onStateMutated with
+//     source "action")
 //   - enqueue narrations into state.runtime.pendingNarrations (the
 //     drainNarrations primitive yields them one per step across
 //     subsequent step() calls)
@@ -15,7 +16,7 @@ export function applyActionResult(
   ctx: PresetContext,
   result: ActionResult,
 ): void {
-  if (result.deltas) applyDelta(ctx.state, result.deltas);
+  if (result.deltas) mutateState(ctx, result.deltas, "action");
   if (result.narrations && result.narrations.length > 0) {
     ctx.state.runtime.pendingNarrations.push(...result.narrations);
   }

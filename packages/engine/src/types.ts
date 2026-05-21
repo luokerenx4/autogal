@@ -77,6 +77,30 @@ export interface ItemDef {
   stack?: boolean;
 }
 
+// Engine-level standard enemy resource. Combat modules read these to
+// drive narration + base stats; specific damage formulas and HP
+// scaling stay with the combat module (different games scale
+// differently). Narrations support `{name}` and `{hp}` template
+// substitution.
+export interface EnemyDef {
+  id: string;
+  name: string;
+  // Markdown body — flavor text for hub UI / inspection.
+  description: string;
+  // Base HP. Combat module may apply scaling (e.g. day-multiplier)
+  // on top of this; engine doesn't.
+  hp: number;
+  // Optional misc stats — combat module decides how to use them
+  // (attack power, defense, etc.). Empty for purely HP-driven enemies.
+  stats?: Record<string, number>;
+  narrations?: {
+    // {hp}, {name} substituted at fire time.
+    intro?: string;
+    victory?: string;
+    escape?: string;
+  };
+}
+
 export interface StatDef {
   id: string;
   name: string;
@@ -175,6 +199,10 @@ export interface Action {
   // consumes. Resolved against ctx.itemMap by the bundled useItem
   // handler in baseline module.
   itemId?: string;
+  // Optional: id of the enemy fought by this action. Used by combat
+  // modules (game-provided) — engine does NOT dispatch on this field
+  // directly. Resolved against ctx.enemyMap by combat handlers.
+  enemyId?: string;
 }
 
 // Where a state mutation came from. Passed to onStateMutated so
@@ -393,6 +421,9 @@ export interface Game {
   // Engine-level item registry — see ItemDef. Empty / absent for games
   // that declare no items/ directory.
   items?: ItemDef[];
+  // Engine-level enemy registry — see EnemyDef. Empty / absent for
+  // games that declare no enemies/ directory.
+  enemies?: EnemyDef[];
   training?: TrainingConfig;
   modules?: Module[];
   // Preset selector. Either a built-in name ("vn" / "training") or a
@@ -484,6 +515,7 @@ export interface PresetContext {
   scriptMap: Map<string, Script>;
   actionMap: Map<string, Action>;
   itemMap: Map<string, ItemDef>;
+  enemyMap: Map<string, EnemyDef>;
   characterNameMap: Map<string, string>;
   // Injected RNG. Defaults to Math.random; tests can override for
   // deterministic combat / choice outcomes.

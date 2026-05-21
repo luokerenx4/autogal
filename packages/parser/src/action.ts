@@ -48,6 +48,9 @@ export function parseAction(content: string, source?: string): Action {
   if (typeof obj.itemId === "string") {
     action.itemId = obj.itemId;
   }
+  if (typeof obj.enemyId === "string") {
+    action.enemyId = obj.enemyId;
+  }
   if (action.kind === "useItem" && !action.itemId) {
     throw new ActionParseError(
       `${source ?? action.id}: kind=useItem requires an \`itemId\` field`,

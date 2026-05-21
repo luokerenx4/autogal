@@ -3,6 +3,7 @@ import path from "node:path";
 import type {
   Action,
   CharacterDef,
+  EnemyDef,
   Game,
   ItemDef,
   Module,
@@ -13,6 +14,7 @@ import {
   buildGame,
   parseAction,
   parseCharacter,
+  parseEnemy,
   parseItem,
   parseManifest,
   parseScript,
@@ -47,9 +49,24 @@ export async function loadGame(dir: string): Promise<Game> {
   );
   items.sort((a, b) => a.id.localeCompare(b.id));
 
+  const enemies = await loadDir<EnemyDef>(
+    path.join(dir, "enemies"),
+    [".md"],
+    (content, source) => parseEnemy(content, source),
+  );
+  enemies.sort((a, b) => a.id.localeCompare(b.id));
+
   const modules = await loadModules(dir, manifest.modules ?? []);
 
-  const game = buildGame(manifest, characters, scripts, actions, modules, items);
+  const game = buildGame(
+    manifest,
+    characters,
+    scripts,
+    actions,
+    modules,
+    items,
+    enemies,
+  );
 
   // If game.yaml's preset: is a relative path (the ejected-preset case),
   // dynamic-import the file and attach its default-exported RunFunction

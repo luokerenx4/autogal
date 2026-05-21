@@ -1,0 +1,38 @@
+name: 中后期合理数值能打赢妖怪
+description: |
+  Balance regression: 在 Day 10、sword_power=15、spectral=30 这种"认真养成
+  过的玩家可达"的数值下，hunt 应当必胜（最低 variance 也打得过）。
+  公式：damage = 15 * (1 + 30*0.04) * 0.8 = 26.4，enemyHp(10) = floor(6+15) = 21。
+  胜利奖励 sword_power += max(2, floor(21/4)) = 5，所以 sword_power 应达到 20。
+state:
+  baseline:
+    completedScripts: [001_arrival, 002_first_youkai]
+  training:
+    day: 10
+    slot: 2
+    stats:
+      spectral: 30
+      sword_power: 15
+      physical: 15
+      mental: 5
+      intellect: 4
+    statMax:
+      spectral: 100
+      sword_power: 100
+      physical: 20
+      mental: 10
+      intellect: 99
+    combatLog: []
+    pendingNarrations: []
+inputs:
+  - { type: doActivity, id: "action:hunt" }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+assertions:
+  - kind: state
+    path: training.combatLog
+    length: 1
+  - kind: state
+    path: training.stats.sword_power
+    eq: 20

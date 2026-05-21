@@ -287,7 +287,7 @@ export class Engine {
     const spectral = t.stats.spectral ?? 0;
     const day = t.day;
 
-    const enemyHp = 8 + day * 2;
+    const enemyHp = Math.floor(6 + day * 1.5);
     const variance = 0.8 + Math.random() * 0.4;
     let damage = swordPower * (1 + spectral * 0.04) * variance;
 
@@ -317,7 +317,7 @@ export class Engine {
     let spectralDelta: number;
     if (victory) {
       const absorb = Math.floor(enemyHp / 2);
-      const swordGain = Math.max(1, Math.floor(enemyHp / 5));
+      const swordGain = Math.max(2, Math.floor(enemyHp / 4));
       spectralDelta = -absorb;
       applyDelta(this.state, {
         stats: { spectral: -absorb, sword_power: swordGain, mental: -2 },

@@ -31,7 +31,9 @@ autogal test .                                 # fixture 回归
 战斗公式：
 
 ```
+妖怪 HP = floor(6 + day × 1.5)
 基础伤害 = sword_power × (1 + spectral × 0.04) × random(0.8, 1.2)
+胜利奖励 = max(2, floor(妖怪HP / 4))   # 妖刀威力 +N
 临界成功率 (crit, ×2 伤害) = spectral × 0.7%
 临界失败率 (fumble, 0 伤害 + 自伤 -3 体力) = spectral × 0.5%
 ```

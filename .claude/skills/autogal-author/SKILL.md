@@ -199,6 +199,44 @@ requires:
 The engine deletes the inventory key when its count hits zero — you
 don't need to clean up explicitly. Counts never go below zero.
 
+## Enemy file format — `enemies/<id>.md`
+
+Optional directory. Enemies are engine-level data; combat modules
+(e.g. spectral-combat) read enemy stats + narrations and apply their
+own damage formulas.
+
+```markdown
+---
+id: youkai
+name: 妖怪
+hp: 6                   # base HP. Combat module may scale (e.g. +day×k).
+stats:                  # optional; combat module decides how to use
+  attack: 2
+narrations:             # optional; templates with {hp} {name} {damage}
+  intro: 一团扭曲的影子爬出——HP {hp} 的{name}。
+  victory: {name} 化为光点散去。
+  escape: {name} 逃了。
+---
+
+Markdown body becomes the enemy's description (for hub UI / AI authoring).
+```
+
+Actions that fight an enemy declare it via `enemyId`:
+
+```yaml
+# actions/hunt.yaml
+id: hunt
+kind: combat
+enemyId: youkai
+requires:
+  stat: { name: mental, min: 2 }
+```
+
+The engine **does not dispatch on `enemyId` itself** — it just makes
+the enemy data available via `game.enemies` to whatever combat handler
+the game registers. Combat modules are responsible for picking up the
+enemy and using its fields.
+
 ## Script ID conventions (suggested, not enforced)
 
 Numeric prefix groups related scripts:

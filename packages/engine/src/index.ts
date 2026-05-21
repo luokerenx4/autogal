@@ -80,6 +80,7 @@ export type {
   ComposedState,
   Condition,
   EndConditionSpec,
+  EnemyDef,
   FlagValue,
   Game,
   HubActivity,

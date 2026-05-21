@@ -1,6 +1,7 @@
 import type {
   Action,
   CharacterDef,
+  EnemyDef,
   Game,
   ItemDef,
   Module,
@@ -14,6 +15,7 @@ export { parseCharacter, CharacterParseError } from "./character";
 export { parseCondition, ConditionParseError } from "./condition";
 export { parseAction, ActionParseError } from "./action";
 export { parseItem, ItemParseError } from "./item";
+export { parseEnemy, EnemyParseError } from "./enemy";
 export type { Manifest } from "./manifest";
 
 export function buildGame(
@@ -23,6 +25,7 @@ export function buildGame(
   actions?: Action[],
   modules?: Module[],
   items?: ItemDef[],
+  enemies?: EnemyDef[],
 ): Game {
   const game: Game = {
     title: manifest.title,
@@ -31,6 +34,7 @@ export function buildGame(
   };
   if (actions && actions.length > 0) game.actions = actions;
   if (items && items.length > 0) game.items = items;
+  if (enemies && enemies.length > 0) game.enemies = enemies;
   if (manifest.training) game.training = manifest.training;
   if (modules && modules.length > 0) game.modules = modules;
   if (manifest.preset) game.preset = manifest.preset;

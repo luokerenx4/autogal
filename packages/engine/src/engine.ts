@@ -38,6 +38,7 @@ export class Engine {
     const scriptMap = new Map(game.scripts.map((s) => [s.id, s]));
     const actionMap = new Map((game.actions ?? []).map((a) => [a.id, a]));
     const itemMap = new Map((game.items ?? []).map((i) => [i.id, i]));
+    const enemyMap = new Map((game.enemies ?? []).map((e) => [e.id, e]));
     const characterNameMap = new Map(
       game.characters.map((c) => [c.id, c.name]),
     );
@@ -78,6 +79,7 @@ export class Engine {
       scriptMap,
       actionMap,
       itemMap,
+      enemyMap,
       characterNameMap,
       rng: Math.random,
     };

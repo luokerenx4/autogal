@@ -5,5 +5,6 @@ category: combat
 slot: night
 cost: 1
 kind: combat
+enemyId: youkai
 requires:
   stat: { name: mental, min: 2 }

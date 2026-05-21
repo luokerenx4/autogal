@@ -1,19 +1,32 @@
-// spectral-combat: the 妖刀さくら抄 combat formula. Lives with the game
-// content because the stat names (sword_power, spectral, mental, physical),
-// damage scaling, and crit/fumble rates are all specific to this game's
-// design. The engine doesn't know any of this exists; it just sees
-// `kind: "combat"` actions dispatch through whatever handler this module
-// registers.
+// spectral-combat: the 妖刀さくら抄 combat formula. After C7 the enemy
+// is data-driven — we look up the enemy from game.enemies using
+// action.enemyId, read its base HP + narration templates, and apply
+// spectral-demo's day-multiplier scaling on top.
+//
+// What stays here (game-specific, lives in this module):
+//   - the damage formula (sw × (1 + spec × 0.04) × variance)
+//   - crit / fumble rates tied to spectral
+//   - fumble reroll using intellect
+//   - HP day-scaling rule (enemy.hp + day * 1.5)
+//   - crit / fumble / hit narrations (about the SWORD, not the enemy)
+//
+// What's data now:
+//   - intro / victory / escape narrations (from enemy.narrations)
+//   - enemy base HP + name
+//
+// Engine doesn't dispatch on enemyId — combat handlers read it themselves.
 
 import type {
   ActionHandler,
   ActionResult,
+  EnemyDef,
   Module,
   StateDelta,
 } from "@autogal/engine";
 
 export interface SpectralCombatLogEntry {
   day: number;
+  enemyId: string;
   enemyHp: number;
   damage: number;
   crit: boolean;
@@ -22,19 +35,45 @@ export interface SpectralCombatLogEntry {
   spectralDelta: number;
 }
 
-const spectralCombatHandler: ActionHandler = ({ state, action, rng }) => {
+// Template substitution. {hp} {name} for intro; {absorb} {swordGain}
+// {damage} for outcome lines — author chooses which to use in
+// enemies/<id>.md narrations.
+function fillTemplate(
+  tmpl: string,
+  enemy: EnemyDef,
+  vars: Record<string, number | string>,
+): string {
+  let out = tmpl.replaceAll("{name}", enemy.name);
+  for (const [k, v] of Object.entries(vars)) {
+    out = out.replaceAll(`{${k}}`, String(v));
+  }
+  return out;
+}
+
+const spectralCombatHandler: ActionHandler = ({ state, action, game, rng }) => {
   const t = state.training!;
   const swordPower = t.stats.sword_power ?? 0;
   const spectral = t.stats.spectral ?? 0;
   const intellect = t.stats.intellect ?? 0;
   const day = t.day;
 
-  const enemyHp = Math.floor(6 + day * 1.5);
+  // Resolve enemy from game.enemies via action.enemyId. Falls back to
+  // the first declared enemy if action didn't specify one (preserves
+  // backward compat for action files that pre-date C7).
+  const enemyId = action.enemyId ?? game.enemies?.[0]?.id;
+  const enemy = enemyId
+    ? game.enemies?.find((e) => e.id === enemyId)
+    : undefined;
+  if (!enemy) {
+    // No enemy data available — return a no-op rather than crashing.
+    // Authors will see "nothing happened" and fix their action/enemy
+    // declaration.
+    return {};
+  }
 
-  // Roll once. If we fumble AND intellect >= 5, spend intellect -2
-  // and re-roll the whole strike. This gives the player a way to
-  // hedge against the spectral × 0.5% fumble chance in late-game when
-  // spectral is high — invest in study early, cash in for stability.
+  // Spectral-demo's day scaling rule: base HP + 1.5 per day.
+  const enemyHp = Math.floor(enemy.hp + day * 1.5);
+
   const rollStrike = () => {
     const variance = 0.8 + rng() * 0.4;
     let damage = swordPower * (1 + spectral * 0.04) * variance;
@@ -61,9 +100,12 @@ const spectralCombatHandler: ActionHandler = ({ state, action, rng }) => {
     stats[k] = (stats[k] ?? 0) + n;
   };
 
-  const narrations: string[] = [
-    `夜风刺骨。一团扭曲的影子从巷子尽头爬出——HP ${enemyHp} 的妖怪。`,
-  ];
+  const narrations: string[] = [];
+  if (enemy.narrations?.intro) {
+    narrations.push(
+      fillTemplate(enemy.narrations.intro, enemy, { hp: enemyHp }),
+    );
+  }
 
   if (rerolled) {
     add("intellect", -2);
@@ -91,18 +133,23 @@ const spectralCombatHandler: ActionHandler = ({ state, action, rng }) => {
     add("spectral", -absorb);
     add("sword_power", swordGain);
     add("mental", -2);
+    const tmpl =
+      enemy.narrations?.victory ??
+      "{name} 化为光点散去——灵体化 -{absorb}, 妖刀威力 +{swordGain}。";
     narrations.push(
-      `妖怪化为光点散去。你把它的妖力封入刀里——灵体化 -${absorb}, 妖刀威力 +${swordGain}。`,
+      fillTemplate(tmpl, enemy, { hp: enemyHp, absorb, swordGain }),
     );
   } else {
     spectralDelta = 5;
     add("spectral", 5);
     add("physical", -5);
     add("mental", -3);
-    narrations.push(`妖怪逃了。它的妖力侵蚀了你——灵体化 +5, 体力 -5。`);
+    const tmpl =
+      enemy.narrations?.escape ??
+      "{name} 逃了。灵体化 +5, 体力 -5。";
+    narrations.push(fillTemplate(tmpl, enemy, { hp: enemyHp }));
   }
 
-  // Merge action.effects into the same delta so the engine applies once.
   const deltas: StateDelta = { stats };
   if (action.effects?.stats) {
     for (const [k, v] of Object.entries(action.effects.stats)) add(k, v);
@@ -112,6 +159,7 @@ const spectralCombatHandler: ActionHandler = ({ state, action, rng }) => {
 
   const logEntry: SpectralCombatLogEntry = {
     day,
+    enemyId: enemy.id,
     enemyHp,
     damage: finalDamage,
     crit: isCrit,
@@ -130,7 +178,7 @@ const spectralCombatHandler: ActionHandler = ({ state, action, rng }) => {
 
 const combatModule: Module = {
   id: "spectral-combat",
-  version: "1.0.0",
+  version: "1.1.0",
   actionHandlers: {
     combat: spectralCombatHandler,
   },

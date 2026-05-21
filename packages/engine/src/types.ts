@@ -50,6 +50,13 @@ export interface StatDef {
   min: number;
   max: number;
   start: number;
+  thresholds?: StatThreshold[];
+}
+
+export interface StatThreshold {
+  min: number;
+  label: string;
+  color?: "green" | "yellow" | "red" | "cyan" | "magenta" | "white";
 }
 
 export interface TrainingConfig {
@@ -128,7 +135,45 @@ export interface Action {
 export interface Module {
   id: string;
   version?: string;
-  initialize(game: Game): unknown;
+  initialize?(game: Game): unknown;
+  // Map of action.kind → handler. When the engine dispatches an Action
+  // whose `kind` matches one of the keys, this handler is invoked.
+  // Handlers MUST resolve atomically (see ActionHandler doc below).
+  actionHandlers?: Record<string, ActionHandler>;
+  // Lifecycle hooks fired by the engine after the corresponding event.
+  // Mutate state in place; do NOT yield narrations from here — push into
+  // state.training?.pendingNarrations if you need them shown.
+  onSlotAdvance?(state: ComposedState, game: Game): void;
+  onDayRollover?(state: ComposedState, game: Game): void;
+  onScriptComplete?(state: ComposedState, game: Game, scriptId: string): void;
+}
+
+// ActionHandler invariant: must resolve ATOMICALLY. The handler computes
+// the entire outcome of the action (rolls, branches, state mutations,
+// narration text) and returns it as a single ActionResult. The engine
+// then applies deltas and enqueues narrations. The handler MUST NOT
+// yield through multiple steps via persisted in-memory state — that
+// pattern broke combat-in-step mode before this refactor. If your
+// action needs multi-step narrative pacing, push the lines into
+// `narrations` and the engine's main loop will drain them one per step.
+export type ActionHandler = (ctx: ActionContext) => ActionResult;
+
+export interface ActionContext {
+  state: ComposedState;
+  action: Action;
+  game: Game;
+  // Inject randomness here so handlers can be tested deterministically.
+  rng: () => number;
+}
+
+export interface ActionResult {
+  // Narration lines shown one-at-a-time, in order, on subsequent steps.
+  narrations?: string[];
+  // Aggregated state changes; the engine calls applyDelta(state, deltas).
+  deltas?: StateDelta;
+  // Optional opaque payload appended to a module-owned log array at
+  // state[moduleId].log[]. Useful for combat logs, debug traces, etc.
+  customLog?: { moduleId: string; entry: unknown };
 }
 
 export interface Game {

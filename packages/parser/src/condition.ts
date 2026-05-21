@@ -64,6 +64,49 @@ export function parseCondition(raw: unknown): Condition | undefined {
       },
     };
   }
+  if ("stat" in obj) {
+    const s = obj.stat as Record<string, unknown> | undefined;
+    if (!s || typeof s !== "object") {
+      throw new ConditionParseError("`stat` must be an object");
+    }
+    if (typeof s.name !== "string") {
+      throw new ConditionParseError("`stat.name` must be a string");
+    }
+    return {
+      stat: {
+        name: s.name,
+        ...(typeof s.min === "number" ? { min: s.min } : {}),
+        ...(typeof s.max === "number" ? { max: s.max } : {}),
+        ...(typeof s.eq === "number" ? { eq: s.eq } : {}),
+      },
+    };
+  }
+  if ("day" in obj) {
+    const d = obj.day as Record<string, unknown>;
+    if (!d || typeof d !== "object") {
+      throw new ConditionParseError("`day` must be an object");
+    }
+    return {
+      day: {
+        ...(typeof d.min === "number" ? { min: d.min } : {}),
+        ...(typeof d.max === "number" ? { max: d.max } : {}),
+        ...(typeof d.eq === "number" ? { eq: d.eq } : {}),
+      },
+    };
+  }
+  if ("slot" in obj) {
+    const s = obj.slot as Record<string, unknown>;
+    if (!s || typeof s !== "object") {
+      throw new ConditionParseError("`slot` must be an object");
+    }
+    return {
+      slot: {
+        ...(typeof s.min === "number" ? { min: s.min } : {}),
+        ...(typeof s.max === "number" ? { max: s.max } : {}),
+        ...(typeof s.eq === "number" ? { eq: s.eq } : {}),
+      },
+    };
+  }
   throw new ConditionParseError(
     `Unknown condition shape. Keys: ${Object.keys(obj).join(", ")}`,
   );

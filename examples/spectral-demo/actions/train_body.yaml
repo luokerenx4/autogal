@@ -1,0 +1,11 @@
+id: train_body
+title: 锻炼身体
+description: 体力上限 +1，但很累
+category: solo
+slot: day
+cost: 1
+requires:
+  stat: { name: physical, min: 3 }
+effects:
+  stats: { physical: -3 }
+  statMax: { physical: 1 }

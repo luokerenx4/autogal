@@ -1,0 +1,136 @@
+import React from "react";
+import { Box, Text } from "ink";
+import type { HubActivity, HubSnapshot, StatSnapshot } from "@autogal/engine";
+
+interface HubMenuProps {
+  snapshot: HubSnapshot;
+}
+
+const BAR_WIDTH = 20;
+
+export function HubMenu({ snapshot }: HubMenuProps) {
+  return (
+    <Box flexDirection="column">
+      <Box flexDirection="row" marginBottom={1}>
+        <Text bold color="yellow">
+          Day {snapshot.day}/{snapshot.maxDay}
+        </Text>
+        <Text dimColor> · </Text>
+        <Text bold>{snapshot.slotName}</Text>
+      </Box>
+
+      <Box flexDirection="column" marginBottom={1}>
+        {snapshot.stats.map((stat) => (
+          <StatRow key={stat.id} stat={stat} />
+        ))}
+      </Box>
+
+      {snapshot.affections.length > 0 ? (
+        <Box flexDirection="row" marginBottom={1} gap={2}>
+          {snapshot.affections.map((a) => (
+            <Text key={a.id}>
+              <Text color="cyan">{a.name}</Text>
+              <Text dimColor>: </Text>
+              <Text color={a.value >= 0 ? "green" : "red"}>{a.value}</Text>
+            </Text>
+          ))}
+        </Box>
+      ) : null}
+
+      <Box flexDirection="column" marginTop={1}>
+        <Text bold>这一段时间你要做什么？</Text>
+        <Box flexDirection="column" marginTop={1}>
+          {snapshot.activities.length === 0 ? (
+            <Text dimColor>（没有可用活动 — 时间会自动推进）</Text>
+          ) : (
+            snapshot.activities.map((act, i) => (
+              <ActivityRow key={act.id} index={i + 1} activity={act} />
+            ))
+          )}
+        </Box>
+      </Box>
+    </Box>
+  );
+}
+
+function StatRow({ stat }: { stat: StatSnapshot }) {
+  const ratio = stat.max > 0 ? Math.max(0, Math.min(1, stat.value / stat.max)) : 0;
+  const filled = Math.round(ratio * BAR_WIDTH);
+  const bar = "█".repeat(filled) + "░".repeat(BAR_WIDTH - filled);
+  const color = colorFor(stat);
+  const status = statusFor(stat);
+  return (
+    <Box flexDirection="row">
+      <Box width={12}>
+        <Text>{stat.name}</Text>
+      </Box>
+      <Text color={color}>{bar}</Text>
+      <Box marginLeft={1}>
+        <Text>
+          {stat.value}/{stat.max}
+        </Text>
+      </Box>
+      {status ? (
+        <Box marginLeft={1}>
+          <Text dimColor color={color}>
+            {status}
+          </Text>
+        </Box>
+      ) : null}
+    </Box>
+  );
+}
+
+function colorFor(stat: StatSnapshot): string {
+  if (stat.id === "spectral") {
+    if (stat.value >= 80) return "red";
+    if (stat.value >= 50) return "yellow";
+    if (stat.value >= 20) return "cyan";
+    return "green";
+  }
+  if (stat.id === "physical" || stat.id === "mental") {
+    if (stat.value <= stat.max * 0.3) return "red";
+    return "green";
+  }
+  return "white";
+}
+
+function statusFor(stat: StatSnapshot): string | null {
+  if (stat.id === "spectral") {
+    if (stat.value >= 100) return "完全灵体化";
+    if (stat.value >= 80) return "失控";
+    if (stat.value >= 50) return "危险";
+    if (stat.value >= 20) return "觉醒";
+    return "平稳";
+  }
+  return null;
+}
+
+function ActivityRow({
+  index,
+  activity,
+}: {
+  index: number;
+  activity: HubActivity;
+}) {
+  const color = activity.available ? undefined : "gray";
+  const marker = activity.available ? " " : "⛔";
+  const hint = activity.effectsHint;
+  return (
+    <Box flexDirection="row">
+      <Text color={color} dimColor={!activity.available}>
+        {marker} {index}. {activity.title}
+      </Text>
+      {hint && activity.available ? (
+        <Box marginLeft={1}>
+          <Text dimColor>({hint})</Text>
+        </Box>
+      ) : null}
+      {!activity.available && activity.lockedReason ? (
+        <Box marginLeft={1}>
+          <Text dimColor>({activity.lockedReason})</Text>
+        </Box>
+      ) : null}
+    </Box>
+  );
+}

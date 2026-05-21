@@ -28,6 +28,8 @@ function hintFor(output: Output): string | null {
       return "按数字选择";
     case "scriptComplete":
       return "按数字选择下一段";
+    case "hubMenu":
+      return "按数字选活动";
     case "gameEnd":
       return null;
   }

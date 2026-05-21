@@ -1,8 +1,9 @@
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
-import type { CharacterDef, Game, Script } from "@autogal/engine";
+import type { Action, CharacterDef, Game, Script } from "@autogal/engine";
 import {
   buildGame,
+  parseAction,
   parseCharacter,
   parseManifest,
   parseScript,
@@ -14,18 +15,28 @@ export async function loadGame(dir: string): Promise<Game> {
 
   const characters = await loadDir<CharacterDef>(
     path.join(dir, "characters"),
+    [".md"],
     parseCharacter,
   );
-  const scripts = await loadDir<Script>(path.join(dir, "scripts"), (content, source) =>
-    parseScript(content, source),
+  const scripts = await loadDir<Script>(
+    path.join(dir, "scripts"),
+    [".md"],
+    (content, source) => parseScript(content, source),
   );
   scripts.sort((a, b) => a.id.localeCompare(b.id));
 
-  return buildGame(manifest, characters, scripts);
+  const actions = await loadDir<Action>(
+    path.join(dir, "actions"),
+    [".yaml", ".yml"],
+    (content, source) => parseAction(content, source),
+  );
+
+  return buildGame(manifest, characters, scripts, actions);
 }
 
 async function loadDir<T>(
   dir: string,
+  exts: string[],
   parse: (content: string, source: string) => T,
 ): Promise<T[]> {
   let entries: string[];
@@ -36,7 +47,7 @@ async function loadDir<T>(
     throw err;
   }
   const files = entries
-    .filter((e) => e.endsWith(".md"))
+    .filter((e) => exts.some((ext) => e.endsWith(ext)))
     .map((e) => path.join(dir, e))
     .sort();
   return Promise.all(

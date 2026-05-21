@@ -19,11 +19,7 @@ export function evaluateCondition(
   if ("affection" in cond) {
     const c = state.baseline.characters[cond.affection.character];
     if (!c) return false;
-    const { min, max, eq } = cond.affection;
-    if (min !== undefined && c.affection < min) return false;
-    if (max !== undefined && c.affection > max) return false;
-    if (eq !== undefined && c.affection !== eq) return false;
-    return true;
+    return rangeMatch(c.affection, cond.affection);
   }
   if ("flag" in cond) {
     const v = state.baseline.flags[cond.flag.name];
@@ -34,5 +30,32 @@ export function evaluateCondition(
     if (max !== undefined && v > max) return false;
     return true;
   }
+  if ("stat" in cond) {
+    if (!state.training) return false;
+    const v = state.training.stats[cond.stat.name];
+    if (v === undefined) return false;
+    return rangeMatch(v, cond.stat);
+  }
+  if ("day" in cond) {
+    if (!state.training) return false;
+    return rangeMatch(state.training.day, cond.day);
+  }
+  if ("slot" in cond) {
+    if (!state.training) return false;
+    return rangeMatch(state.training.slot, cond.slot);
+  }
   return false;
+}
+
+interface RangeQuery {
+  min?: number;
+  max?: number;
+  eq?: number;
+}
+
+function rangeMatch(value: number, q: RangeQuery): boolean {
+  if (q.min !== undefined && value < q.min) return false;
+  if (q.max !== undefined && value > q.max) return false;
+  if (q.eq !== undefined && value !== q.eq) return false;
+  return true;
 }

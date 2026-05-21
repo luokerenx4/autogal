@@ -8,6 +8,7 @@ import { appendLog, loadSession, saveSession } from "../session";
 import { Choices } from "./Choices";
 import { ScriptPicker } from "./ScriptPicker";
 import { StatusBar } from "./StatusBar";
+import { HubMenu } from "./HubMenu";
 import { Hint } from "./Hint";
 
 const SCROLLBACK_LIMIT = 12;
@@ -198,6 +199,20 @@ export function PlayScreen({
         }
         break;
       }
+      case "hubMenu": {
+        const k = Number(input);
+        if (
+          Number.isInteger(k) &&
+          k >= 1 &&
+          k <= current.snapshot.activities.length
+        ) {
+          const act = current.snapshot.activities[k - 1];
+          if (act && act.available) {
+            void sendInput({ type: "doActivity", id: act.id });
+          }
+        }
+        break;
+      }
     }
   });
 
@@ -263,7 +278,10 @@ function ScrollbackBeat({ output }: { output: Output }) {
           <Text dimColor>─── 场景切换 ───</Text>
         </Box>
       );
-    default:
+    case "hubMenu":
+    case "scriptComplete":
+    case "choice":
+    case "gameEnd":
       return null;
   }
 }
@@ -298,6 +316,12 @@ function CurrentBeat({ output }: { output: Output }) {
             completedId={output.completedId}
             options={output.nextAvailable}
           />
+        </Box>
+      );
+    case "hubMenu":
+      return (
+        <Box marginTop={1}>
+          <HubMenu snapshot={output.snapshot} />
         </Box>
       );
     case "clear":

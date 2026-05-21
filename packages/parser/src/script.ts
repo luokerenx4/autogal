@@ -331,6 +331,18 @@ function parseEffectsObject(
     }
     delta.flags = obj.flags as Record<string, number | string | boolean>;
   }
+  if (obj.stats !== undefined) {
+    if (typeof obj.stats !== "object" || obj.stats === null) {
+      throw new ScriptParseError("`stats` must be an object", source);
+    }
+    delta.stats = obj.stats as Record<string, number>;
+  }
+  if (obj.statMax !== undefined) {
+    if (typeof obj.statMax !== "object" || obj.statMax === null) {
+      throw new ScriptParseError("`statMax` must be an object", source);
+    }
+    delta.statMax = obj.statMax as Record<string, number>;
+  }
   return delta;
 }
 

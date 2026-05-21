@@ -1,0 +1,22 @@
+name: 开局状态：Day 1 上午，spectral=5，sword_power=3
+description: 验证 training config 正确加载，初始 state 与 game.yaml 一致
+inputs: []
+assertions:
+  - kind: state
+    path: training.day
+    eq: 1
+  - kind: state
+    path: training.slot
+    eq: 0
+  - kind: state
+    path: training.stats.spectral
+    eq: 5
+  - kind: state
+    path: training.stats.sword_power
+    eq: 3
+  - kind: state
+    path: training.stats.physical
+    eq: 10
+  - kind: output
+    type: hubMenu
+    present: true

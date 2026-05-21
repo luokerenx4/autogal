@@ -4,6 +4,8 @@ import type {
   Game,
   Module,
   StateDelta,
+  TrainingConfig,
+  TrainingState,
 } from "./types";
 import { baselineModule } from "./modules/baseline";
 
@@ -29,7 +31,26 @@ export function createInitialState(
   for (const mod of modules) {
     composed[mod.id] = mod.initialize(game);
   }
+  if (game.training) {
+    composed.training = createTrainingState(game.training);
+  }
   return composed;
+}
+
+export function createTrainingState(config: TrainingConfig): TrainingState {
+  const stats: Record<string, number> = {};
+  const statMax: Record<string, number> = {};
+  for (const s of config.stats) {
+    stats[s.id] = s.start;
+    statMax[s.id] = s.max;
+  }
+  return {
+    day: config.startDay,
+    slot: 0,
+    stats,
+    statMax,
+    combatLog: [],
+  };
 }
 
 export function applyDelta(state: ComposedState, delta: StateDelta): void {
@@ -49,6 +70,25 @@ export function applyDelta(state: ComposedState, delta: StateDelta): void {
       }
     }
   }
+  if (delta.stats && state.training) {
+    for (const [name, change] of Object.entries(delta.stats)) {
+      const current = state.training.stats[name] ?? 0;
+      const max = state.training.statMax[name] ?? Number.MAX_SAFE_INTEGER;
+      state.training.stats[name] = clamp(current + change, 0, max);
+    }
+  }
+  if (delta.statMax && state.training) {
+    for (const [name, change] of Object.entries(delta.statMax)) {
+      const current = state.training.statMax[name] ?? 0;
+      state.training.statMax[name] = current + change;
+    }
+  }
+}
+
+export function clamp(n: number, min: number, max: number): number {
+  if (n < min) return min;
+  if (n > max) return max;
+  return n;
 }
 
 export function cloneState(state: ComposedState): ComposedState {

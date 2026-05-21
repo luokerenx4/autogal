@@ -1,0 +1,12 @@
+id: night_study
+title: 熬夜钻研术式
+description: 妖刀威力 +1，消耗精神和体力
+category: spirit
+slot: night
+cost: 1
+requires:
+  all:
+    - stat: { name: mental, min: 3 }
+    - stat: { name: intellect, min: 3 }
+effects:
+  stats: { sword_power: 1, mental: -3, spectral: 2 }

@@ -6,9 +6,12 @@ A game is a folder of markdown files. You play it in your terminal — from a ma
 
 ```bash
 bun install
-bun run play       # boot the bundled "樱花季" — Hub → New Game / Continue / Quit
-bun run autoplay   # watch a built-in AI persona play through to an ending
-bun run test       # run fixture-based regression tests
+bun run play              # boot "樱花季" — minimal pure VN demo
+bun run autoplay          # watch a built-in AI persona play through
+
+# Or try the training-mode demo:
+bun packages/cli/src/bin.ts play examples/spectral-demo
+bun packages/cli/src/bin.ts autoplay examples/spectral-demo --persona greedy -v
 ```
 
 ## Make your own
@@ -51,12 +54,28 @@ autogal/
 ├── packages/
 │   ├── engine/    Pure state-machine runtime. No DOM, no Node-specific APIs.
 │   ├── parser/    Markdown + frontmatter + YAML fence → engine AST.
-│   └── cli/       The `autogal` binary: play / step / peek / sessions / test / autoplay.
+│   └── cli/       The `autogal` binary: init / play / step / peek / autoplay / test / sessions.
 ├── examples/
-│   └── starter/   "樱花季 / Cherry Blossom Season" — 10 scripts, 2 characters,
-│                  5 endings. Fully playable in ~5–10 minutes.
-└── .claude/skills/autogal-player/SKILL.md   Instructions for an AI player.
+│   ├── starter/        "樱花季" — pure VN, 10 scripts, 2 chars, 5 endings (5–10 min)
+│   └── spectral-demo/  "妖刀さくら抄" — training-mode demo with day/time/stats/combat
+│                       (10 scripts, 2 chars, 9 actions, 5 endings, ~14 in-game days)
+└── .claude/skills/
+    ├── autogal-player/SKILL.md   for AIs that play
+    └── autogal-author/SKILL.md   for AIs that write content
 ```
+
+## Two game modes
+
+**Pure VN** (like `starter`): scripts only. Between scripts, the engine yields a
+`scriptComplete` picker. Affection + flags + branching. Classic visual novel.
+
+**Training mode** (like `spectral-demo`): add a `training:` block to `game.yaml`
+and the hub becomes era-style. Day/time slots, stats with caps, an `actions/`
+folder of daily activities, optional combat mini-loop with crit/fumble mechanics
+tied to a `spectral` stat, end conditions that trigger ending scripts. Story
+scripts coexist with daily actions as activities in the hub.
+
+See `examples/spectral-demo/README.md` for the full design + numbers.
 
 ## How a play session is structured
 

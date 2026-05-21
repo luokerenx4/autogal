@@ -1,0 +1,9 @@
+id: hunt
+title: 出门讨伐妖怪
+description: 战斗判定，伤害随灵体化升高
+category: combat
+slot: night
+cost: 1
+kind: combat
+requires:
+  stat: { name: mental, min: 2 }

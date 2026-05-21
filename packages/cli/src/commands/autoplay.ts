@@ -94,8 +94,19 @@ function formatOutput(o: Output): string | null {
       return `  ─── ${o.completedId ?? "(start)"} ─── next: ${
         o.nextAvailable.map((s) => s.id).join(", ") || "(none)"
       }`;
+    case "hubMenu": {
+      const s = o.snapshot;
+      const stats = s.stats.map((st) => `${st.name}:${st.value}`).join(" ");
+      const acts = s.activities
+        .map(
+          (a, i) =>
+            `${i + 1}. ${a.title}${a.available ? "" : " (locked)"}`,
+        )
+        .join("  ");
+      return `  [Day ${s.day} · ${s.slotName}]  ${stats}\n    ${acts}`;
+    }
     case "gameEnd":
-      return `  ═══ GAME END ═══`;
+      return `  ═══ GAME END ═══${o.reason ? ` (${o.reason})` : ""}`;
     case "clear":
       return `  ─── scene ───`;
   }

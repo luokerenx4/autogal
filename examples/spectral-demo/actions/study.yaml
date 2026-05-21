@@ -1,0 +1,10 @@
+id: study
+title: 在图书馆自习
+description: 提升学识，消耗体力
+category: solo
+slot: day
+cost: 1
+requires:
+  stat: { name: physical, min: 2 }
+effects:
+  stats: { intellect: 1, physical: -2 }

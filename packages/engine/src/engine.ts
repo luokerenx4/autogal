@@ -1,5 +1,10 @@
 import { evaluateCondition } from "./condition";
-import { applyDelta, cloneState, createInitialState } from "./state";
+import {
+  applyDelta,
+  cloneState,
+  createInitialState,
+  resolveModules,
+} from "./state";
 import type {
   Action,
   ActionHandler,
@@ -7,15 +12,12 @@ import type {
   ComposedState,
   EndConditionSpec,
   Game,
-  HubActivity,
-  HubSnapshot,
   Input,
+  Module,
   Output,
   RenderedChoice,
   Script,
   ScriptInfo,
-  StateDelta,
-  TrainingConfig,
 } from "./types";
 import { END_LABEL } from "./types";
 
@@ -24,9 +26,13 @@ export class Engine {
   private readonly scriptMap: Map<string, Script>;
   private readonly actionMap: Map<string, Action>;
   private readonly characterNameMap: Map<string, string>;
-  // Registry of action.kind → handler, aggregated from all game.modules.
-  // Duplicate kind across modules throws at construction time.
+  // Registry of action.kind → handler, aggregated from all modules
+  // (built-in + game-provided). Duplicate kind across modules throws
+  // at construction time.
   private readonly actionHandlerRegistry: Record<string, ActionHandler>;
+  // Resolved module list (defaults + training preset if game.training
+  // present + game-provided modules). Used for hub/lifecycle dispatch.
+  private readonly modules: Module[];
 
   constructor(
     private readonly game: Game,
@@ -36,8 +42,9 @@ export class Engine {
     this.scriptMap = new Map(game.scripts.map((s) => [s.id, s]));
     this.actionMap = new Map((game.actions ?? []).map((a) => [a.id, a]));
     this.characterNameMap = new Map(game.characters.map((c) => [c.id, c.name]));
+    this.modules = resolveModules(game);
     this.actionHandlerRegistry = {};
-    for (const mod of game.modules ?? []) {
+    for (const mod of this.modules) {
       for (const [kind, handler] of Object.entries(mod.actionHandlers ?? {})) {
         if (this.actionHandlerRegistry[kind]) {
           throw new Error(
@@ -117,8 +124,15 @@ export class Engine {
           this.state.baseline.completedScripts.push(script.id);
           this.state.baseline.currentScriptId = null;
           this.state.baseline.beatIndex = 0;
-          if (this.state.training) {
-            this.advanceTime(1);
+          // Scripts count as 1 slot when a preset is providing the hub
+          // (i.e. training mode). The preset's advanceAfterAction owns
+          // calendar bookkeeping.
+          for (const mod of this.modules) {
+            mod.advanceAfterAction?.(this.state, this.game, {
+              id: script.id,
+              title: script.title,
+              cost: 1,
+            });
           }
         } else {
           return;
@@ -126,8 +140,13 @@ export class Engine {
         continue;
       }
 
-      if (this.state.training && this.game.training) {
-        const input = yield this.buildHubMenu();
+      // Hub vs scriptComplete: ask each module if it provides a hub
+      // Output for the current state. First non-null wins (typically
+      // the training preset, when game.training is configured). Pure-VN
+      // games have no hub-providing module → fall through to scriptComplete.
+      const hubOutput = this.askModulesForHub();
+      if (hubOutput) {
+        const input = yield hubOutput;
         if (input.type === "quit") return;
         if (input.type !== "doActivity") continue;
         const dispatched = yield* this.dispatchActivity(input.id);
@@ -156,6 +175,14 @@ export class Engine {
     }
   }
 
+  private askModulesForHub(): Output | null {
+    for (const mod of this.modules) {
+      const out = mod.buildHubOutput?.(this.state, this.game);
+      if (out) return out;
+    }
+    return null;
+  }
+
   private checkEndConditions(): EndConditionSpec | null {
     if (!this.game.training) return null;
     for (const ec of this.game.training.endConditions) {
@@ -164,80 +191,6 @@ export class Engine {
       }
     }
     return null;
-  }
-
-  private buildHubMenu(): Output {
-    const cfg = this.game.training!;
-    const t = this.state.training!;
-    const slotName = cfg.slotNames[t.slot] ?? `slot ${t.slot}`;
-    const isNight = t.slot === cfg.slotsPerDay - 1;
-
-    const activities: HubActivity[] = [];
-
-    for (const s of this.game.scripts) {
-      if (this.state.baseline.completedScripts.includes(s.id)) continue;
-      const available =
-        s.requires === undefined ||
-        evaluateCondition(s.requires, this.state);
-      if (!available) continue;
-      const explicitlyEnding = this.isExplicitlyEndingScript(s.id);
-      if (explicitlyEnding) continue;
-      activities.push({
-        id: `script:${s.id}`,
-        kind: "script",
-        title: `📖 ${s.title}`,
-        cost: 1,
-        available: true,
-      });
-    }
-
-    for (const a of this.game.actions ?? []) {
-      if (a.slot === "day" && isNight) continue;
-      if (a.slot === "night" && !isNight) continue;
-      const available =
-        a.requires === undefined ||
-        evaluateCondition(a.requires, this.state);
-      activities.push({
-        id: `action:${a.id}`,
-        kind: "action",
-        title: a.title,
-        description: a.description,
-        category: a.category,
-        cost: a.cost,
-        effectsHint: formatEffectsHint(a.effects),
-        available,
-        lockedReason: available ? undefined : "条件未满足",
-      });
-    }
-
-    const snapshot: HubSnapshot = {
-      day: t.day,
-      maxDay: cfg.maxDay,
-      slot: t.slot,
-      slotName,
-      slotsPerDay: cfg.slotsPerDay,
-      stats: cfg.stats.map((sd) => ({
-        id: sd.id,
-        name: sd.name,
-        value: t.stats[sd.id] ?? 0,
-        min: sd.min,
-        max: t.statMax[sd.id] ?? sd.max,
-        ...(sd.thresholds ? { thresholds: sd.thresholds } : {}),
-      })),
-      affections: this.game.characters.map((c) => ({
-        id: c.id,
-        name: c.name,
-        value: this.state.baseline.characters[c.id]?.affection ?? 0,
-      })),
-      activities,
-    };
-
-    return { type: "hubMenu", snapshot };
-  }
-
-  private isExplicitlyEndingScript(scriptId: string): boolean {
-    if (!this.game.training) return false;
-    return this.game.training.endConditions.some((ec) => ec.goto === scriptId);
   }
 
   private async *dispatchActivity(
@@ -276,23 +229,16 @@ export class Engine {
         game: this.game,
         rng: Math.random,
       }));
-    } else {
-      if (action.effects) applyDelta(this.state, action.effects);
-      // TODO(A.4): move "sleep" into a training-preset module handler.
-      if (action.kind === "sleep") {
-        const t = this.state.training!;
-        for (const statId of Object.keys(t.stats)) {
-          if (
-            statId === "physical" ||
-            statId === "energy" ||
-            statId === "stamina"
-          ) {
-            t.stats[statId] = t.statMax[statId] ?? t.stats[statId]!;
-          }
-        }
-      }
+    } else if (action.effects) {
+      applyDelta(this.state, action.effects);
     }
-    this.advanceTime(action.cost);
+    // Notify every module that an action completed. The training preset
+    // uses this hook to advance slot/day and apply per-day decay; other
+    // modules can observe state transitions here. Engine itself is
+    // calendar-agnostic.
+    for (const mod of this.modules) {
+      mod.advanceAfterAction?.(this.state, this.game, action);
+    }
     return "ok";
   }
 
@@ -321,21 +267,6 @@ export class Engine {
     }
   }
 
-  private advanceTime(slots: number): void {
-    if (!this.state.training || !this.game.training) return;
-    const cfg = this.game.training;
-    const t = this.state.training;
-    t.slot += slots;
-    while (t.slot >= cfg.slotsPerDay) {
-      t.slot -= cfg.slotsPerDay;
-      t.day += 1;
-      if (cfg.decayPerDay !== 0 && cfg.decayStatId) {
-        applyDelta(this.state, {
-          stats: { [cfg.decayStatId]: cfg.decayPerDay },
-        });
-      }
-    }
-  }
 
   private async *runScript(
     script: Script,
@@ -434,23 +365,3 @@ function buildLabelMap(script: Script): Map<string, number> {
   return map;
 }
 
-function formatEffectsHint(effects: StateDelta | undefined): string | undefined {
-  if (!effects) return undefined;
-  const parts: string[] = [];
-  if (effects.affection) {
-    for (const [k, v] of Object.entries(effects.affection)) {
-      parts.push(`${k}${v >= 0 ? "+" : ""}${v}`);
-    }
-  }
-  if (effects.stats) {
-    for (const [k, v] of Object.entries(effects.stats)) {
-      parts.push(`${k}${v >= 0 ? "+" : ""}${v}`);
-    }
-  }
-  if (effects.flags) {
-    for (const [k, v] of Object.entries(effects.flags)) {
-      parts.push(`${k}=${v}`);
-    }
-  }
-  return parts.length > 0 ? parts.join(" ") : undefined;
-}

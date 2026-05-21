@@ -129,12 +129,17 @@ export interface Module {
   // whose `kind` matches one of the keys, this handler is invoked.
   // Handlers MUST resolve atomically (see ActionHandler doc below).
   actionHandlers?: Record<string, ActionHandler>;
-  // Lifecycle hooks fired by the engine after the corresponding event.
-  // Mutate state in place; do NOT yield narrations from here — push into
-  // state.training?.pendingNarrations if you need them shown.
-  onSlotAdvance?(state: ComposedState, game: Game): void;
-  onDayRollover?(state: ComposedState, game: Game): void;
-  onScriptComplete?(state: ComposedState, game: Game, scriptId: string): void;
+  // Called by the engine after every action body completes. Preset
+  // modules use this to advance the calendar (slot/day/decay) — the
+  // engine itself no longer owns this concept. Reactor modules can use
+  // it to observe state transitions.
+  advanceAfterAction?(state: ComposedState, game: Game, action: Action): void;
+  // Called by the engine when it needs to render the hub. The first
+  // module returning a non-null Output wins (typically a hubMenu
+  // snapshot). Used by the training preset to provide its hub. Pure-VN
+  // games have no module returning a hub here, so the engine falls
+  // back to the inter-script "scriptComplete" flow.
+  buildHubOutput?(state: ComposedState, game: Game): Output | null;
 }
 
 // ActionHandler invariant: must resolve ATOMICALLY. The handler computes

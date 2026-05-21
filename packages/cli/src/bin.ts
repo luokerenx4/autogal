@@ -14,8 +14,10 @@ USAGE
   autogal <command> [args]
 
 COMMANDS
-  play     <game-dir>
+  play     [<game-dir>]
       Run the interactive TUI (ink). Requires a real terminal.
+      Without <game-dir>, scans ./ and ./examples for folders with
+      game.yaml and shows a picker.
 
   peek     <game-dir> [--session NAME] [--pretty]
       Print the current Output for the session without applying any input.
@@ -89,8 +91,12 @@ function requirePositional(positionals: string[], usage: string): string {
 
 async function runPlay(args: string[]): Promise<void> {
   const { positionals } = parseArgs({ args, allowPositionals: true });
-  const gameDir = requirePositional(positionals, "autogal play <game-dir>");
-  await playCommand({ gameDir });
+  if (positionals.length > 1) {
+    process.stderr.write("Usage: autogal play [<game-dir>]\n");
+    process.exit(2);
+  }
+  const gameDir = positionals[0];
+  await playCommand(gameDir ? { gameDir } : {});
 }
 
 async function runPeek(args: string[]): Promise<void> {

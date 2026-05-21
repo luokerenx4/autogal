@@ -8,23 +8,21 @@ description: |
 state:
   baseline:
     completedScripts: [001_arrival, 002_first_youkai]
+    weapons:
+      yaodao: { power: 50 }
   training:
     day: 2
     slot: 2
     stats:
       spectral: 0
-      sword_power: 50
       physical: 10
       mental: 5
       intellect: 0
     statMax:
       spectral: 100
-      sword_power: 100
       physical: 20
       mental: 10
       intellect: 99
-    combatLog: []
-    pendingNarrations: []
 inputs:
   - { type: doActivity, id: "action:hunt" }
   - { type: next }
@@ -35,7 +33,7 @@ assertions:
     path: spectral-combat.log
     length: 1
   - kind: state
-    path: training.stats.sword_power
+    path: baseline.weapons.yaodao.power
     gte: 52
   - kind: state
     path: runtime.pendingNarrations

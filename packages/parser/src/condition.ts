@@ -98,6 +98,23 @@ export function parseCondition(raw: unknown): Condition | undefined {
       },
     };
   }
+  if ("weaponPower" in obj) {
+    const w = obj.weaponPower as Record<string, unknown> | undefined;
+    if (!w || typeof w !== "object") {
+      throw new ConditionParseError("`weaponPower` must be an object");
+    }
+    if (typeof w.weaponId !== "string") {
+      throw new ConditionParseError("`weaponPower.weaponId` must be a string");
+    }
+    return {
+      weaponPower: {
+        weaponId: w.weaponId,
+        ...(typeof w.min === "number" ? { min: w.min } : {}),
+        ...(typeof w.max === "number" ? { max: w.max } : {}),
+        ...(typeof w.eq === "number" ? { eq: w.eq } : {}),
+      },
+    };
+  }
   if ("day" in obj) {
     const d = obj.day as Record<string, unknown>;
     if (!d || typeof d !== "object") {

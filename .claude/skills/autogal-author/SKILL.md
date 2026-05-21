@@ -121,6 +121,7 @@ flag: { name: route, eq: alice }          # flags.route === "alice"
 flag: { name: coins, min: 100 }           # flags.coins >= 100 (numeric flags only)
 stat: { name: spectral, min: 80 }         # training-mode stat >= 80
 inventory: { itemId: talisman, min: 1 }   # player holds >= 1 talisman
+weaponPower: { weaponId: yaodao, min: 20 } # equipped/registered weapon's power >= 20
 day: { min: 8 }                           # training calendar
 slot: { eq: 2 }                           # training-mode slot index
 
@@ -236,6 +237,49 @@ The engine **does not dispatch on `enemyId` itself** — it just makes
 the enemy data available via `game.enemies` to whatever combat handler
 the game registers. Combat modules are responsible for picking up the
 enemy and using its fields.
+
+## Weapon file format — `weapons/<id>.md`
+
+Optional directory. Weapons are engine-level resources with a static
+definition + a runtime mirror in `state.baseline.weapons[id]`. Engine
+auto-equips the only declared weapon at init (single-weapon games);
+multi-weapon games equip via the `equipWeapon` primitive.
+
+```markdown
+---
+id: yaodao
+name: 妖刀
+basePower: 3         # state.baseline.weapons.yaodao.power starts here
+kind: melee          # optional; combat modules may dispatch on this
+properties:          # optional; open-ended fields combat modules use
+  crit_scaling: 0.7
+---
+
+Markdown body becomes the weapon's description.
+```
+
+To **grow a weapon's power** during play, put `weapons` in any
+action's or beat's `effects`:
+
+```yaml
+# actions/night_study.yaml — train the sword by study
+effects:
+  weapons: { yaodao: { power: 2 } }
+  stats: { mental: -2 }
+```
+
+To **gate a script/action** on weapon power, use the `weaponPower`
+condition variant:
+
+```yaml
+requires:
+  weaponPower: { weaponId: yaodao, min: 20 }
+```
+
+Combat modules read the equipped weapon's current power via the
+`getEquippedWeaponPower(ctx)` primitive (or
+`state.baseline.weapons[state.baseline.equippedWeaponId].power` from
+inside an ActionHandler).
 
 ## Script ID conventions (suggested, not enforced)
 

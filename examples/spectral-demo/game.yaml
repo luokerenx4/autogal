@@ -22,7 +22,6 @@ training:
         - { min: 50,  label: 危险,       color: yellow }
         - { min: 80,  label: 失控,       color: red }
         - { min: 100, label: 完全灵体化, color: red }
-    - { id: sword_power, name: 妖刀威力, min: 0, max: 100, start: 3 }
     - id: physical
       name: 体力
       min: 0

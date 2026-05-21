@@ -52,7 +52,13 @@ function fillTemplate(
 
 const spectralCombatHandler: ActionHandler = ({ state, action, game, rng }) => {
   const t = state.training!;
-  const swordPower = t.stats.sword_power ?? 0;
+  // C8: sword_power now lives on the equipped weapon (engine schema),
+  // not on training.stats. Read via baseline state directly since
+  // ActionContext doesn't carry the full PresetContext.
+  const equippedId = state.baseline.equippedWeaponId;
+  const swordPower = equippedId
+    ? (state.baseline.weapons[equippedId]?.power ?? 0)
+    : 0;
   const spectral = t.stats.spectral ?? 0;
   const intellect = t.stats.intellect ?? 0;
   const day = t.day;
@@ -126,13 +132,16 @@ const spectralCombatHandler: ActionHandler = ({ state, action, game, rng }) => {
   }
 
   let spectralDelta: number;
+  // weapon delta goes on a separate field, not stats (sword_power
+  // moved to weapon resource in C8).
+  const weaponDelta: Record<string, { power?: number }> = {};
   if (victory) {
     const absorb = Math.floor(enemyHp / 2);
     const swordGain = Math.max(2, Math.floor(enemyHp / 4));
     spectralDelta = -absorb;
     add("spectral", -absorb);
-    add("sword_power", swordGain);
     add("mental", -2);
+    if (equippedId) weaponDelta[equippedId] = { power: swordGain };
     const tmpl =
       enemy.narrations?.victory ??
       "{name} 化为光点散去——灵体化 -{absorb}, 妖刀威力 +{swordGain}。";
@@ -156,6 +165,7 @@ const spectralCombatHandler: ActionHandler = ({ state, action, game, rng }) => {
   }
   if (action.effects?.affection) deltas.affection = action.effects.affection;
   if (action.effects?.flags) deltas.flags = action.effects.flags;
+  if (Object.keys(weaponDelta).length > 0) deltas.weapons = weaponDelta;
 
   const logEntry: SpectralCombatLogEntry = {
     day,

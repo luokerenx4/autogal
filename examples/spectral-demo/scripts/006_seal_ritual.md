@@ -4,7 +4,7 @@ title: 镇魂仪式
 characters: []
 requires:
   all:
-    - stat: { name: sword_power, min: 20 }
+    - weaponPower: { weaponId: yaodao, min: 20 }
     - day: { min: 8 }
 ---
 
@@ -21,9 +21,9 @@ requires:
 很多年前坍塌的神社遗迹下，被困了几十年的本源妖力涌出来——它知道这是最后一次见到天光的机会。
 
 ? 你怎么做？
-- 集中精神，强行压制 -> +mental,+sword_power | goto press
-- 让妖刀自己跟它谈判 -> +sword_power | goto talk
-- 调用所有体内的灵体化，硬碰硬 -> +sword_power+sword_power | goto force
+- 集中精神，强行压制 -> goto press
+- 让妖刀自己跟它谈判 -> goto talk
+- 调用所有体内的灵体化，硬碰硬 -> goto force
 
 # press
 

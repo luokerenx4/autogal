@@ -91,6 +91,18 @@ export function applyDelta(state: ComposedState, delta: StateDelta): void {
       }
     }
   }
+  if (delta.weapons) {
+    for (const [weaponId, fields] of Object.entries(delta.weapons)) {
+      // Weapons exist only if declared in game.weapons (baseline init
+      // pre-creates each). Skip unknown weapon ids — game data
+      // mismatch, not a runtime error.
+      const w = state.baseline.weapons[weaponId];
+      if (!w) continue;
+      if (typeof fields.power === "number") {
+        w.power = Math.max(0, w.power + fields.power);
+      }
+    }
+  }
 }
 
 export function clamp(n: number, min: number, max: number): number {

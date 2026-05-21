@@ -49,6 +49,10 @@ export {
   giveItem,
   consumeItem,
   hasItem,
+  getEquippedWeapon,
+  getEquippedWeaponPower,
+  getWeaponPower,
+  equipWeapon,
   fireHook,
   fireOnSessionStart,
   fireOnScriptStart,
@@ -104,4 +108,6 @@ export type {
   TriggerHandler,
   TrainingConfig,
   TrainingState,
+  WeaponDef,
+  WeaponState,
 } from "./types";

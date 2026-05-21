@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Box, Text, useInput } from "ink";
+import { watch } from "node:fs";
 import { Engine } from "@autogal/engine";
 import type { ComposedState, Game, Input, Output } from "@autogal/engine";
+import { loadGame } from "../loader";
 import { appendLog, loadSession, saveSession } from "../session";
 import { Choices } from "./Choices";
 import { ScriptPicker } from "./ScriptPicker";
@@ -9,6 +11,8 @@ import { StatusBar } from "./StatusBar";
 import { Hint } from "./Hint";
 
 const SCROLLBACK_LIMIT = 12;
+const RELOAD_DEBOUNCE_MS = 200;
+const RELOAD_INDICATOR_MS = 1500;
 
 interface Props {
   game: Game;
@@ -17,10 +21,18 @@ interface Props {
   onOpenMenu: () => void;
 }
 
-export function PlayScreen({ game, gameDir, sessionName, onOpenMenu }: Props) {
+export function PlayScreen({
+  game: initialGame,
+  gameDir,
+  sessionName,
+  onOpenMenu,
+}: Props) {
   const [timeline, setTimeline] = useState<Output[]>([]);
   const [state, setState] = useState<ComposedState | null>(null);
   const [done, setDone] = useState(false);
+  const [reloadFlash, setReloadFlash] = useState(0);
+  const [reloadError, setReloadError] = useState<string | null>(null);
+  const gameRef = useRef<Game>(initialGame);
   const engineRef = useRef<Engine | null>(null);
   const runnerRef = useRef<AsyncGenerator<Output, void, Input> | null>(null);
   const processingRef = useRef(false);
@@ -28,9 +40,10 @@ export function PlayScreen({ game, gameDir, sessionName, onOpenMenu }: Props) {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const initialState = await loadSession(gameDir, sessionName, game);
-      const engine = new Engine(game, initialState);
+      const initialState = await loadSession(gameDir, sessionName, initialGame);
+      const engine = new Engine(initialGame, initialState);
       const runner = engine.run();
+      gameRef.current = initialGame;
       engineRef.current = engine;
       runnerRef.current = runner;
       const { value, done: isDone } = await runner.next();
@@ -46,7 +59,72 @@ export function PlayScreen({ game, gameDir, sessionName, onOpenMenu }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [game, gameDir, sessionName]);
+  }, [initialGame, gameDir, sessionName]);
+
+  const reload = useCallback(async () => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    if (processingRef.current) return;
+    processingRef.current = true;
+    try {
+      const currentState = engine.getState();
+      let newGame: Game;
+      try {
+        newGame = await loadGame(gameDir);
+      } catch (err) {
+        setReloadError((err as Error).message);
+        setTimeout(() => setReloadError(null), 3000);
+        return;
+      }
+      const newEngine = new Engine(newGame, currentState);
+      const newRunner = newEngine.run();
+      gameRef.current = newGame;
+      engineRef.current = newEngine;
+      runnerRef.current = newRunner;
+      try {
+        const { value, done: isDone } = await newRunner.next();
+        if (isDone) {
+          setDone(true);
+        } else {
+          setTimeline((prev) =>
+            prev.length === 0 ? [value] : [...prev.slice(0, -1), value],
+          );
+          setState(newEngine.getState());
+        }
+        setReloadFlash(Date.now());
+        setReloadError(null);
+      } catch (err) {
+        setReloadError(`engine: ${(err as Error).message}`);
+        setTimeout(() => setReloadError(null), 3000);
+      }
+    } finally {
+      processingRef.current = false;
+    }
+  }, [gameDir]);
+
+  useEffect(() => {
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    const watcher = watch(gameDir, { recursive: true }, (_evt, filename) => {
+      if (!filename) return;
+      if (filename.startsWith(".autogal")) return;
+      if (filename.startsWith("node_modules")) return;
+      if (!/\.(md|yaml|yml)$/i.test(filename)) return;
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        void reload();
+      }, RELOAD_DEBOUNCE_MS);
+    });
+    return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      watcher.close();
+    };
+  }, [gameDir, reload]);
+
+  useEffect(() => {
+    if (reloadFlash === 0) return;
+    const timer = setTimeout(() => setReloadFlash(0), RELOAD_INDICATOR_MS);
+    return () => clearTimeout(timer);
+  }, [reloadFlash]);
 
   const sendInput = useCallback(
     async (input: Input) => {
@@ -137,17 +215,27 @@ export function PlayScreen({ game, gameDir, sessionName, onOpenMenu }: Props) {
   }
 
   const scrollback = timeline.slice(0, -1);
+  const game = gameRef.current;
 
   return (
     <Box flexDirection="column">
       <StatusBar game={game} state={state} sessionName={sessionName} />
+      {reloadError ? (
+        <Box paddingX={1}>
+          <Text color="red">⚠ 重载失败: {reloadError}</Text>
+        </Box>
+      ) : reloadFlash > 0 ? (
+        <Box paddingX={1}>
+          <Text color="green">↻ 已重载</Text>
+        </Box>
+      ) : null}
       <Box flexDirection="column" paddingX={2} paddingY={1}>
         {scrollback.map((o, i) => (
           <ScrollbackBeat key={i} output={o} />
         ))}
         <CurrentBeat output={current} />
       </Box>
-      <Hint output={current} suffix="Esc 主菜单" />
+      <Hint output={current} suffix="Esc 主菜单 · 改 .md 自动重载" />
     </Box>
   );
 }

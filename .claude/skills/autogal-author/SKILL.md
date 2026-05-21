@@ -1,0 +1,213 @@
+---
+name: autogal-author
+description: Author content for an autogal GalGame — write or extend scripts (台本), add characters, design branching, add tests. Use this skill when you're inside an autogal game folder (one with game.yaml + characters/ + scripts/) and the user wants you to write story content, add a new scene, design an ending, balance affection numbers, or add a test fixture.
+---
+
+# autogal-author
+
+You're writing content for an autogal game. You don't write engine code — you only edit markdown and YAML files inside the game directory.
+
+## Where you are
+
+You should be in a folder that has:
+- `game.yaml` — manifest
+- `characters/` — one .md file per character
+- `scripts/` — one .md file per 台本 (story segment)
+- `tests/` (optional) — fixture-based regression tests
+
+If any of those is missing, the user is starting from scratch — suggest `autogal init` to scaffold a template.
+
+## The script (.md) format
+
+Every script is a markdown file with frontmatter. The frontmatter declares metadata; the body is the actual story. Beats are separated by blank lines.
+
+```markdown
+---
+id: 001_meeting          # unique within the game
+title: 樱花树下           # human-readable
+characters: [alice]      # which characters appear
+requires:                # optional — when this script becomes available
+  affection: { character: alice, min: 1 }
+---
+
+narration line.          # plain text is narration
+
+@alice 嗨。               # @<id> <text> is dialogue from character <id>
+
+? 你怎么回应？             # ? at start = choice block
+- 打招呼 -> +alice         # inline: "<text> -> <effects>"
+- 离开 -> -alice
+- 转身 -> goto leave       # goto a label (or `goto $end` to end script here)
+
+她笑了。
+
+[end]                     # explicit end-of-script (skip remaining beats)
+
+# leave                   # label (jump target)
+
+你转身离开了。
+```
+
+### Beat types in detail
+
+**Narration** — plain text, no prefix:
+```
+她合上素描本，但没收起来。
+```
+
+**Dialogue** — `@<character-id>` at start of paragraph:
+```
+@alice 我点了两杯咖啡。
+```
+The character must be defined in `characters/<id>.md`. The display name comes from the character file's `name` frontmatter field.
+
+**Choice** — `?` at start, then `-` options. Inline effects after `->`:
+```
+? 你怎么说？
+- "嗯，谢谢" -> +alice
+- "不喝咖啡" -> -alice
+- "你点什么我喝什么" -> +2alice
+```
+
+Inline effects support **only** affection deltas: `+alice` (= +1 to alice), `-bea` (= -1 to bea), `+2alice` (= +2 to alice). For anything more complex (flags, requires on options, goto), use a YAML fenced block (see below).
+
+You can also add `goto <label>` after `|`:
+```
+- 走开 -> -alice | goto leave
+- 留下 -> +alice
+```
+
+**Label** — `# <name>` on its own line. Used as a goto target:
+```
+# leave
+```
+
+Label names: ASCII letters/digits/underscore/hyphen. Cannot start with `$` (reserved).
+
+**End-of-script** — `[end]` on its own line. Stops the script immediately. Use this to prevent fall-through into following label sections.
+
+**YAML fenced choice** — when you need flags, requires on options, or multi-effect:
+
+````markdown
+```yaml
+type: choice
+prompt: 你要选哪条路？
+options:
+  - text: 跟 alice 走
+    effects:
+      flags: { route: alice }
+      affection: { alice: 1 }
+    goto: pick_alice
+  - text: 跟 bea 走
+    requires:
+      affection: { character: bea, min: 2 }
+    effects:
+      flags: { route: bea }
+    goto: pick_bea
+```
+````
+
+## Frontmatter `requires` — the Condition DSL
+
+When a script (or fenced choice option) has `requires`, it's only available when the condition is true. The grammar:
+
+```yaml
+# Atoms:
+scriptCompleted: 001_meeting               # this script must be in completedScripts
+affection: { character: alice, min: 2 }   # alice's affection >= 2
+affection: { character: bea, max: 5 }     # bea <= 5
+affection: { character: alice, eq: 0 }    # alice == 0
+flag: { name: route, eq: alice }          # flags.route === "alice"
+flag: { name: coins, min: 100 }           # flags.coins >= 100 (numeric flags only)
+
+# Combinators:
+all: [<cond>, <cond>, ...]                # all must hold (AND)
+any: [<cond>, <cond>, ...]                # any holds (OR)
+not: <cond>                                # negation
+
+# Example: both alice+bea high but no specific route picked yet
+requires:
+  all:
+    - affection: { character: alice, min: 3 }
+    - affection: { character: bea, min: 3 }
+    - not:
+        flag: { name: route, eq: alice }
+```
+
+## Character file format
+
+```markdown
+---
+id: alice
+name: 薄樱
+defaultAffection: 0
+---
+
+短描述。用于作者参考，引擎不读。
+```
+
+The `id` must match what scripts use in `@<id>` dialogue beats.
+
+## Script ID conventions (suggested, not enforced)
+
+Numeric prefix groups related scripts:
+- `001_*` — opening
+- `00X_*` — main flow
+- `004a_*`, `004b_*` — branch routes (a/b for parallel)
+- `005a_good`, `005b_bad` — endings
+
+Script availability is determined by `requires`, not by name. Names are for humans.
+
+## Test fixtures — `tests/*.yaml`
+
+For regression: assert that certain inputs lead to certain state.
+
+```yaml
+name: 选好感选项三次应该解锁 002
+description: ...
+state:                       # optional partial state to seed
+  baseline:
+    characters:
+      alice: { affection: 3 }
+inputs:
+  - { type: select, scriptId: "001_meeting" }
+  - { type: next }
+  - { type: choose, index: 2 }
+assertions:
+  - { kind: reason, eq: completed }   # or inputs-exhausted / quit / max-steps
+  - { kind: state, path: baseline.completedScripts, includes: 001_meeting }
+  - { kind: state, path: baseline.characters.alice.affection, eq: 5 }
+  - { kind: output, type: gameEnd, present: true }
+```
+
+After writing or changing scripts, run `autogal test .` to check fixtures still pass.
+
+## How to make changes
+
+1. **Understand the existing flow first.** Read `game.yaml`, all `characters/*.md`, all `scripts/*.md`. Note which scripts gate which (via `requires`). Build a mental map of the routes and endings.
+2. **Identify what's being asked.** Is it: add a new branch? Polish dialogue? Balance affection thresholds? Add a new character?
+3. **Make the change in the smallest viable scope.** One new script is better than three. Edit existing text in-place when polishing.
+4. **Test.** Run `autogal autoplay . --persona greedy` and `--persona charmer` and `--persona rude`. Each should still reach a defined ending. Then `autogal test .` to verify fixtures.
+5. **If a fixture is now wrong** (the design changed legitimately), update the fixture rather than the design — and tell the user what changed.
+
+## When NOT to touch
+
+- Don't edit `engine/`, `parser/`, `cli/` source — that's engine, not content.
+- Don't touch `.autogal/sessions/` — those are player saves.
+- Don't change a character's `id` once scripts reference it. Add a new character if you need a new name.
+- Don't introduce a new beat type or condition operator the engine doesn't already support. (See the lists above.)
+
+## Stylistic guidance
+
+- Keep narration short and concrete. The player advances one beat at a time — long paragraphs feel like walls.
+- Don't repeat what a character just said in narration. Dialogue carries voice; narration carries scene.
+- 3 choice options is usually right. 2 feels coercive. 5+ feels like a survey.
+- An ending script should be SHORT (3-6 beats). The drama is in the run-up; the ending lands the feeling.
+- A "bad" ending isn't punishment — it's a different note. Even "bad" endings should give the player something to feel.
+
+## Common pitfalls
+
+- **Fall-through past `[end]` is forgotten** — if a script has a `# leave` section but no `[end]` before it, the main path will run into the leave content. Use `[end]`.
+- **Label names with special chars** — only `[a-zA-Z_][\w-]*` works. `$end` is the reserved goto-to-end-of-script target.
+- **Inline effects with flags** — inline only supports affection. For flags use YAML fence.
+- **Forgetting to add `scriptCompleted` to ending requires** — if you have `004 → 005`, ending 005 should also require 004 completed, otherwise random play can skip ahead.

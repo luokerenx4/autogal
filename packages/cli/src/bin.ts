@@ -6,6 +6,7 @@ import { sessionsCommand } from "./commands/sessions";
 import { playCommand } from "./commands/play";
 import { testCommand } from "./commands/test";
 import { autoplayCommand } from "./commands/autoplay";
+import { initCommand } from "./commands/init";
 
 const HELP = `autogal — shell-native GalGame engine
 
@@ -34,6 +35,11 @@ COMMANDS
       Have a built-in AI persona play through the game and report the ending.
       Personas: greedy / charmer / rude / random
       Without -v, only prints the final JSON summary to stdout.
+
+  init     <dir> [--force]
+      Scaffold a minimal autogal game in <dir>. Creates game.yaml,
+      a sample character, a sample script, a test fixture, README, .gitignore.
+      Refuses if <dir> is non-empty unless --force.
 
 FLAGS
   --session NAME   Session id (folder under .autogal/sessions/). Default: "default"
@@ -65,6 +71,8 @@ async function main(): Promise<void> {
       return runTest(rest);
     case "autoplay":
       return runAutoplay(rest);
+    case "init":
+      return runInit(rest);
     default:
       process.stderr.write(`Unknown command: ${subcommand}\n\n${HELP}`);
       process.exit(1);
@@ -141,6 +149,18 @@ async function runTest(args: string[]): Promise<void> {
   const { positionals } = parseArgs({ args, allowPositionals: true });
   const gameDir = requirePositional(positionals, "autogal test <game-dir>");
   await testCommand({ gameDir });
+}
+
+async function runInit(args: string[]): Promise<void> {
+  const { values, positionals } = parseArgs({
+    args,
+    options: {
+      force: { type: "boolean", default: false },
+    },
+    allowPositionals: true,
+  });
+  const dir = requirePositional(positionals, "autogal init <dir> [--force]");
+  await initCommand({ dir, force: Boolean(values.force) });
 }
 
 async function runAutoplay(args: string[]): Promise<void> {

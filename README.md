@@ -11,20 +11,38 @@ bun run autoplay   # watch a built-in AI persona play through to an ending
 bun run test       # run fixture-based regression tests
 ```
 
-## Let an AI play
+## Make your own
 
-Drop into Claude Code (or any agent that can read a `SKILL.md`) **inside this repo**:
+```bash
+bun packages/cli/src/bin.ts init ./my-game   # scaffold a minimal game
+cd my-game
+autogal play .                                # play it
+```
+
+Or in another terminal, **edit `scripts/001_intro.md` while the game is running** — the engine watches for `.md` / `.yaml` changes and reloads the next time a beat resolves. Live authoring with no restart.
+
+## Let an AI play (or write)
+
+Two skills ship with the repo:
+
+- **[`autogal-player`](.claude/skills/autogal-player/SKILL.md)** — read this and an AI knows how to play autogal games by running `autogal peek` / `autogal step` in a shell loop. No SDK, no API key.
+- **[`autogal-author`](.claude/skills/autogal-author/SKILL.md)** — read this and an AI knows how to extend an autogal game: new scripts, new characters, new branches, new tests. The full DSL is documented inline.
+
+Drop into Claude Code inside any autogal game folder containing `.claude/skills/`:
 
 ```
-> Read .claude/skills/autogal-player/SKILL.md and play through examples/starter
+> Read .claude/skills/autogal-player/SKILL.md and play through this game
 > as a thoughtful character who's curious but doesn't oversell themselves.
-> Tell me what's happening as you go.
 ```
 
-The AI will discover the loop on its own (`peek` → decide → `step` → repeat), invent
-a session name, narrate its reasoning, and report which ending it reached. No API
-key. No SDK integration. The skill is `.claude/skills/autogal-player/SKILL.md` —
-copy it to any folder where you want AIs to play autogal games.
+or
+
+```
+> Read .claude/skills/autogal-author/SKILL.md, then add a third character
+> named "凉" who shows up in script 003 as a wild card.
+```
+
+The AI discovers the format on its own. To enable this in a game folder created via `autogal init`, copy `.claude/` from the autogal repo into your game folder.
 
 ## What's in the box
 
@@ -62,10 +80,11 @@ autogal · shell-native GalGame
 
 Saves live at `<game-dir>/.autogal/sessions/<name>/state.json` — plain JSON, `git diff`-able, copyable between machines.
 
-## The six modes
+## The seven modes
 
 ```bash
-autogal play     <game-dir>                                       # interactive TUI (ink)
+autogal init     <dir> [--force]                                  # scaffold a new game
+autogal play     <game-dir>                                       # interactive TUI (ink, hot-reloading)
 autogal step     <game-dir> --input <json> [--session NAME]       # headless, stateless step
 autogal peek     <game-dir> [--session NAME]                      # inspect current state
 autogal autoplay <game-dir> --persona NAME [-v]                   # built-in AI plays through
@@ -220,10 +239,10 @@ if you're an AI playing the games.
 
 ## Status
 
-Pre-alpha. Works end-to-end. Hub-mode TUI with multi-save support, markdown content
-authoring, headless step API, fixture testing, built-in autoplay personas, and an
-AI-player skill are all landed. Hot reload for content edits, combat/training
-modules, web frontend, and plugin registry are next.
+Pre-alpha. Works end-to-end. Hub-mode TUI with multi-save and live hot-reload,
+markdown content authoring, headless step API, fixture testing, built-in autoplay
+personas, AI player + author skills, and a scaffold command (`autogal init`) are
+all landed. Combat/training modules, web frontend, and plugin registry are next.
 
 ## License
 

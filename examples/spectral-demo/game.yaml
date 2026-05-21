@@ -1,4 +1,5 @@
 title: 妖刀さくら抄 / Spectral Suite
+preset: ./preset/run.ts
 modules:
   - ./modules/combat.ts
 training:

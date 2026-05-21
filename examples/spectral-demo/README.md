@@ -2,6 +2,8 @@
 
 一个用 [autogal](https://github.com/luokerenx4/autogal) 引擎做的**养成 + GalGame + 战斗** demo。
 
+**Headless RPGMaker 形态**：游戏 loop 在 `preset/run.ts`（ejected 自引擎内置 training preset，作者可改）；所有资产都是 typed databases (`items/` / `enemies/` / `weapons/` / `skills/`)；战斗公式 + 触发器在 `modules/combat.ts`。引擎层只提供 schema 和 primitives。
+
 ## 世界观
 
 你转入位于山顶的"樱花谷高校"。山下是一座坍塌的镇魔神社，每晚都有妖怪从地脉里冒出来。你来自退魔师家族但传承断代——家传**妖刀**目前威力只有 3，而你体内的"**灵体化**"已经 5 了。家书说：

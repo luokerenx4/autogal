@@ -28,6 +28,9 @@ inputs:
   - { type: next }
   - { type: next }
   - { type: next }
+  # Day rolls to day 3 after the hunt; ejected preset emits a
+  # daybreak narration on each new day. Drain it.
+  - { type: next }
 assertions:
   - kind: state
     path: spectral-combat.log

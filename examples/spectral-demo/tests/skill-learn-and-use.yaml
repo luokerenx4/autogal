@@ -27,8 +27,11 @@ inputs:
   # Night-study bumps weapon power 8 → 10 (rising edge of learn_purify
   # trigger when: weaponPower >= 10). Trigger learns the skill silently.
   - { type: doActivity, id: "action:night_study" }
-  # Day rolled to 4 morning; use_purify is now learnable (slot: any,
-  # knowsSkill: purify, stat.intellect >= 3 — all met).
+  # Day rolled to 4 morning; ejected preset emits a daybreak narration
+  # on each new day — drain it.
+  - { type: next }
+  # Now use_purify is learnable (slot: any, knowsSkill: purify,
+  # stat.intellect >= 3 — all met).
   - { type: doActivity, id: "action:use_purify" }
 assertions:
   - kind: state

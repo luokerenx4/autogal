@@ -52,10 +52,12 @@ autogal test .                                 # fixture 回归
 
 ## 节奏建议（提示）
 
-- **前 3 天**：完成 001_arrival 和 002_first_youkai，了解战斗机制
-- **Day 3-8**：白天积累好感 + 锻炼，晚上 night_study 把 sword_power 攒起来（每次 +2）
-- **Day 8-12**：sword_power ≥ 20 后做镇魂仪式
-- **危险信号**：spectral ≥ 80 时小心 fumble；用 shrine_pray 压一下
+- **Day 1-2**：完成 001_arrival 和 002_first_youkai；白天攒 intellect 解锁 night_study（需 mental ≥ 3 + intellect ≥ 3）
+- **Day 3-7**：晚上 night_study 把 sword_power 推到 9-10（每次 +2，mental -2，与 sleep 交替）；白天 meet_alice/bea 攒好感同时也回 mental
+- **Day 4 起**：alice/bea 好感 ≥ 3 触发 event_alice_witness / event_bea_witness（坦白真相 +2 好感）
+- **Day 8-11**：sword_power 已经够高，开始 hunt 大幅加速。Day 8 妖怪 HP 18，sw 10+ 配 spectral ≥ 30 能稳赢
+- **Day 12-13**：sword_power ≥ 20 + 心仪角色好感 ≥ 4，做镇魂仪式（006_seal_ritual）
+- **危险信号**：spectral ≥ 80 时小心 fumble；用 shrine_pray 压一下，或者带 intellect ≥ 5 的状态去 hunt 触发 reroll（详见 combat.ts）
 
 ## fixture 测试
 

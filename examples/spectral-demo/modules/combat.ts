@@ -26,19 +26,33 @@ const spectralCombatHandler: ActionHandler = ({ state, action, rng }) => {
   const t = state.training!;
   const swordPower = t.stats.sword_power ?? 0;
   const spectral = t.stats.spectral ?? 0;
+  const intellect = t.stats.intellect ?? 0;
   const day = t.day;
 
   const enemyHp = Math.floor(6 + day * 1.5);
-  const variance = 0.8 + rng() * 0.4;
-  let damage = swordPower * (1 + spectral * 0.04) * variance;
 
-  const critRoll = rng() * 100;
-  const fumbleRoll = rng() * 100;
-  const isCrit = critRoll < spectral * 0.7;
-  const isFumble = !isCrit && fumbleRoll < spectral * 0.5;
+  // Roll once. If we fumble AND intellect >= 5, spend intellect -2
+  // and re-roll the whole strike. This gives the player a way to
+  // hedge against the spectral × 0.5% fumble chance in late-game when
+  // spectral is high — invest in study early, cash in for stability.
+  const rollStrike = () => {
+    const variance = 0.8 + rng() * 0.4;
+    let damage = swordPower * (1 + spectral * 0.04) * variance;
+    const critRoll = rng() * 100;
+    const fumbleRoll = rng() * 100;
+    const isCrit = critRoll < spectral * 0.7;
+    const isFumble = !isCrit && fumbleRoll < spectral * 0.5;
+    if (isCrit) damage *= 2;
+    if (isFumble) damage = 0;
+    return { damage, isCrit, isFumble };
+  };
 
-  if (isCrit) damage *= 2;
-  if (isFumble) damage = 0;
+  let { damage, isCrit, isFumble } = rollStrike();
+  let rerolled = false;
+  if (isFumble && intellect >= 5) {
+    ({ damage, isCrit, isFumble } = rollStrike());
+    rerolled = true;
+  }
   const finalDamage = Math.floor(damage);
   const victory = finalDamage >= enemyHp;
 
@@ -50,6 +64,13 @@ const spectralCombatHandler: ActionHandler = ({ state, action, rng }) => {
   const narrations: string[] = [
     `夜风刺骨。一团扭曲的影子从巷子尽头爬出——HP ${enemyHp} 的妖怪。`,
   ];
+
+  if (rerolled) {
+    add("intellect", -2);
+    narrations.push(
+      `刚才那一刀差点失手——你冷静下来，调动学识里的术式，重新挥出 (学识 -2)。`,
+    );
+  }
 
   if (isCrit) {
     narrations.push(

@@ -19,6 +19,7 @@ export interface TrainingState {
   stats: Record<string, number>;
   statMax: Record<string, number>;
   combatLog: CombatLogEntry[];
+  pendingNarrations?: string[];
 }
 
 export interface CombatLogEntry {

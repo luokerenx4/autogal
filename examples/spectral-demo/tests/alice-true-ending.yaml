@@ -1,0 +1,87 @@
+name: 攒到妖刀威力 25 + alice 4+ 能拿到 alice 真结局
+description: |
+  End-to-end balance smoke test. Seed late-game state (day 10, sword_power
+  20, alice 5) — exactly the kind of position reachable from optimal play
+  under the rebalanced numbers — then run one winning hunt to cross 25
+  and trigger the seal ritual. Asserts alice true ending fires.
+state:
+  baseline:
+    characters:
+      alice: { affection: 5, custom: {} }
+      bea: { affection: 0, custom: {} }
+    completedScripts: [001_arrival, 002_first_youkai, event_alice_witness]
+  training:
+    day: 10
+    slot: 2
+    stats:
+      spectral: 30
+      sword_power: 20
+      physical: 15
+      mental: 5
+      intellect: 4
+    statMax:
+      spectral: 100
+      sword_power: 100
+      physical: 20
+      mental: 10
+      intellect: 99
+    combatLog: []
+    pendingNarrations: []
+inputs:
+  # Win a hunt to push sword_power over 25 (sw=20, sp=30 → ~52 damage min,
+  # enemyHp=21, gain max(2, 21/4)=5 → sw becomes 25). Hunt advances slot
+  # past night → Day 11 slot 0 with 3 narrations queued for the player to drain.
+  - { type: doActivity, id: "action:hunt" }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  # Day 11 morning. seal_ritual now unlocked. Pick it and walk through.
+  - { type: doActivity, id: "script:006_seal_ritual" }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: choose, index: 0 }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+assertions:
+  - kind: state
+    path: training.stats.sword_power
+    gte: 25
+  - kind: state
+    path: baseline.completedScripts
+    includes: 006_seal_ritual
+  - kind: state
+    path: baseline.completedScripts
+    includes: end_alice_true
+  - kind: output
+    type: gameEnd
+    present: true

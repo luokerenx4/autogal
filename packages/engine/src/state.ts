@@ -50,6 +50,7 @@ export function createTrainingState(config: TrainingConfig): TrainingState {
     stats,
     statMax,
     combatLog: [],
+    pendingNarrations: [],
   };
 }
 

@@ -1,0 +1,42 @@
+name: 战斗能在 step 模式下完整执行
+description: |
+  回归测试：之前 runCombat 多次 yield，但 step.ts 每次新建 engine 并在第一个
+  yield 后 runner.return()，导致 combat 的 applyDelta 永远不执行。
+  修复后 combat 应当原子结算 + 把 narration 推入 pendingNarrations 队列，
+  引擎主循环每步排空一条。本 fixture 注入"必胜"数值，验证 hunt 之后
+  sword_power 真的上去了、combatLog 也写入了。
+state:
+  baseline:
+    completedScripts: [001_arrival, 002_first_youkai]
+  training:
+    day: 2
+    slot: 2
+    stats:
+      spectral: 0
+      sword_power: 50
+      physical: 10
+      mental: 5
+      intellect: 0
+    statMax:
+      spectral: 100
+      sword_power: 100
+      physical: 20
+      mental: 10
+      intellect: 99
+    combatLog: []
+    pendingNarrations: []
+inputs:
+  - { type: doActivity, id: "action:hunt" }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+assertions:
+  - kind: state
+    path: training.combatLog
+    length: 1
+  - kind: state
+    path: training.stats.sword_power
+    gte: 52
+  - kind: state
+    path: training.pendingNarrations
+    length: 0

@@ -4,7 +4,7 @@ title: 镇魂仪式
 characters: []
 requires:
   all:
-    - stat: { name: sword_power, min: 25 }
+    - stat: { name: sword_power, min: 20 }
     - day: { min: 8 }
 ---
 
@@ -12,7 +12,7 @@ requires:
 
 @narrator 妖刀的震动比平时强了一百倍。
 
-家书最后一页：当妖刀威力到达 25 以上，你才有资格做"镇魂"——把这一带所有妖力一次性封印进刀里。
+家书最后一页：当妖刀威力到达 20 以上，你才有资格做"镇魂"——把这一带所有妖力一次性封印进刀里。
 
 @narrator 你蹲下，将刀插入地面。
 

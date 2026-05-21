@@ -31,7 +31,9 @@ autogal test .                                 # fixture 回归
 战斗公式：
 
 ```
+妖怪 HP = floor(6 + day × 1.5)
 基础伤害 = sword_power × (1 + spectral × 0.04) × random(0.8, 1.2)
+胜利奖励 = max(2, floor(妖怪HP / 4))   # 妖刀威力 +N
 临界成功率 (crit, ×2 伤害) = spectral × 0.7%
 临界失败率 (fumble, 0 伤害 + 自伤 -3 体力) = spectral × 0.5%
 ```
@@ -51,8 +53,8 @@ autogal test .                                 # fixture 回归
 ## 节奏建议（提示）
 
 - **前 3 天**：完成 001_arrival 和 002_first_youkai，了解战斗机制
-- **Day 3-8**：白天积累好感 + 锻炼，晚上 hunt 把 sword_power 推到 20+
-- **Day 8-12**：sword_power ≥ 25 后做镇魂仪式
+- **Day 3-8**：白天积累好感 + 锻炼，晚上 night_study 把 sword_power 攒起来（每次 +2）
+- **Day 8-12**：sword_power ≥ 20 后做镇魂仪式
 - **危险信号**：spectral ≥ 80 时小心 fumble；用 shrine_pray 压一下
 
 ## fixture 测试

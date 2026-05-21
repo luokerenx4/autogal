@@ -1,0 +1,30 @@
+name: 開局：玩家在 hub 模式，weapon 装备好，flags 初始化正确
+description: |
+  Smoke test:
+    - module's onSessionStart bootstraps player flags
+    - weapon ancestor_yaodao auto-equipped at basePower=4
+    - mode starts as "hub"
+    - intro script auto-launches (becomes first non-hub Output)
+inputs: []
+assertions:
+  - kind: state
+    path: sengoku-raid.mode
+    eq: hub
+  - kind: state
+    path: baseline.equippedWeaponId
+    eq: ancestor_yaodao
+  - kind: state
+    path: baseline.weapons.ancestor_yaodao.power
+    eq: 4
+  - kind: state
+    path: baseline.flags.hp
+    eq: 30
+  - kind: state
+    path: baseline.flags.spectral
+    eq: 5
+  - kind: state
+    path: baseline.inventory.ryo
+    eq: 100
+  - kind: state
+    path: baseline.currentScriptId
+    eq: 000_intro

@@ -1,0 +1,4 @@
+title: 妖刀奇譚 / Sengoku Raid
+preset: ./preset/run.ts
+modules:
+  - ./modules/raid.ts

@@ -1,0 +1,6 @@
+# Player saves — local only
+.autogal/
+
+node_modules
+.DS_Store
+*.log

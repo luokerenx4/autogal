@@ -19,8 +19,8 @@ import {
   fireOnScriptComplete,
   fireOnSessionStart,
   runScript,
-} from "../../primitives";
-import type { Action, Input, Output, PresetContext } from "../../types";
+} from "@autogal/engine";
+import type { Action, Input, Output, PresetContext } from "@autogal/engine";
 
 // Default export is the RunFunction itself — this is what the CLI
 // loader picks up when game.yaml says `preset: ./preset/run.ts`

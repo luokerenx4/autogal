@@ -1,0 +1,7 @@
+id: sleep
+title: 睡觉
+description: 一天结束
+category: rest
+slot: night
+cost: 1
+kind: sleep

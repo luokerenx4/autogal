@@ -26,6 +26,12 @@ import type {
   ScriptInfo,
 } from "../../types";
 
+// Default export is the RunFunction itself — this is what the CLI
+// loader picks up when game.yaml says `preset: ./preset/run.ts`
+// (the --eject scenario). Named export is kept for engine-internal
+// consumers (state.ts resolveRunFn).
+export default vnRun;
+
 export async function* vnRun(
   ctx: PresetContext,
 ): AsyncGenerator<Output, void, Input> {

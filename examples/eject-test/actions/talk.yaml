@@ -1,0 +1,9 @@
+id: talk
+title: 找 Alice 聊天
+description: 信任 +5
+category: social
+slot: day
+cost: 1
+effects:
+  affection: { alice: 1 }
+  stats: { trust: 5 }

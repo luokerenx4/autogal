@@ -1,0 +1,23 @@
+name: 拉满 trust 应该触发结局
+description: 注入 trust=50 验证 end_trust 触发
+state:
+  baseline:
+    completedScripts: [001_intro]
+  training:
+    day: 2
+    slot: 0
+    stats: { trust: 50 }
+    statMax: { trust: 100 }
+inputs:
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+assertions:
+  - kind: state
+    path: baseline.completedScripts
+    includes: end_trust
+  - kind: output
+    type: gameEnd
+    present: true

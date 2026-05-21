@@ -44,7 +44,23 @@ export {
   applyActionResult,
   runScript,
   dispatchActivity,
+  mutateState,
   fireHook,
+  fireOnSessionStart,
+  fireOnScriptStart,
+  fireOnScriptComplete,
+  fireOnScriptSelect,
+  fireOnBeatBefore,
+  fireOnBeatAfter,
+  fireOnChoicePresented,
+  fireOnChoiceResolved,
+  fireOnLabelEnter,
+  fireOnActionDispatch,
+  fireOnActionComplete,
+  fireOnStateMutated,
+  fireOnHubBuild,
+  fireOnEndConditionFire,
+  fireOnNarrationDrain,
 } from "./primitives";
 export { END_LABEL } from "./types";
 export type {
@@ -77,6 +93,7 @@ export type {
   StatSnapshot,
   StatThreshold,
   StateDelta,
+  StateMutationSource,
   TrainingConfig,
   TrainingState,
 } from "./types";

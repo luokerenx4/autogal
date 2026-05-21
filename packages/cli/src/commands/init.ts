@@ -1,12 +1,66 @@
-import { mkdir, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 interface Args {
   dir: string;
   force: boolean;
+  preset: string;
+  eject: boolean;
 }
 
-const GAME_YAML = `title: 我的第一个 autogal 游戏
+interface ScaffoldFile {
+  path: string;
+  content: string;
+}
+
+interface PresetScaffold {
+  name: string;
+  files: ScaffoldFile[];
+  dirs: string[];
+}
+
+// ============ shared (cross-preset) ============
+
+const README = (gameLine: string): string => `# 我的 autogal 游戏
+
+一个用 [autogal](https://github.com/luokerenx4/autogal) 引擎做的 GalGame。
+${gameLine}
+
+## 玩
+
+\`\`\`bash
+autogal play .                          # 人玩（ink TUI）
+autogal autoplay . --persona greedy -v  # AI 玩
+\`\`\`
+
+## 写
+
+游戏内容都是 markdown / yaml + 可选的 ts module：
+
+- \`game.yaml\` — 标题、preset、可选 modules / training 配置
+- \`characters/\` — 角色定义
+- \`scripts/\` — 台本
+- \`actions/\` — training 模式才用，hub 上的动作
+- \`tests/\` — 回归测试
+
+## 测试
+
+\`\`\`bash
+autogal test .
+\`\`\`
+
+## AI 协作
+
+把 autogal 仓库的 \`.claude/skills/\` 拷过来；AI 自动知道怎么玩这个游戏（\`autogal-player\` skill）和怎么帮你写新内容（\`autogal-author\` skill）。
+`;
+
+const GITIGNORE = `# Player saves — local only
+.autogal/
+
+node_modules
+.DS_Store
+*.log
 `;
 
 const CHARACTER_ALICE = `---
@@ -18,7 +72,13 @@ defaultAffection: 0
 故事的关键角色。这一段是给作者看的，引擎不读。
 `;
 
-const SCRIPT_001 = `---
+// ============ vn preset scaffold ============
+
+const VN_GAME_YAML = `title: 我的第一个 autogal 游戏
+preset: vn
+`;
+
+const VN_SCRIPT = `---
 id: 001_intro
 title: 开场
 characters: [alice]
@@ -38,7 +98,7 @@ characters: [alice]
 [end]
 `;
 
-const TEST_BASIC = `name: 选"主动介绍自己" alice 应该 +2
+const VN_TEST = `name: 选"主动介绍自己" alice 应该 +2
 description: 验证 inline effects 的 +2alice 语法生效
 inputs:
   - { type: select, scriptId: "001_intro" }
@@ -55,95 +115,237 @@ assertions:
     includes: 001_intro
 `;
 
-const README = `# 我的 autogal 游戏
+const VN_SCAFFOLD: PresetScaffold = {
+  name: "vn",
+  dirs: ["characters", "scripts", "tests"],
+  files: [
+    { path: "game.yaml", content: VN_GAME_YAML },
+    { path: "characters/alice.md", content: CHARACTER_ALICE },
+    { path: "scripts/001_intro.md", content: VN_SCRIPT },
+    { path: "tests/intro-test.yaml", content: VN_TEST },
+    { path: "README.md", content: README("\n这是一个 pure VN — 没有 hub、没有数值，只有剧情和分支。") },
+    { path: ".gitignore", content: GITIGNORE },
+  ],
+};
 
-一个用 [autogal](https://github.com/luokerenx4/autogal) 引擎做的 GalGame。
+// ============ training preset scaffold ============
 
-## 玩
-
-\`\`\`bash
-autogal play .                          # 人玩（ink TUI）
-autogal autoplay . --persona greedy -v  # AI 玩（内置 persona）
-\`\`\`
-
-## 写
-
-游戏内容都是 markdown / yaml：
-
-- \`game.yaml\` — 标题
-- \`characters/\` — 角色定义
-- \`scripts/\` — 台本
-- \`tests/\` — 回归测试
-
-边玩边改：进入 \`autogal play\` 后，直接在编辑器里改 \`.md\` 文件，下一句剧情会用新内容。
-
-## 测试
-
-\`\`\`bash
-autogal test .
-\`\`\`
-
-## AI 协作
-
-把 autogal 仓库的 \`.claude/skills/\` 拷过来：
-
-\`\`\`bash
-cp -r path/to/autogal/.claude .
-\`\`\`
-
-然后在这个目录里跑 \`claude\`，AI 自动知道怎么玩这个游戏（\`autogal-player\` skill）和怎么帮你写新内容（\`autogal-author\` skill）。
-
-## License
-
-MIT.
+const TRAINING_GAME_YAML = `title: 我的训练 mode 游戏
+preset: training
+training:
+  slotsPerDay: 3
+  slotNames: [morning, afternoon, night]
+  startDay: 1
+  maxDay: 7
+  decayPerDay: 0
+  decayStatId: ""
+  sleepActionId: sleep
+  huntActionId: ""
+  stats:
+    - { id: trust, name: 信任, min: 0, max: 100, start: 0 }
+  endConditions:
+    - reason: 信任拉满
+      when: { stat: { name: trust, min: 50 } }
+      goto: end_trust
 `;
 
-const GITIGNORE = `# Player saves — local only
-.autogal/
+const TRAINING_SCRIPT_INTRO = `---
+id: 001_intro
+title: 开场
+characters: [alice]
+---
 
-node_modules
-.DS_Store
-*.log
+第一天。你刚转学过来。
+
+@alice 我是 Alice。我们这有点不一样。
+
+[end]
 `;
 
-const FILES: Array<{ path: string; content: string }> = [
-  { path: "game.yaml", content: GAME_YAML },
-  { path: "characters/alice.md", content: CHARACTER_ALICE },
-  { path: "scripts/001_intro.md", content: SCRIPT_001 },
-  { path: "tests/intro-test.yaml", content: TEST_BASIC },
-  { path: "README.md", content: README },
-  { path: ".gitignore", content: GITIGNORE },
-];
+const TRAINING_SCRIPT_END = `---
+id: end_trust
+title: 信任结局
+characters: [alice]
+---
+
+@alice 没想到你这么快就和我成了朋友。
+
+═══════════════════════════
+   END：信任拉满
+═══════════════════════════
+
+[end]
+`;
+
+const TRAINING_ACTION_TALK = `id: talk
+title: 找 Alice 聊天
+description: 信任 +5
+category: social
+slot: day
+cost: 1
+effects:
+  affection: { alice: 1 }
+  stats: { trust: 5 }
+`;
+
+const TRAINING_ACTION_REST = `id: rest
+title: 休息一下
+description: 不做什么
+category: rest
+slot: any
+cost: 1
+`;
+
+const TRAINING_ACTION_SLEEP = `id: sleep
+title: 睡觉
+description: 一天结束
+category: rest
+slot: night
+cost: 1
+kind: sleep
+`;
+
+const TRAINING_TEST = `name: 拉满 trust 应该触发结局
+description: 注入 trust=50 验证 end_trust 触发
+state:
+  baseline:
+    completedScripts: [001_intro]
+  training:
+    day: 2
+    slot: 0
+    stats: { trust: 50 }
+    statMax: { trust: 100 }
+inputs:
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+assertions:
+  - kind: state
+    path: baseline.completedScripts
+    includes: end_trust
+  - kind: output
+    type: gameEnd
+    present: true
+`;
+
+const TRAINING_SCAFFOLD: PresetScaffold = {
+  name: "training",
+  dirs: ["characters", "scripts", "actions", "tests"],
+  files: [
+    { path: "game.yaml", content: TRAINING_GAME_YAML },
+    { path: "characters/alice.md", content: CHARACTER_ALICE },
+    { path: "scripts/001_intro.md", content: TRAINING_SCRIPT_INTRO },
+    { path: "scripts/end_trust.md", content: TRAINING_SCRIPT_END },
+    { path: "actions/talk.yaml", content: TRAINING_ACTION_TALK },
+    { path: "actions/rest.yaml", content: TRAINING_ACTION_REST },
+    { path: "actions/sleep.yaml", content: TRAINING_ACTION_SLEEP },
+    { path: "tests/intro-test.yaml", content: TRAINING_TEST },
+    { path: "README.md", content: README("\n这是一个 training 模式游戏 — hub + day/slot + 数值。") },
+    { path: ".gitignore", content: GITIGNORE },
+  ],
+};
+
+const PRESETS: Record<string, PresetScaffold> = {
+  vn: VN_SCAFFOLD,
+  training: TRAINING_SCAFFOLD,
+};
 
 export async function initCommand(args: Args): Promise<void> {
+  const scaffold = PRESETS[args.preset];
+  if (!scaffold) {
+    throw new Error(
+      `Unknown preset "${args.preset}". Available: ${Object.keys(PRESETS).join(" / ")}`,
+    );
+  }
+
   const target = path.resolve(args.dir);
   await ensureEmpty(target, args.force);
 
   await mkdir(target, { recursive: true });
-  await mkdir(path.join(target, "characters"), { recursive: true });
-  await mkdir(path.join(target, "scripts"), { recursive: true });
-  await mkdir(path.join(target, "tests"), { recursive: true });
-
-  for (const f of FILES) {
+  for (const d of scaffold.dirs) {
+    await mkdir(path.join(target, d), { recursive: true });
+  }
+  for (const f of scaffold.files) {
     await writeFile(path.join(target, f.path), f.content, "utf-8");
+  }
+
+  let ejectNote = "";
+  if (args.eject) {
+    await ejectPreset(target, args.preset);
+    // Rewrite game.yaml's `preset: <name>` to `preset: ./preset/run.ts`
+    const yamlPath = path.join(target, "game.yaml");
+    const current = await readFile(yamlPath, "utf-8");
+    const updated = current.replace(
+      /^preset:\s*\S+$/m,
+      "preset: ./preset/run.ts",
+    );
+    await writeFile(yamlPath, updated, "utf-8");
+    ejectNote =
+      `\n  └── preset/                  ← ejected preset (edit run.ts to customize the loop)\n` +
+      `\n[ejected] this game forks ${args.preset} preset's source into ./preset/.\n` +
+      `          edits to ./preset/run.ts take effect on next play.\n` +
+      `          engine API updates won't auto-flow in — sync manually if needed.\n`;
   }
 
   const display = args.dir;
   process.stdout.write(
-    `✓ created autogal game at ${display}\n\n` +
+    `✓ created autogal game at ${display} (preset: ${args.preset}${args.eject ? ", ejected" : ""})\n\n` +
       `  ${display}/\n` +
-      `  ├── game.yaml\n` +
-      `  ├── characters/alice.md\n` +
-      `  ├── scripts/001_intro.md\n` +
-      `  ├── tests/intro-test.yaml\n` +
-      `  ├── README.md\n` +
-      `  └── .gitignore\n\n` +
-      `next:\n` +
+      scaffold.files.map((f) => `  ├── ${f.path}\n`).join("") +
+      ejectNote +
+      `\nnext:\n` +
       `  cd ${display}\n` +
       `  autogal play .\n\n` +
       `to enable AI co-authoring/playing in this folder:\n` +
       `  cp -r <autogal-repo>/.claude .\n`,
   );
+}
+
+// ============ eject implementation ============
+
+// Files in packages/engine/src/presets/<name>/ that get copied into a
+// game folder's preset/ dir. README.md is skipped (lives in engine
+// repo); index.ts is included so internal sibling imports work.
+const EJECT_INCLUDE_EXTS = [".ts"];
+
+async function ejectPreset(targetDir: string, presetName: string): Promise<void> {
+  const srcPresetDir = locateEnginePresetDir(presetName);
+  const destDir = path.join(targetDir, "preset");
+  await mkdir(destDir, { recursive: true });
+
+  const entries = await readdir(srcPresetDir);
+  for (const entry of entries) {
+    const ext = path.extname(entry);
+    if (!EJECT_INCLUDE_EXTS.includes(ext)) continue;
+    const srcFile = path.join(srcPresetDir, entry);
+    const destFile = path.join(destDir, entry);
+    const content = await readFile(srcFile, "utf-8");
+    await writeFile(destFile, rewriteImportsForEject(content), "utf-8");
+  }
+}
+
+// Resolve packages/engine/src/presets/<name>/ from this file's
+// location. Works for the workspace dev layout
+// (packages/cli/src/commands/init.ts → ../../../engine/src/presets/).
+// In a future npm-published scenario the engine package's src/ may not
+// be present; we'd need to either ship presets/ as data or pre-bundle
+// at publish time. Out of scope for the current monorepo-only workflow.
+function locateEnginePresetDir(presetName: string): string {
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  return path.resolve(here, "../../../engine/src/presets", presetName);
+}
+
+// Rewrite `from "../../<anything>"` and `from "../../../<anything>"`
+// imports to `from "@autogal/engine"`. Sibling imports (`./xxx`) and
+// existing package imports are left alone. The engine package
+// re-exports everything ejected presets need (primitives, types,
+// condition helpers, state utilities).
+function rewriteImportsForEject(source: string): string {
+  return source
+    .replace(/from\s+"\.\.\/\.\.\/[^"]+"/g, 'from "@autogal/engine"')
+    .replace(/from\s+"\.\.\/\.\.\/\.\.\/[^"]+"/g, 'from "@autogal/engine"');
 }
 
 async function ensureEmpty(target: string, force: boolean): Promise<void> {
@@ -158,7 +360,6 @@ async function ensureEmpty(target: string, force: boolean): Promise<void> {
     throw new Error(`${target} exists and is not a directory`);
   }
   if (force) return;
-  const { readdir } = await import("node:fs/promises");
   const entries = await readdir(target);
   if (entries.length > 0) {
     throw new Error(

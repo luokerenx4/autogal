@@ -19,3 +19,4 @@ jobs:
       - run: bun run autogal test examples/starter
       - run: bun run autogal test examples/spectral-demo
       - run: bun run autogal test examples/hook-test
+      - run: bun run autogal test examples/eject-test

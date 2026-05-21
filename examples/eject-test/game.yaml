@@ -1,0 +1,17 @@
+title: 我的训练 mode 游戏
+preset: ./preset/run.ts
+training:
+  slotsPerDay: 3
+  slotNames: [morning, afternoon, night]
+  startDay: 1
+  maxDay: 7
+  decayPerDay: 0
+  decayStatId: ""
+  sleepActionId: sleep
+  huntActionId: ""
+  stats:
+    - { id: trust, name: 信任, min: 0, max: 100, start: 0 }
+  endConditions:
+    - reason: 信任拉满
+      when: { stat: { name: trust, min: 50 } }
+      goto: end_trust

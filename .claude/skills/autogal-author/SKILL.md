@@ -119,6 +119,10 @@ affection: { character: bea, max: 5 }     # bea <= 5
 affection: { character: alice, eq: 0 }    # alice == 0
 flag: { name: route, eq: alice }          # flags.route === "alice"
 flag: { name: coins, min: 100 }           # flags.coins >= 100 (numeric flags only)
+stat: { name: spectral, min: 80 }         # training-mode stat >= 80
+inventory: { itemId: talisman, min: 1 }   # player holds >= 1 talisman
+day: { min: 8 }                           # training calendar
+slot: { eq: 2 }                           # training-mode slot index
 
 # Combinators:
 all: [<cond>, <cond>, ...]                # all must hold (AND)
@@ -147,6 +151,53 @@ defaultAffection: 0
 ```
 
 The `id` must match what scripts use in `@<id>` dialogue beats.
+
+## Item file format — `items/<id>.md`
+
+Optional directory. Items are engine-level resources; once declared,
+the player can carry them in `state.baseline.inventory` and you can
+gate scripts/actions on them via `requires: { inventory: ... }`.
+
+```markdown
+---
+id: talisman
+name: 镇魂札
+kind: consumable        # consumable | key | gift
+stack: true             # optional; default true. false = unique key item
+effects:                # optional; applied when player uses the item
+  stats: { spectral: -10 }
+---
+
+Markdown body becomes the item's description (for hub UI / AI context).
+```
+
+To let the player **acquire** an item, put `inventory: { talisman: 1 }`
+in any action's or beat's `effects`:
+
+```yaml
+# actions/find_talisman.yaml
+id: find_talisman
+title: 翻一张札
+effects:
+  inventory: { talisman: 1 }
+```
+
+To let the player **use** an item, declare an action with
+`kind: useItem` and `itemId: <id>`. The engine's bundled handler
+consumes one of the item AND applies the item's `effects` atomically:
+
+```yaml
+# actions/use_talisman.yaml
+id: use_talisman
+title: 撕一张镇魂札
+kind: useItem
+itemId: talisman
+requires:
+  inventory: { itemId: talisman, min: 1 }   # only show when player has one
+```
+
+The engine deletes the inventory key when its count hits zero — you
+don't need to clean up explicitly. Counts never go below zero.
 
 ## Script ID conventions (suggested, not enforced)
 

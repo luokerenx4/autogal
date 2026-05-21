@@ -343,6 +343,12 @@ function parseEffectsObject(
     }
     delta.statMax = obj.statMax as Record<string, number>;
   }
+  if (obj.inventory !== undefined) {
+    if (typeof obj.inventory !== "object" || obj.inventory === null) {
+      throw new ScriptParseError("`inventory` must be an object", source);
+    }
+    delta.inventory = obj.inventory as Record<string, number>;
+  }
   return delta;
 }
 

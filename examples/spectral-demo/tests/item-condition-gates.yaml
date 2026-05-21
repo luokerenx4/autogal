@@ -1,0 +1,38 @@
+name: inventory condition 正确门控 action 可用性
+description: |
+  use_talisman declares `requires: { inventory: { itemId: talisman, min: 1 } }`.
+  When the player has no talisman, the hub renders it as available=false.
+  When they have one (pickup via find_talisman), it becomes available=true.
+
+  This fixture seeds zero talismans, takes one peek to confirm
+  use_talisman is locked, then triggers find_talisman, then peeks again
+  to confirm use_talisman unlocks. (Peeks happen via the runLoop's
+  output trace — assertions check the hub Outputs the engine emitted.)
+state:
+  baseline:
+    completedScripts: [001_arrival, 002_first_youkai]
+  training:
+    day: 4
+    slot: 0
+    stats:
+      spectral: 20
+      sword_power: 3
+      physical: 15
+      mental: 5
+      intellect: 3
+    statMax:
+      spectral: 100
+      sword_power: 100
+      physical: 20
+      mental: 10
+      intellect: 99
+inputs:
+  # First hub yield happens at session start (runLoop primes); player
+  # inspects it (use_talisman should be locked). Then picks up a
+  # talisman; next hub shows use_talisman unlocked.
+  - { type: doActivity, id: "action:find_talisman" }
+assertions:
+  # After pickup the talisman is in inventory
+  - kind: state
+    path: baseline.inventory.talisman
+    eq: 1

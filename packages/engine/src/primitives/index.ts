@@ -5,6 +5,7 @@ export { applyActionResult } from "./applyActionResult";
 export { runScript } from "./runScript";
 export { dispatchActivity } from "./dispatchActivity";
 export { mutateState } from "./mutateState";
+export { giveItem, consumeItem, hasItem } from "./inventory";
 export {
   fireHook,
   fireOnSessionStart,

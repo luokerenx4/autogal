@@ -37,6 +37,7 @@ export class Engine {
     this.state = initialState ?? createInitialState(game);
     const scriptMap = new Map(game.scripts.map((s) => [s.id, s]));
     const actionMap = new Map((game.actions ?? []).map((a) => [a.id, a]));
+    const itemMap = new Map((game.items ?? []).map((i) => [i.id, i]));
     const characterNameMap = new Map(
       game.characters.map((c) => [c.id, c.name]),
     );
@@ -76,6 +77,7 @@ export class Engine {
       triggerRegistry,
       scriptMap,
       actionMap,
+      itemMap,
       characterNameMap,
       rng: Math.random,
     };

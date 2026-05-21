@@ -79,6 +79,18 @@ export function applyDelta(state: ComposedState, delta: StateDelta): void {
       state.training.statMax[name] = current + change;
     }
   }
+  if (delta.inventory) {
+    for (const [itemId, change] of Object.entries(delta.inventory)) {
+      const current = state.baseline.inventory[itemId] ?? 0;
+      const next = current + change;
+      if (next <= 0) {
+        // Preserve the invariant: present key ⇔ count >= 1.
+        delete state.baseline.inventory[itemId];
+      } else {
+        state.baseline.inventory[itemId] = next;
+      }
+    }
+  }
 }
 
 export function clamp(n: number, min: number, max: number): number {

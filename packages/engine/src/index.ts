@@ -41,6 +41,7 @@ export {
 export {
   drainNarrations,
   checkEndConditions,
+  checkTriggers,
   applyActionResult,
   runScript,
   dispatchActivity,
@@ -94,6 +95,8 @@ export type {
   StatThreshold,
   StateDelta,
   StateMutationSource,
+  Trigger,
+  TriggerHandler,
   TrainingConfig,
   TrainingState,
 } from "./types";

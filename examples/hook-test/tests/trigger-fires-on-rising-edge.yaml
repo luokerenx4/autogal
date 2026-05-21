@@ -1,0 +1,27 @@
+name: trigger 在 condition 上升沿触发
+description: |
+  Play intro + choose option A (`+dev` inline effect). The tracker's
+  `dev-first-bond` trigger declares
+  `when: dev.affection >= 1, once: true`. After mutateState applies
+  the +dev, checkTriggers detects the rising edge (was false at
+  affection=0, now true at affection=1) and fires `do`. The trigger
+  narration queues + drains; the trigger id lands in firedTriggers.
+inputs:
+  - { type: doActivity, id: "script:intro" }
+  - { type: next }
+  - { type: next }
+  - { type: choose, index: 0 }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+assertions:
+  - kind: state
+    path: hook-tracker.log
+    includes: "TRIGGER:dev-first-bond"
+  - kind: state
+    path: runtime.firedTriggers
+    includes: dev-first-bond
+  - kind: state
+    path: runtime.pendingNarrations
+    length: 0

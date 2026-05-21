@@ -13,6 +13,7 @@
 
 import { evaluateCondition } from "../../condition";
 import {
+  checkTriggers,
   drainNarrations,
   fireOnScriptComplete,
   fireOnScriptSelect,
@@ -36,6 +37,10 @@ export async function* vnRun(
   ctx: PresetContext,
 ): AsyncGenerator<Output, void, Input> {
   fireOnSessionStart(ctx);
+  // Catch any triggers already-active in seed state (e.g. a fixture
+  // injects alice.affection=5 and a milestone trigger fires at >=5).
+  // mutateState wouldn't fire them since no mutation happened yet.
+  checkTriggers(ctx);
 
   while (true) {
     yield* drainNarrations(ctx);

@@ -22,6 +22,7 @@ import type {
   PresetContext,
   RunFunction,
   ScriptInfo,
+  Trigger,
 } from "./types";
 
 export class Engine {
@@ -53,11 +54,26 @@ export class Engine {
       }
     }
 
+    const triggerRegistry: Trigger[] = [];
+    const seenTriggerIds = new Set<string>();
+    for (const mod of modules) {
+      for (const trig of mod.triggers ?? []) {
+        if (seenTriggerIds.has(trig.id)) {
+          throw new Error(
+            `Engine: duplicate trigger id "${trig.id}" (module ${mod.id})`,
+          );
+        }
+        seenTriggerIds.add(trig.id);
+        triggerRegistry.push(trig);
+      }
+    }
+
     this.ctx = {
       state: this.state,
       game,
       modules,
       actionHandlerRegistry,
+      triggerRegistry,
       scriptMap,
       actionMap,
       characterNameMap,

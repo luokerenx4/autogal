@@ -26,6 +26,15 @@ export interface TrainingState {
 // unreachable for non-training presets.)
 export interface RuntimeState {
   pendingNarrations: string[];
+  // Trigger ids whose `when` condition is currently satisfied. Used by
+  // checkTriggers to detect rising-edge transitions (was false, now
+  // true) and only fire then — not every time the condition is
+  // satisfied. Falling edges (was true, now false) re-arm the trigger.
+  activeTriggers: string[];
+  // Trigger ids that have fired at least once (only tracked for
+  // triggers declared with `once: true`). Prevents re-firing even on
+  // future rising edges.
+  firedTriggers: string[];
 }
 
 export interface ComposedState {
@@ -137,7 +146,39 @@ export type StateMutationSource =
   | "action" // an action handler's returned deltas
   | "decay" // training preset's per-day decay
   | "endcondition" // an end-condition-triggered mutation
+  | "trigger" // a reactive trigger's do() ActionResult deltas
   | "external"; // anything else (manual game scripts, hot-reload, etc.)
+
+// Reactive trigger. Modules declare a list of these; the engine
+// evaluates each one's `when` after every state mutation and fires
+// `do` on rising-edge transitions (was false → now true). This is the
+// RPGMaker "parallel process + conditional branch" idiom condensed
+// into a declarative shape: "when this state condition becomes true,
+// run this small piece of code."
+//
+// `do` returns an ActionResult — same shape as an action handler. Its
+// deltas, narrations, and customLog apply through the engine's normal
+// channels. Trigger-fired mutations are tagged source="trigger" on the
+// onStateMutated hook and do NOT recursively trigger other triggers
+// within the same wave (to avoid infinite loops). Authors who need
+// cascades chain via flags observed by another trigger.
+export interface Trigger {
+  // Stable identifier, unique within the module. Used to track
+  // active / fired state across step() boundaries.
+  id: string;
+  // Reuse the existing Condition AST (alice.affection >= 5, day >= 8,
+  // etc.). evaluateCondition() is exported from @autogal/engine.
+  when: Condition;
+  // Returns an ActionResult to apply atomically when the trigger fires.
+  // Receives the full PresetContext (state + game + rng + modules).
+  do: TriggerHandler;
+  // If true, fires at most once per game session. Future rising edges
+  // are ignored. Useful for milestone events ("alice affection first
+  // hits 5"). Default false: re-arms on falling edges.
+  once?: boolean;
+}
+
+export type TriggerHandler = (ctx: PresetContext) => ActionResult;
 
 export interface Module {
   id: string;
@@ -148,6 +189,11 @@ export interface Module {
   // whose `kind` matches one of the keys, this handler is invoked.
   // Handlers MUST resolve atomically (see ActionHandler doc below).
   actionHandlers?: Record<string, ActionHandler>;
+
+  // Reactive triggers. The engine evaluates each Trigger's `when`
+  // after every state mutation; fires `do` on rising-edge transitions.
+  // See Trigger doc for semantics.
+  triggers?: Trigger[];
 
   // ============ LIFECYCLE HOOKS ============
   // All hooks fire SYNC. To emit narrations, push into
@@ -388,6 +434,9 @@ export interface PresetContext {
   // once from all modules' actionHandlers. Duplicate kinds error at
   // construction time.
   actionHandlerRegistry: Record<string, ActionHandler>;
+  // Aggregated trigger list (all modules.triggers concatenated in
+  // declaration order). Trigger ids must be unique across all modules.
+  triggerRegistry: Trigger[];
   // Precomputed lookup maps; cheap convenience, not authoritative.
   scriptMap: Map<string, Script>;
   actionMap: Map<string, Action>;

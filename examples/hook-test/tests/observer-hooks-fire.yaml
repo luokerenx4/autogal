@@ -7,8 +7,9 @@ inputs:
   - { type: doActivity, id: "script:intro" }
   - { type: next }   # narration beat
   - { type: next }   # dialogue beat
-  - { type: choose, index: 0 }  # option A → goto branch_a
-  - { type: next }   # @dev Picked A.
+  - { type: choose, index: 0 }  # option A → +dev → trigger fires + queues narration
+  - { type: next }   # @dev Picked A. (script continues at branch_a)
+  - { type: next }   # drain the trigger's queued narration after script ends
   # script ends; back at hub, do the noop action
   - { type: doActivity, id: "action:noop" }
 assertions:

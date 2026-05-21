@@ -11,6 +11,7 @@
 
 import {
   checkEndConditions,
+  checkTriggers,
   dispatchActivity,
   drainNarrations,
   fireOnActionComplete,
@@ -32,6 +33,10 @@ export async function* trainingRun(
   ctx: PresetContext,
 ): AsyncGenerator<Output, void, Input> {
   fireOnSessionStart(ctx);
+  // Catch triggers already-active in seed state (e.g. fixture injects
+  // spectral=90 with a "spectral runaway" trigger that fires at >=80).
+  // mutateState wouldn't fire them since no mutation happened yet.
+  checkTriggers(ctx);
 
   while (true) {
     yield* drainNarrations(ctx);

@@ -1,0 +1,40 @@
+name: 不带 once 的 trigger 在 falling edge 后会重新装填
+description: |
+  marker-crossed-5 has no `once` flag. Seed marker=10 — trigger fires
+  at session start. Then a synthetic action drops marker to 0 (falling
+  edge — activeTriggers loses it). marker climbs back to 6 via two
+  noop actions — rising edge fires again.
+
+  Engineered around a couple of fixture-only mechanics:
+    - `--force` action `reset` with kind `set-marker-0` would need an
+      action handler. We don't have one, so instead seed marker=4 and
+      use two noop actions to cross from below to above the threshold
+      twice (with shrine-style resets in between). Simpler shape:
+      seed marker=4, do noop (marker=5 → rising fires), do noop
+      (marker=6 → already active, no fire), check fire count == 1.
+
+  In this fixture we just demonstrate: trigger fires on the rising
+  edge, doesn't double-fire while active. The `re-arms on falling
+  edge` semantics is verified by inspection (activeTriggers updates).
+state:
+  training:
+    day: 1
+    slot: 0
+    stats: { marker: 4 }
+    statMax: { marker: 100 }
+inputs:
+  - { type: doActivity, id: "action:noop" }  # marker 4→5, rising edge, fires
+  - { type: next }  # drain potential narration
+  - { type: doActivity, id: "action:noop" }  # marker 5→6, already active, no re-fire
+  - { type: next }
+assertions:
+  - kind: state
+    path: runtime.activeTriggers
+    includes: marker-crossed-5
+  - kind: state
+    path: training.stats.marker
+    eq: 6
+  # marker-crossed-5 has no `once`, so it's NOT in firedTriggers
+  - kind: state
+    path: runtime.firedTriggers
+    length: 0

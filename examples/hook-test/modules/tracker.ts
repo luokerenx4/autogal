@@ -84,6 +84,36 @@ const tracker: Module = {
     }
     return undefined;
   },
+
+  // ============ REACTIVE TRIGGERS ============
+  triggers: [
+    // Milestone: fires the FIRST time dev's affection crosses 1.
+    // `once: true` — even if dev drops back to 0 and crosses 1 again
+    // later, this won't re-fire.
+    {
+      id: "dev-first-bond",
+      when: { affection: { character: "dev", min: 1 } },
+      once: true,
+      do: (ctx) => {
+        log(ctx, "TRIGGER:dev-first-bond");
+        return {
+          narrations: ["[trigger] dev 第一次对你产生信任。"],
+        };
+      },
+    },
+    // Re-arming: fires every time `marker` first crosses 5 (default
+    // `once: false`). Falling back below 5 and crossing again will
+    // fire it again. Useful for "warning when stat dips too low,
+    // again."
+    {
+      id: "marker-crossed-5",
+      when: { stat: { name: "marker", min: 5 } },
+      do: (ctx) => {
+        log(ctx, "TRIGGER:marker-crossed-5");
+        return {};
+      },
+    },
+  ],
 };
 
 export default tracker;

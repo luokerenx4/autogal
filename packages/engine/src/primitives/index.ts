@@ -1,5 +1,6 @@
 export { drainNarrations } from "./drainNarrations";
 export { checkEndConditions } from "./checkEndConditions";
+export { checkTriggers } from "./checkTriggers";
 export { applyActionResult } from "./applyActionResult";
 export { runScript } from "./runScript";
 export { dispatchActivity } from "./dispatchActivity";

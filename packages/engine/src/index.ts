@@ -7,7 +7,17 @@ export {
   hydrateState,
   defaultModules,
   resolveModules,
+  resolveRunFn,
 } from "./state";
+export {
+  trainingPreset,
+  TRAINING_NAMESPACE,
+  createTrainingState,
+  trainingRun,
+  buildHubSnapshot,
+  sleepHandler,
+} from "./presets/training";
+export { vnRun } from "./presets/vn/run";
 export { step, peek } from "./step";
 export { runLoop } from "./runLoop";
 export type { StepResult } from "./step";

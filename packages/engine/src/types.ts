@@ -306,6 +306,13 @@ export interface Game {
   actions?: Action[];
   training?: TrainingConfig;
   modules?: Module[];
+  // Preset selector. Either a built-in name ("vn" / "training") or a
+  // relative path the loader resolved via dynamic import. When set as
+  // a path, the loader fills `runFn` directly.
+  preset?: string;
+  // Resolved RunFunction (set by CLI loader after a path-based preset
+  // is imported). Engine prefers this over the built-in lookup.
+  runFn?: RunFunction;
 }
 
 export interface ScriptInfo {

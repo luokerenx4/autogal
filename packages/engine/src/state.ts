@@ -3,11 +3,13 @@ import type {
   ComposedState,
   Game,
   Module,
+  RunFunction,
   StateDelta,
 } from "./types";
 import { baselineModule } from "./modules/baseline";
 import { runtimeModule } from "./modules/runtime";
-import { trainingPreset } from "./presets/training";
+import { trainingPreset, trainingRun } from "./presets/training";
+import { vnRun } from "./presets/vn/run";
 
 export function defaultModules(): Module[] {
   return [baselineModule, runtimeModule];
@@ -91,4 +93,23 @@ export function cloneState(state: ComposedState): ComposedState {
 
 export function hydrateState(serialized: string): ComposedState {
   return JSON.parse(serialized) as ComposedState;
+}
+
+// Pick the main-loop generator for a game. Priority:
+//   1. game.runFn (set by the CLI loader after a path-based preset
+//      was dynamically imported)
+//   2. game.preset string → built-in preset by name
+//   3. auto-detect: training when game.training is set, else vn
+export function resolveRunFn(game: Game): RunFunction {
+  if (game.runFn) return game.runFn;
+  if (game.preset === "training") return trainingRun;
+  if (game.preset === "vn") return vnRun;
+  if (game.preset !== undefined) {
+    throw new Error(
+      `state.resolveRunFn: unknown preset "${game.preset}". ` +
+        `Built-in: "vn" / "training". Relative paths must be resolved ` +
+        `by the CLI loader into game.runFn.`,
+    );
+  }
+  return game.training ? trainingRun : vnRun;
 }

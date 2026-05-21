@@ -4,6 +4,7 @@ import type {
   Action,
   CharacterDef,
   Game,
+  ItemDef,
   Module,
   RunFunction,
   Script,
@@ -12,6 +13,7 @@ import {
   buildGame,
   parseAction,
   parseCharacter,
+  parseItem,
   parseManifest,
   parseScript,
 } from "@autogal/parser";
@@ -38,9 +40,16 @@ export async function loadGame(dir: string): Promise<Game> {
     (content, source) => parseAction(content, source),
   );
 
+  const items = await loadDir<ItemDef>(
+    path.join(dir, "items"),
+    [".md"],
+    (content, source) => parseItem(content, source),
+  );
+  items.sort((a, b) => a.id.localeCompare(b.id));
+
   const modules = await loadModules(dir, manifest.modules ?? []);
 
-  const game = buildGame(manifest, characters, scripts, actions, modules);
+  const game = buildGame(manifest, characters, scripts, actions, modules, items);
 
   // If game.yaml's preset: is a relative path (the ejected-preset case),
   // dynamic-import the file and attach its default-exported RunFunction

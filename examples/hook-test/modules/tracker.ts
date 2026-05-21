@@ -113,6 +113,33 @@ const tracker: Module = {
         return {};
       },
     },
+    // Composite milestone: fires when BOTH dev.affection >= 2 AND
+    // marker >= 3 become true (the AND is evaluated atomically by
+    // the condition AST). once: true so this is a one-shot "secret
+    // reveal" beat. Sets a flag downstream scripts/actions can gate
+    // on, and pushes a thematic narration. This is the pattern that
+    // pre-trigger would have needed a hidden activity for — now it
+    // fires reactively.
+    {
+      id: "secret-revealed",
+      when: {
+        all: [
+          { affection: { character: "dev", min: 2 } },
+          { stat: { name: "marker", min: 3 } },
+        ],
+      },
+      once: true,
+      do: (ctx) => {
+        log(ctx, "TRIGGER:secret-revealed");
+        return {
+          deltas: { flags: { secretRevealed: true } },
+          narrations: [
+            "[secret] dev 看了你一眼，把笔记本翻到了空白页。",
+            "[secret] 那一页上画着的，是 marker 的真正含义。",
+          ],
+        };
+      },
+    },
   ],
 };
 

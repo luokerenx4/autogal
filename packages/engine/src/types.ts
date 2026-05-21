@@ -11,6 +11,11 @@ export interface BaselineState {
   completedScripts: string[];
   currentScriptId: string | null;
   beatIndex: number;
+  // Engine-owned standard inventory schema. Counts keyed by item id.
+  // Invariant: keys with count <= 0 are deleted by applyDelta, so a
+  // present key always means count >= 1. Empty record for games that
+  // declare no items.
+  inventory: Record<string, number>;
 }
 
 export interface TrainingState {
@@ -48,6 +53,28 @@ export interface CharacterDef {
   id: string;
   name: string;
   defaultAffection?: number;
+}
+
+// Engine-level standard item resource. Defined here (not in any
+// gameplay module) so any module can assume this schema exists and
+// use giveItem/consumeItem/hasItem primitives without reinventing.
+// Gameplay modules that need item-shaped data outside this schema
+// should namespace their own state slice under state[moduleId].
+export interface ItemDef {
+  id: string;
+  name: string;
+  // Markdown body of the .md file — for hub UI / inspection / AI
+  // authoring context. Engine doesn't read it.
+  description: string;
+  kind: "consumable" | "key" | "gift";
+  // Applied when the player uses this item via a kind: "useItem"
+  // action. The engine's bundled useItem handler merges this with a
+  // `-1` inventory delta for the item itself.
+  effects?: StateDelta;
+  // Default true. false marks unique key items — the bundled
+  // giveItem primitive refuses to push count above 1 for non-stack
+  // items so authors don't need to guard against double-pickup.
+  stack?: boolean;
 }
 
 export interface StatDef {
@@ -92,6 +119,7 @@ export type Condition =
   | { affection: { character: string; min?: number; max?: number; eq?: number } }
   | { flag: { name: string; eq?: FlagValue; min?: number; max?: number } }
   | { stat: { name: string; min?: number; max?: number; eq?: number } }
+  | { inventory: { itemId: string; min?: number; max?: number; eq?: number } }
   | { day: { min?: number; max?: number; eq?: number } }
   | { slot: { min?: number; max?: number; eq?: number } };
 
@@ -100,6 +128,13 @@ export interface StateDelta {
   flags?: Record<string, FlagValue>;
   stats?: Record<string, number>;
   statMax?: Record<string, number>;
+  // Signed inventory deltas keyed by item id. applyDelta sums into
+  // state.baseline.inventory and prunes any key whose result is <= 0,
+  // preserving the "present key ⇔ count >= 1" invariant. Negative
+  // deltas going below zero clamp to zero (key removed) rather than
+  // throwing — the engine is forgiving here; handlers like consumeItem
+  // do their own pre-validation for "loud" failures.
+  inventory?: Record<string, number>;
 }
 
 export type Beat =
@@ -135,7 +170,11 @@ export interface Action {
   slot?: "any" | "day" | "night";
   requires?: Condition;
   effects?: StateDelta;
-  kind?: "combat" | "sleep" | "plain";
+  kind?: "combat" | "sleep" | "plain" | "useItem";
+  // Required when kind === "useItem": id of the item this action
+  // consumes. Resolved against ctx.itemMap by the bundled useItem
+  // handler in baseline module.
+  itemId?: string;
 }
 
 // Where a state mutation came from. Passed to onStateMutated so
@@ -147,6 +186,7 @@ export type StateMutationSource =
   | "decay" // training preset's per-day decay
   | "endcondition" // an end-condition-triggered mutation
   | "trigger" // a reactive trigger's do() ActionResult deltas
+  | "item" // giveItem / consumeItem / useItem-handler-produced
   | "external"; // anything else (manual game scripts, hot-reload, etc.)
 
 // Reactive trigger. Modules declare a list of these; the engine
@@ -350,6 +390,9 @@ export interface Game {
   characters: CharacterDef[];
   scripts: Script[];
   actions?: Action[];
+  // Engine-level item registry — see ItemDef. Empty / absent for games
+  // that declare no items/ directory.
+  items?: ItemDef[];
   training?: TrainingConfig;
   modules?: Module[];
   // Preset selector. Either a built-in name ("vn" / "training") or a
@@ -440,6 +483,7 @@ export interface PresetContext {
   // Precomputed lookup maps; cheap convenience, not authoritative.
   scriptMap: Map<string, Script>;
   actionMap: Map<string, Action>;
+  itemMap: Map<string, ItemDef>;
   characterNameMap: Map<string, string>;
   // Injected RNG. Defaults to Math.random; tests can override for
   // deterministic combat / choice outcomes.

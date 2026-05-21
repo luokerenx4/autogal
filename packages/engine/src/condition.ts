@@ -36,6 +36,10 @@ export function evaluateCondition(
     if (v === undefined) return false;
     return rangeMatch(v, cond.stat);
   }
+  if ("inventory" in cond) {
+    const count = state.baseline.inventory[cond.inventory.itemId] ?? 0;
+    return rangeMatch(count, cond.inventory);
+  }
   if ("day" in cond) {
     if (!state.training) return false;
     return rangeMatch(state.training.day, cond.day);

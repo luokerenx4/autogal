@@ -81,6 +81,23 @@ export function parseCondition(raw: unknown): Condition | undefined {
       },
     };
   }
+  if ("inventory" in obj) {
+    const i = obj.inventory as Record<string, unknown> | undefined;
+    if (!i || typeof i !== "object") {
+      throw new ConditionParseError("`inventory` must be an object");
+    }
+    if (typeof i.itemId !== "string") {
+      throw new ConditionParseError("`inventory.itemId` must be a string");
+    }
+    return {
+      inventory: {
+        itemId: i.itemId,
+        ...(typeof i.min === "number" ? { min: i.min } : {}),
+        ...(typeof i.max === "number" ? { max: i.max } : {}),
+        ...(typeof i.eq === "number" ? { eq: i.eq } : {}),
+      },
+    };
+  }
   if ("day" in obj) {
     const d = obj.day as Record<string, unknown>;
     if (!d || typeof d !== "object") {

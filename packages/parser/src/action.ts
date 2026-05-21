@@ -37,8 +37,21 @@ export function parseAction(content: string, source?: string): Action {
   if (obj.slot === "any" || obj.slot === "day" || obj.slot === "night") {
     action.slot = obj.slot;
   }
-  if (obj.kind === "combat" || obj.kind === "sleep" || obj.kind === "plain") {
+  if (
+    obj.kind === "combat" ||
+    obj.kind === "sleep" ||
+    obj.kind === "plain" ||
+    obj.kind === "useItem"
+  ) {
     action.kind = obj.kind;
+  }
+  if (typeof obj.itemId === "string") {
+    action.itemId = obj.itemId;
+  }
+  if (action.kind === "useItem" && !action.itemId) {
+    throw new ActionParseError(
+      `${source ?? action.id}: kind=useItem requires an \`itemId\` field`,
+    );
   }
   const requires = parseCondition(obj.requires);
   if (requires) action.requires = requires;
@@ -90,6 +103,14 @@ function parseEffectsObject(
       );
     }
     delta.statMax = obj.statMax as Record<string, number>;
+  }
+  if (obj.inventory !== undefined) {
+    if (typeof obj.inventory !== "object" || obj.inventory === null) {
+      throw new ActionParseError(
+        `${source ?? "action"}: effects.inventory must be an object`,
+      );
+    }
+    delta.inventory = obj.inventory as Record<string, number>;
   }
   return delta;
 }

@@ -53,8 +53,8 @@ autogal test .                                 # fixture 回归
 ## 节奏建议（提示）
 
 - **前 3 天**：完成 001_arrival 和 002_first_youkai，了解战斗机制
-- **Day 3-8**：白天积累好感 + 锻炼，晚上 hunt 把 sword_power 推到 20+
-- **Day 8-12**：sword_power ≥ 25 后做镇魂仪式
+- **Day 3-8**：白天积累好感 + 锻炼，晚上 night_study 把 sword_power 攒起来（每次 +2）
+- **Day 8-12**：sword_power ≥ 20 后做镇魂仪式
 - **危险信号**：spectral ≥ 80 时小心 fumble；用 shrine_pray 压一下
 
 ## fixture 测试

@@ -1,0 +1,54 @@
+name: 多条件 trigger 只在两个条件同时满足时 fire
+description: |
+  `secret-revealed` is a `once: true` trigger gated by AND-composed
+  condition (dev.affection >= 2 AND marker >= 3). This fixture seeds
+  state to land exactly on the edge:
+
+    - Start: dev=1, marker=2. NEITHER condition met → trigger inactive.
+    - Step 1 (noop): marker 2 → 3. dev still 1 → AND is FALSE → no fire.
+    - Step 2 (script intro, choice 0): dev 1 → 2 (+dev). Now BOTH true
+      → rising edge → trigger fires. Pushes 2 narrations + sets
+      flag.secretRevealed=true + logs TRIGGER:secret-revealed.
+
+  Demonstrates: (a) composite condition evaluated atomically per check,
+  (b) trigger fires only on the transition where both became true,
+  (c) deltas + narrations + customLog all flow through trigger result.
+state:
+  baseline:
+    characters:
+      dev: { affection: 1, custom: {} }
+  training:
+    day: 1
+    slot: 0
+    stats: { marker: 2 }
+    statMax: { marker: 100 }
+inputs:
+  # dev-first-bond fires at session start (dev=1 already satisfies its
+  # `when`) and queues a narration. Drain that first.
+  - { type: next }
+  - { type: doActivity, id: "action:noop" }  # marker 2→3 — dev only 1, no fire
+  - { type: doActivity, id: "script:intro" }
+  - { type: next }
+  - { type: next }
+  - { type: choose, index: 0 }  # +dev (1→2) → secret-revealed fires (rising edge of AND)
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+assertions:
+  - kind: state
+    path: hook-tracker.log
+    includes: "TRIGGER:secret-revealed"
+  - kind: state
+    path: runtime.firedTriggers
+    includes: secret-revealed
+  - kind: state
+    path: baseline.flags.secretRevealed
+    eq: true
+  # dev-first-bond ALSO fires (alice-first-bond's dev variant — at
+  # dev=2 we crossed dev>=1 too). firedTriggers should include both.
+  - kind: state
+    path: runtime.firedTriggers
+    includes: dev-first-bond

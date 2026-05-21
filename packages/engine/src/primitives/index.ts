@@ -7,6 +7,12 @@ export { dispatchActivity } from "./dispatchActivity";
 export { mutateState } from "./mutateState";
 export { giveItem, consumeItem, hasItem } from "./inventory";
 export {
+  getEquippedWeapon,
+  getEquippedWeaponPower,
+  getWeaponPower,
+  equipWeapon,
+} from "./weapons";
+export {
   fireHook,
   fireOnSessionStart,
   fireOnScriptStart,

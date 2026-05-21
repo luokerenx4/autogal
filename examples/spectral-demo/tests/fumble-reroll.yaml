@@ -14,22 +14,21 @@ description: |
 state:
   baseline:
     completedScripts: [001_arrival, 002_first_youkai]
+    weapons:
+      yaodao: { power: 50 }
   training:
     day: 10
     slot: 2
     stats:
       spectral: 99
-      sword_power: 50
       physical: 15
       mental: 5
       intellect: 5
     statMax:
       spectral: 100
-      sword_power: 100
       physical: 20
       mental: 10
       intellect: 99
-    pendingNarrations: []
 inputs:
   - { type: doActivity, id: "action:hunt" }
   - { type: next }

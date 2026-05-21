@@ -115,5 +115,13 @@ function parseEffectsObject(
     }
     delta.inventory = obj.inventory as Record<string, number>;
   }
+  if (obj.weapons !== undefined) {
+    if (typeof obj.weapons !== "object" || obj.weapons === null) {
+      throw new ActionParseError(
+        `${source ?? "action"}: effects.weapons must be an object`,
+      );
+    }
+    delta.weapons = obj.weapons as Record<string, { power?: number }>;
+  }
   return delta;
 }

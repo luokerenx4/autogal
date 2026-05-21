@@ -7,6 +7,8 @@ import type {
   Game,
   Module,
   StateDelta,
+  WeaponDef,
+  WeaponState,
 } from "../types";
 
 export const BASELINE_NAMESPACE = "baseline";
@@ -43,7 +45,10 @@ const useItemHandler: ActionHandler = ({ state, action, game }) => {
   return { deltas };
 };
 
-export function createBaselineState(characters: CharacterDef[]): BaselineState {
+export function createBaselineState(
+  characters: CharacterDef[],
+  weapons: WeaponDef[] = [],
+): BaselineState {
   const charMap: Record<string, CharacterState> = {};
   for (const c of characters) {
     charMap[c.id] = {
@@ -51,6 +56,13 @@ export function createBaselineState(characters: CharacterDef[]): BaselineState {
       custom: {},
     };
   }
+  const weaponMap: Record<string, WeaponState> = {};
+  for (const w of weapons) {
+    weaponMap[w.id] = { power: w.basePower };
+  }
+  // Auto-equip the only declared weapon. Multi-weapon games leave
+  // equippedWeaponId null and equip via the equipWeapon primitive.
+  const equippedWeaponId = weapons.length === 1 ? weapons[0]!.id : null;
   return {
     characters: charMap,
     flags: {},
@@ -58,6 +70,8 @@ export function createBaselineState(characters: CharacterDef[]): BaselineState {
     currentScriptId: null,
     beatIndex: 0,
     inventory: {},
+    weapons: weaponMap,
+    equippedWeaponId,
   };
 }
 
@@ -65,7 +79,7 @@ export const baselineModule: Module = {
   id: BASELINE_NAMESPACE,
   version: "0.1",
   initialize(game: Game): BaselineState {
-    return createBaselineState(game.characters);
+    return createBaselineState(game.characters, game.weapons ?? []);
   },
   actionHandlers: {
     useItem: useItemHandler,

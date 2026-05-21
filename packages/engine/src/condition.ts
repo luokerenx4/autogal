@@ -40,6 +40,11 @@ export function evaluateCondition(
     const count = state.baseline.inventory[cond.inventory.itemId] ?? 0;
     return rangeMatch(count, cond.inventory);
   }
+  if ("weaponPower" in cond) {
+    const w = state.baseline.weapons[cond.weaponPower.weaponId];
+    if (!w) return false;
+    return rangeMatch(w.power, cond.weaponPower);
+  }
   if ("day" in cond) {
     if (!state.training) return false;
     return rangeMatch(state.training.day, cond.day);

@@ -9,6 +9,7 @@ import type {
   Module,
   RunFunction,
   Script,
+  WeaponDef,
 } from "@autogal/engine";
 import {
   buildGame,
@@ -18,6 +19,7 @@ import {
   parseItem,
   parseManifest,
   parseScript,
+  parseWeapon,
 } from "@autogal/parser";
 
 export async function loadGame(dir: string): Promise<Game> {
@@ -56,6 +58,13 @@ export async function loadGame(dir: string): Promise<Game> {
   );
   enemies.sort((a, b) => a.id.localeCompare(b.id));
 
+  const weapons = await loadDir<WeaponDef>(
+    path.join(dir, "weapons"),
+    [".md"],
+    (content, source) => parseWeapon(content, source),
+  );
+  weapons.sort((a, b) => a.id.localeCompare(b.id));
+
   const modules = await loadModules(dir, manifest.modules ?? []);
 
   const game = buildGame(
@@ -66,6 +75,7 @@ export async function loadGame(dir: string): Promise<Game> {
     modules,
     items,
     enemies,
+    weapons,
   );
 
   // If game.yaml's preset: is a relative path (the ejected-preset case),

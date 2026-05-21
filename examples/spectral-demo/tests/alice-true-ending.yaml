@@ -13,18 +13,18 @@ state:
       alice: { affection: 5, custom: {} }
       bea: { affection: 0, custom: {} }
     completedScripts: [001_arrival, 002_first_youkai, event_alice_witness]
+    weapons:
+      yaodao: { power: 25 }
   training:
     day: 10
     slot: 2
     stats:
       spectral: 0
-      sword_power: 25
       physical: 15
       mental: 5
       intellect: 4
     statMax:
       spectral: 100
-      sword_power: 100
       physical: 20
       mental: 10
       intellect: 99
@@ -75,7 +75,7 @@ inputs:
   - { type: next }
 assertions:
   - kind: state
-    path: training.stats.sword_power
+    path: baseline.weapons.yaodao.power
     gte: 25
   - kind: state
     path: baseline.completedScripts

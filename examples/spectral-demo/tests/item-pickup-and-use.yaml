@@ -14,13 +14,11 @@ state:
     slot: 0
     stats:
       spectral: 20
-      sword_power: 3
       physical: 15
       mental: 5
       intellect: 3
     statMax:
       spectral: 100
-      sword_power: 100
       physical: 20
       mental: 10
       intellect: 99

@@ -9,4 +9,5 @@ requires:
     - stat: { name: mental, min: 3 }
     - stat: { name: intellect, min: 3 }
 effects:
-  stats: { sword_power: 2, mental: -2, spectral: 2 }
+  stats: { mental: -2, spectral: 2 }
+  weapons: { yaodao: { power: 2 } }

@@ -16,6 +16,14 @@ export interface BaselineState {
   // present key always means count >= 1. Empty record for games that
   // declare no items.
   inventory: Record<string, number>;
+  // Engine-owned runtime weapon instances. Keyed by weapon id; engine
+  // initializes each declared WeaponDef with power = basePower at
+  // game start. Mutations go through StateDelta.weapons.
+  weapons: Record<string, WeaponState>;
+  // Id of the currently equipped weapon, or null. Engine auto-equips
+  // the only declared weapon at init; multi-weapon games equip via
+  // the equipWeapon primitive.
+  equippedWeaponId: string | null;
 }
 
 export interface TrainingState {
@@ -101,6 +109,35 @@ export interface EnemyDef {
   };
 }
 
+// Engine-level standard weapon resource. Engine owns the static
+// definition (basePower, kind, properties); runtime instance state
+// lives in state.baseline.weapons[id] (so authors can grow a weapon's
+// power across the game). Combat modules pick the equipped weapon
+// from state.baseline.equippedWeaponId and read its runtime power via
+// the getWeaponPower primitive.
+export interface WeaponDef {
+  id: string;
+  name: string;
+  description: string;
+  // Starting power. state.baseline.weapons[id].power = basePower at
+  // game init; subsequent mutations (e.g. night_study, hunt wins) add
+  // to that.
+  basePower: number;
+  // Optional. Combat modules may dispatch differently on weapon kind
+  // (e.g. melee vs spell-focus). Engine doesn't interpret it.
+  kind?: string;
+  // Open-ended properties for combat-module-specific use (crit bonus,
+  // affinity, durability, etc.). Engine just stores them.
+  properties?: Record<string, number>;
+}
+
+// Runtime state per weapon. Engine initializes each weapon's `power`
+// to its WeaponDef.basePower; gameplay modules / action effects can
+// mutate it via StateDelta.weapons.
+export interface WeaponState {
+  power: number;
+}
+
 export interface StatDef {
   id: string;
   name: string;
@@ -144,6 +181,14 @@ export type Condition =
   | { flag: { name: string; eq?: FlagValue; min?: number; max?: number } }
   | { stat: { name: string; min?: number; max?: number; eq?: number } }
   | { inventory: { itemId: string; min?: number; max?: number; eq?: number } }
+  | {
+      weaponPower: {
+        weaponId: string;
+        min?: number;
+        max?: number;
+        eq?: number;
+      };
+    }
   | { day: { min?: number; max?: number; eq?: number } }
   | { slot: { min?: number; max?: number; eq?: number } };
 
@@ -159,6 +204,11 @@ export interface StateDelta {
   // throwing — the engine is forgiving here; handlers like consumeItem
   // do their own pre-validation for "loud" failures.
   inventory?: Record<string, number>;
+  // Weapon runtime field deltas: { yaodao: { power: +2 } } adds 2 to
+  // state.baseline.weapons.yaodao.power. applyDelta clamps to >= 0
+  // but does not delete weapons whose power hits 0 (weapons persist
+  // even at 0 power, unlike inventory items at 0 count).
+  weapons?: Record<string, Partial<WeaponState>>;
 }
 
 export type Beat =
@@ -215,6 +265,7 @@ export type StateMutationSource =
   | "endcondition" // an end-condition-triggered mutation
   | "trigger" // a reactive trigger's do() ActionResult deltas
   | "item" // giveItem / consumeItem / useItem-handler-produced
+  | "weapon" // weapon power / properties mutation
   | "external"; // anything else (manual game scripts, hot-reload, etc.)
 
 // Reactive trigger. Modules declare a list of these; the engine
@@ -424,6 +475,9 @@ export interface Game {
   // Engine-level enemy registry — see EnemyDef. Empty / absent for
   // games that declare no enemies/ directory.
   enemies?: EnemyDef[];
+  // Engine-level weapon registry — see WeaponDef. Empty / absent for
+  // games that declare no weapons/ directory.
+  weapons?: WeaponDef[];
   training?: TrainingConfig;
   modules?: Module[];
   // Preset selector. Either a built-in name ("vn" / "training") or a
@@ -516,6 +570,7 @@ export interface PresetContext {
   actionMap: Map<string, Action>;
   itemMap: Map<string, ItemDef>;
   enemyMap: Map<string, EnemyDef>;
+  weaponMap: Map<string, WeaponDef>;
   characterNameMap: Map<string, string>;
   // Injected RNG. Defaults to Math.random; tests can override for
   // deterministic combat / choice outcomes.

@@ -2,6 +2,8 @@ import { evaluateCondition } from "./condition";
 import { applyDelta, cloneState, createInitialState } from "./state";
 import type {
   Action,
+  ActionHandler,
+  ActionResult,
   ComposedState,
   EndConditionSpec,
   Game,
@@ -22,6 +24,9 @@ export class Engine {
   private readonly scriptMap: Map<string, Script>;
   private readonly actionMap: Map<string, Action>;
   private readonly characterNameMap: Map<string, string>;
+  // Registry of action.kind → handler, aggregated from all game.modules.
+  // Duplicate kind across modules throws at construction time.
+  private readonly actionHandlerRegistry: Record<string, ActionHandler>;
 
   constructor(
     private readonly game: Game,
@@ -31,6 +36,17 @@ export class Engine {
     this.scriptMap = new Map(game.scripts.map((s) => [s.id, s]));
     this.actionMap = new Map((game.actions ?? []).map((a) => [a.id, a]));
     this.characterNameMap = new Map(game.characters.map((c) => [c.id, c.name]));
+    this.actionHandlerRegistry = {};
+    for (const mod of game.modules ?? []) {
+      for (const [kind, handler] of Object.entries(mod.actionHandlers ?? {})) {
+        if (this.actionHandlerRegistry[kind]) {
+          throw new Error(
+            `Engine: duplicate action handler for kind "${kind}" (module ${mod.id})`,
+          );
+        }
+        this.actionHandlerRegistry[kind] = handler;
+      }
+    }
   }
 
   getState(): ComposedState {
@@ -251,11 +267,17 @@ export class Engine {
   private async *runAction(
     action: Action,
   ): AsyncGenerator<Output, "ok" | "quit", Input> {
-    if (action.kind === "combat") {
-      const combatResult = yield* this.runCombat(action);
-      if (combatResult === "quit") return "quit";
+    const handler = action.kind ? this.actionHandlerRegistry[action.kind] : undefined;
+    if (handler) {
+      this.applyActionResult(handler({
+        state: this.state,
+        action,
+        game: this.game,
+        rng: Math.random,
+      }));
     } else {
       if (action.effects) applyDelta(this.state, action.effects);
+      // TODO(A.4): move "sleep" into a training-preset module handler.
       if (action.kind === "sleep") {
         const t = this.state.training!;
         for (const statId of Object.keys(t.stats)) {
@@ -273,78 +295,29 @@ export class Engine {
     return "ok";
   }
 
-  private async *runCombat(
-    action: Action,
-  ): AsyncGenerator<Output, "ok" | "quit", Input> {
-    // Resolve combat atomically: compute all rolls, apply all state deltas,
-    // then enqueue narrations into training.pendingNarrations. The main
-    // run() loop drains them across subsequent step() calls. This keeps
-    // combat coherent even when each step() creates a fresh engine.
-    const t = this.state.training!;
-    if (!t.pendingNarrations) t.pendingNarrations = [];
-    const swordPower = t.stats.sword_power ?? 0;
-    const spectral = t.stats.spectral ?? 0;
-    const day = t.day;
-
-    const enemyHp = Math.floor(6 + day * 1.5);
-    const variance = 0.8 + Math.random() * 0.4;
-    let damage = swordPower * (1 + spectral * 0.04) * variance;
-
-    const critRoll = Math.random() * 100;
-    const fumbleRoll = Math.random() * 100;
-    const isCrit = critRoll < spectral * 0.7;
-    const isFumble = !isCrit && fumbleRoll < spectral * 0.5;
-
-    if (isCrit) damage *= 2;
-    if (isFumble) damage = 0;
-    const finalDamage = Math.floor(damage);
-    const victory = finalDamage >= enemyHp;
-
-    const narrations: string[] = [];
-    narrations.push(
-      `夜风刺骨。一团扭曲的影子从巷子尽头爬出——HP ${enemyHp} 的妖怪。`,
-    );
-    if (isCrit) {
-      narrations.push(`妖刀震动，你斩出了双倍威力！(造成 ${finalDamage} 伤害)`);
-    } else if (isFumble) {
-      applyDelta(this.state, { stats: { physical: -3 } });
-      narrations.push(`妖力反噬。你被自己的刀气擦伤，体力 -3。`);
-    } else {
-      narrations.push(`你拔刀。冷光一闪，造成 ${finalDamage} 伤害。`);
+  // Apply the atomic result of a module-provided ActionHandler:
+  //   - merge state deltas via applyDelta
+  //   - enqueue narrations for the run() loop to drain one per step
+  //   - append customLog entries to state[moduleId].log[]
+  private applyActionResult(result: ActionResult): void {
+    if (result.deltas) applyDelta(this.state, result.deltas);
+    if (result.narrations && result.narrations.length > 0) {
+      const t = this.state.training;
+      if (t) {
+        if (!t.pendingNarrations) t.pendingNarrations = [];
+        t.pendingNarrations.push(...result.narrations);
+      }
     }
-
-    let spectralDelta: number;
-    if (victory) {
-      const absorb = Math.floor(enemyHp / 2);
-      const swordGain = Math.max(2, Math.floor(enemyHp / 4));
-      spectralDelta = -absorb;
-      applyDelta(this.state, {
-        stats: { spectral: -absorb, sword_power: swordGain, mental: -2 },
-      });
-      narrations.push(
-        `妖怪化为光点散去。你把它的妖力封入刀里——灵体化 -${absorb}, 妖刀威力 +${swordGain}。`,
-      );
-    } else {
-      spectralDelta = 5;
-      applyDelta(this.state, {
-        stats: { spectral: 5, physical: -5, mental: -3 },
-      });
-      narrations.push(`妖怪逃了。它的妖力侵蚀了你——灵体化 +5, 体力 -5。`);
+    if (result.customLog) {
+      const { moduleId, entry } = result.customLog;
+      const existing = this.state[moduleId] as
+        | { log?: unknown[] }
+        | undefined;
+      const slot = existing ?? { log: [] };
+      if (!Array.isArray(slot.log)) slot.log = [];
+      slot.log.push(entry);
+      this.state[moduleId] = slot;
     }
-
-    t.combatLog.push({
-      day,
-      enemyHp,
-      damage: finalDamage,
-      crit: isCrit,
-      fumble: isFumble,
-      victory,
-      spectralDelta,
-    });
-
-    if (action.effects) applyDelta(this.state, action.effects);
-    t.pendingNarrations.push(...narrations);
-    return "ok";
   }
 
   private advanceTime(slots: number): void {

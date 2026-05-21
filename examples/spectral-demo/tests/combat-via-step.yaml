@@ -4,7 +4,7 @@ description: |
   yield 后 runner.return()，导致 combat 的 applyDelta 永远不执行。
   修复后 combat 应当原子结算 + 把 narration 推入 pendingNarrations 队列，
   引擎主循环每步排空一条。本 fixture 注入"必胜"数值，验证 hunt 之后
-  sword_power 真的上去了、combatLog 也写入了。
+  sword_power 真的上去了、spectral-combat module 的 log 也写入了。
 state:
   baseline:
     completedScripts: [001_arrival, 002_first_youkai]
@@ -32,7 +32,7 @@ inputs:
   - { type: next }
 assertions:
   - kind: state
-    path: training.combatLog
+    path: spectral-combat.log
     length: 1
   - kind: state
     path: training.stats.sword_power

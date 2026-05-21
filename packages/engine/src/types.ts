@@ -18,18 +18,7 @@ export interface TrainingState {
   slot: number;
   stats: Record<string, number>;
   statMax: Record<string, number>;
-  combatLog: CombatLogEntry[];
   pendingNarrations?: string[];
-}
-
-export interface CombatLogEntry {
-  day: number;
-  enemyHp: number;
-  damage: number;
-  crit: boolean;
-  fumble: boolean;
-  victory: boolean;
-  spectralDelta: number;
 }
 
 export interface ComposedState {

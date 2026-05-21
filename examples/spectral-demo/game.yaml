@@ -1,4 +1,6 @@
 title: 妖刀さくら抄 / Spectral Suite
+modules:
+  - ./modules/combat.ts
 training:
   slotsPerDay: 3
   slotNames: [上午, 下午, 晚上]

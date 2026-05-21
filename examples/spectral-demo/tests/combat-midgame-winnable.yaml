@@ -31,7 +31,7 @@ inputs:
   - { type: next }
 assertions:
   - kind: state
-    path: training.combatLog
+    path: spectral-combat.log
     length: 1
   - kind: state
     path: training.stats.sword_power

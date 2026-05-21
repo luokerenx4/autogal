@@ -1,10 +1,19 @@
 import { parse as parseYaml } from "yaml";
-import type { EndConditionSpec, StatDef, TrainingConfig } from "@autogal/engine";
+import type {
+  EndConditionSpec,
+  StatDef,
+  StatThreshold,
+  TrainingConfig,
+} from "@autogal/engine";
 import { parseCondition } from "./condition";
 
 export interface Manifest {
   title: string;
   training?: TrainingConfig;
+  // Relative paths (from game dir) of ts modules to load at runtime.
+  // The loader dynamically imports each path and registers its default
+  // export as a Module on the Game object.
+  modules?: string[];
 }
 
 export class ManifestParseError extends Error {}
@@ -28,6 +37,12 @@ export function parseManifest(content: string): Manifest {
   const manifest: Manifest = { title: obj.title };
   if (obj.training !== undefined) {
     manifest.training = parseTraining(obj.training);
+  }
+  if (obj.modules !== undefined) {
+    if (!Array.isArray(obj.modules) || obj.modules.some((m) => typeof m !== "string")) {
+      throw new ManifestParseError("`modules` must be an array of strings");
+    }
+    manifest.modules = obj.modules as string[];
   }
   return manifest;
 }
@@ -61,13 +76,17 @@ function parseTraining(raw: unknown): TrainingConfig {
     if (typeof obj.id !== "string") {
       throw new ManifestParseError(`stats[${i}].id must be a string`);
     }
-    return {
+    const stat: StatDef = {
       id: obj.id,
       name: typeof obj.name === "string" ? obj.name : obj.id,
       min: typeof obj.min === "number" ? obj.min : 0,
       max: typeof obj.max === "number" ? obj.max : 100,
       start: typeof obj.start === "number" ? obj.start : 0,
     };
+    if (Array.isArray(obj.thresholds)) {
+      stat.thresholds = obj.thresholds.map((tr, j) => parseThreshold(tr, i, j));
+    }
+    return stat;
   });
 
   const endRaw = t.endConditions;
@@ -105,6 +124,30 @@ function parseTraining(raw: unknown): TrainingConfig {
     huntActionId,
     endConditions,
   };
+}
+
+function parseThreshold(raw: unknown, statIdx: number, thrIdx: number): StatThreshold {
+  if (!raw || typeof raw !== "object") {
+    throw new ManifestParseError(
+      `stats[${statIdx}].thresholds[${thrIdx}] must be an object`,
+    );
+  }
+  const obj = raw as Record<string, unknown>;
+  if (typeof obj.min !== "number") {
+    throw new ManifestParseError(
+      `stats[${statIdx}].thresholds[${thrIdx}].min must be a number`,
+    );
+  }
+  if (typeof obj.label !== "string") {
+    throw new ManifestParseError(
+      `stats[${statIdx}].thresholds[${thrIdx}].label must be a string`,
+    );
+  }
+  const thr: StatThreshold = { min: obj.min, label: obj.label };
+  if (typeof obj.color === "string") {
+    thr.color = obj.color as StatThreshold["color"];
+  }
+  return thr;
 }
 
 function numberField(

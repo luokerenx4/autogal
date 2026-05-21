@@ -13,9 +13,14 @@ export function defaultModules(): Module[] {
   return [baselineModule];
 }
 
+// Always layer game-provided modules on top of the built-in defaults
+// (which include the baseline module). Game modules can register
+// action handlers and lifecycle hooks but cannot replace baseline state.
 export function resolveModules(game: Game): Module[] {
-  if (game.modules && game.modules.length > 0) return game.modules;
-  return defaultModules();
+  const defaults = defaultModules();
+  const game_modules = game.modules ?? [];
+  const seen = new Set(defaults.map((m) => m.id));
+  return [...defaults, ...game_modules.filter((m) => !seen.has(m.id))];
 }
 
 export function createInitialState(game: Game): ComposedState;
@@ -29,7 +34,9 @@ export function createInitialState(
   const modules = resolveModules(game);
   const composed: ComposedState = { baseline: undefined as never };
   for (const mod of modules) {
-    composed[mod.id] = mod.initialize(game);
+    if (mod.initialize) {
+      composed[mod.id] = mod.initialize(game);
+    }
   }
   if (game.training) {
     composed.training = createTrainingState(game.training);
@@ -49,7 +56,6 @@ export function createTrainingState(config: TrainingConfig): TrainingState {
     slot: 0,
     stats,
     statMax,
-    combatLog: [],
     pendingNarrations: [],
   };
 }

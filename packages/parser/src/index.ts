@@ -1,4 +1,4 @@
-import type { Action, CharacterDef, Game, Script } from "@autogal/engine";
+import type { Action, CharacterDef, Game, Module, Script } from "@autogal/engine";
 import type { Manifest } from "./manifest";
 
 export { parseScript, ScriptParseError } from "./script";
@@ -13,6 +13,7 @@ export function buildGame(
   characters: CharacterDef[],
   scripts: Script[],
   actions?: Action[],
+  modules?: Module[],
 ): Game {
   const game: Game = {
     title: manifest.title,
@@ -21,5 +22,6 @@ export function buildGame(
   };
   if (actions && actions.length > 0) game.actions = actions;
   if (manifest.training) game.training = manifest.training;
+  if (modules && modules.length > 0) game.modules = modules;
   return game;
 }

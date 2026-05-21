@@ -54,6 +54,18 @@ export class Engine {
 
   async *run(): AsyncGenerator<Output, void, Input> {
     while (true) {
+      // Drain any queued narrations (e.g. from a combat that ran atomically
+      // last step). State persists across step() calls, so this resumes
+      // correctly when the engine is rebuilt from disk between yields.
+      const t = this.state.training;
+      if (t?.pendingNarrations && t.pendingNarrations.length > 0) {
+        const text = t.pendingNarrations[0]!;
+        const input = yield { type: "narration", text };
+        if (input.type === "quit") return;
+        t.pendingNarrations.shift();
+        continue;
+      }
+
       const endCheck = this.checkEndConditions();
       if (endCheck) {
         if (
@@ -265,7 +277,12 @@ export class Engine {
   private async *runCombat(
     action: Action,
   ): AsyncGenerator<Output, "ok" | "quit", Input> {
+    // Resolve combat atomically: compute all rolls, apply all state deltas,
+    // then enqueue narrations into training.pendingNarrations. The main
+    // run() loop drains them across subsequent step() calls. This keeps
+    // combat coherent even when each step() creates a fresh engine.
     const t = this.state.training!;
+    if (!t.pendingNarrations) t.pendingNarrations = [];
     const swordPower = t.stats.sword_power ?? 0;
     const spectral = t.stats.spectral ?? 0;
     const day = t.day;
@@ -279,66 +296,41 @@ export class Engine {
     const isCrit = critRoll < spectral * 0.7;
     const isFumble = !isCrit && fumbleRoll < spectral * 0.5;
 
-    const intro = yield {
-      type: "narration",
-      text: `夜风刺骨。一团扭曲的影子从巷子尽头爬出——HP ${enemyHp} 的妖怪。`,
-    };
-    if (intro.type === "quit") return "quit";
+    if (isCrit) damage *= 2;
+    if (isFumble) damage = 0;
+    const finalDamage = Math.floor(damage);
+    const victory = finalDamage >= enemyHp;
 
+    const narrations: string[] = [];
+    narrations.push(
+      `夜风刺骨。一团扭曲的影子从巷子尽头爬出——HP ${enemyHp} 的妖怪。`,
+    );
     if (isCrit) {
-      damage *= 2;
-      const c = yield {
-        type: "narration",
-        text: `妖刀震动，你斩出了双倍威力！(造成 ${Math.floor(damage)} 伤害)`,
-      };
-      if (c.type === "quit") return "quit";
+      narrations.push(`妖刀震动，你斩出了双倍威力！(造成 ${finalDamage} 伤害)`);
     } else if (isFumble) {
-      damage = 0;
       applyDelta(this.state, { stats: { physical: -3 } });
-      const f = yield {
-        type: "narration",
-        text: `妖力反噬。你被自己的刀气擦伤，体力 -3。`,
-      };
-      if (f.type === "quit") return "quit";
+      narrations.push(`妖力反噬。你被自己的刀气擦伤，体力 -3。`);
     } else {
-      const n = yield {
-        type: "narration",
-        text: `你拔刀。冷光一闪，造成 ${Math.floor(damage)} 伤害。`,
-      };
-      if (n.type === "quit") return "quit";
+      narrations.push(`你拔刀。冷光一闪，造成 ${finalDamage} 伤害。`);
     }
 
     let spectralDelta: number;
-    let victory: boolean;
-    const finalDamage = Math.floor(damage);
-
-    if (finalDamage >= enemyHp) {
-      victory = true;
+    if (victory) {
       const absorb = Math.floor(enemyHp / 2);
+      const swordGain = Math.max(1, Math.floor(enemyHp / 5));
       spectralDelta = -absorb;
       applyDelta(this.state, {
-        stats: {
-          spectral: -absorb,
-          sword_power: Math.max(1, Math.floor(enemyHp / 5)),
-          mental: -2,
-        },
+        stats: { spectral: -absorb, sword_power: swordGain, mental: -2 },
       });
-      const v = yield {
-        type: "narration",
-        text: `妖怪化为光点散去。你把它的妖力封入刀里——灵体化 -${absorb}, 妖刀威力 +${Math.max(1, Math.floor(enemyHp / 5))}。`,
-      };
-      if (v.type === "quit") return "quit";
+      narrations.push(
+        `妖怪化为光点散去。你把它的妖力封入刀里——灵体化 -${absorb}, 妖刀威力 +${swordGain}。`,
+      );
     } else {
-      victory = false;
       spectralDelta = 5;
       applyDelta(this.state, {
         stats: { spectral: 5, physical: -5, mental: -3 },
       });
-      const d = yield {
-        type: "narration",
-        text: `妖怪逃了。它的妖力侵蚀了你——灵体化 +5, 体力 -5。`,
-      };
-      if (d.type === "quit") return "quit";
+      narrations.push(`妖怪逃了。它的妖力侵蚀了你——灵体化 +5, 体力 -5。`);
     }
 
     t.combatLog.push({
@@ -352,6 +344,7 @@ export class Engine {
     });
 
     if (action.effects) applyDelta(this.state, action.effects);
+    t.pendingNarrations.push(...narrations);
     return "ok";
   }
 

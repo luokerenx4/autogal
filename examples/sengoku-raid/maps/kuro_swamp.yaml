@@ -1,0 +1,69 @@
+id: kuro_swamp
+name: 黒沼地
+difficulty: 1
+description: 江戸の南三里。霧深く、夜になると啼くものがいる。
+spawn_zone_id: edge
+
+zones:
+  - id: edge
+    name: 沼の縁
+    connections:
+      - { dir: 奥, target: crossroads }
+    encounter_table:
+      - { enemy: null, weight: 1 }
+    loot_table:
+      - { item: ryo, min: 5, max: 12, weight: 30 }
+      - { item: null, min: 0, max: 0, weight: 70 }
+
+  - id: crossroads
+    name: 三叉路
+    connections:
+      - { dir: 東, target: shrine }
+      - { dir: 北, target: ruined_hut }
+      - { dir: 西奥, target: deep_grove }
+    encounter_table:
+      - { enemy: oni_lesser, weight: 70 }
+      - { enemy: null, weight: 30 }
+    loot_table:
+      - { item: ryo, min: 8, max: 20, weight: 50 }
+      - { item: soul_shard, min: 1, max: 2, weight: 30 }
+      - { item: null, min: 0, max: 0, weight: 20 }
+
+  - id: shrine
+    name: 潰れた社
+    is_extract: true
+    connections:
+      - { dir: 戻る, target: crossroads }
+    encounter_table:
+      - { enemy: null, weight: 1 }
+    loot_table:
+      - { item: soul_shard, min: 1, max: 1, weight: 100 }
+
+  - id: ruined_hut
+    name: 廃れた茅屋
+    connections:
+      - { dir: 戻る, target: crossroads }
+    encounter_table:
+      - { enemy: oni_lesser, weight: 80 }
+      - { enemy: null, weight: 20 }
+    loot_table:
+      - { item: ryo, min: 15, max: 30, weight: 60 }
+      - { item: soul_shard, min: 1, max: 2, weight: 30 }
+      - { item: null, min: 0, max: 0, weight: 10 }
+
+  - id: deep_grove
+    name: 奥の杜
+    is_extract: true
+    connections:
+      - { dir: 戻る, target: crossroads }
+    encounter_table:
+      - { enemy: oni_lesser, weight: 100 }
+    loot_table:
+      - { item: soul_shard, min: 2, max: 3, weight: 70 }
+      - { item: ryo, min: 20, max: 40, weight: 30 }
+
+character_spawns:
+  - character: kagari
+    zones: [crossroads, ruined_hut]
+    chance: 1.0
+    encounter_script: encounter_kagari_first

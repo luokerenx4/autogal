@@ -1,0 +1,42 @@
+name: 高羁绊触发 bond_kasumi_02 → 学到 hayagake；flee 之后保证零伤
+description: |
+  Mirror of fixture 05 for the second character. Seeds kasumi met +
+  affection=4, dispatches bond_kasumi_02, asserts hayagake skill is
+  granted. Then demonstrates the skill: even seeded into a raid with
+  an active encounter, flee succeeds with no damage (hayagake branch).
+
+state:
+  baseline:
+    completedScripts: [000_intro, encounter_kasumi_first]
+    characters:
+      kasumi: { affection: 4, custom: {} }
+  sengoku-raid:
+    mode: hub
+    raid: null
+    metCharacters: [kasumi]
+inputs:
+  - { type: doActivity, id: "script:bond_kasumi_02" }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+assertions:
+  - kind: state
+    path: baseline.knownSkills
+    includes: hayagake
+  - kind: state
+    path: baseline.completedScripts
+    includes: bond_kasumi_02
+  - kind: state
+    path: baseline.characters.kasumi.affection
+    eq: 5
+  - kind: state
+    path: baseline.flags.learnedHayagake
+    eq: true

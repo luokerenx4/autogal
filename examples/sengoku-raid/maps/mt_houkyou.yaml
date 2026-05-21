@@ -1,0 +1,72 @@
+id: mt_houkyou
+name: 砲響山
+difficulty: 3
+description: 江戸の北西。十数年前の戦で焼けた山。今もまだ赤熱の岩が残り、夜は唸る。
+spawn_zone_id: foothills
+
+zones:
+  - id: foothills
+    name: 麓
+    connections:
+      - { dir: 登る, target: stone_paths }
+    encounter_table:
+      - { enemy: null, weight: 1 }
+    loot_table:
+      - { item: ryo, min: 10, max: 20, weight: 50 }
+      - { item: null, min: 0, max: 0, weight: 50 }
+
+  - id: stone_paths
+    name: 石畳の道
+    connections:
+      - { dir: 上, target: burnt_temple }
+      - { dir: 横, target: lava_vent }
+      - { dir: 戻る, target: foothills }
+    encounter_table:
+      - { enemy: oni_lesser, weight: 40 }
+      - { enemy: oni_warrior, weight: 30 }
+      - { enemy: null, weight: 30 }
+    loot_table:
+      - { item: ryo, min: 15, max: 30, weight: 40 }
+      - { item: soul_shard, min: 1, max: 2, weight: 30 }
+      - { item: oni_horn, min: 1, max: 1, weight: 20 }
+      - { item: null, min: 0, max: 0, weight: 10 }
+
+  - id: burnt_temple
+    name: 焼け落ちた寺
+    is_extract: true
+    connections:
+      - { dir: 戻る, target: stone_paths }
+    encounter_table:
+      - { enemy: oni_warrior, weight: 60 }
+      - { enemy: null, weight: 40 }
+    loot_table:
+      - { item: oni_horn, min: 1, max: 2, weight: 60 }
+      - { item: soul_shard, min: 2, max: 3, weight: 40 }
+
+  - id: lava_vent
+    name: 噴気孔
+    connections:
+      - { dir: 奥, target: caldera }
+      - { dir: 戻る, target: stone_paths }
+    encounter_table:
+      - { enemy: oni_warrior, weight: 100 }
+    loot_table:
+      - { item: soul_shard, min: 2, max: 4, weight: 70 }
+      - { item: oni_horn, min: 1, max: 1, weight: 30 }
+
+  - id: caldera
+    name: 火口
+    is_extract: true
+    connections:
+      - { dir: 戻る, target: lava_vent }
+    encounter_table:
+      - { enemy: kijin, weight: 100 }
+    loot_table:
+      - { item: cursed_blade_fragment, min: 1, max: 1, weight: 60 }
+      - { item: oni_horn, min: 2, max: 3, weight: 40 }
+
+character_spawns:
+  - character: kasumi
+    zones: [stone_paths, lava_vent]
+    chance: 1.0
+    encounter_script: encounter_kasumi_first

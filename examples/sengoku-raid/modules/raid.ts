@@ -14,7 +14,18 @@
 //   We want HP/spectral as free-form clampable numbers and we want our
 //   onHubBuild to win first-wins. Skipping game.training avoids both.
 
+import { readdirSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { checkTriggers, evaluateCondition } from "@autogal/engine";
+
+// Bun ships with a built-in YAML parser; we use it here so games don't
+// need to declare a `yaml` dependency to load map data files. If we
+// later want to run under Node, swap to the `yaml` package (already in
+// the workspace's devDependencies).
+declare const Bun: { YAML: { parse: (s: string) => unknown } };
+const parseYaml = (s: string) => Bun.YAML.parse(s);
 import type {
   Game,
   HubActivity,
@@ -26,6 +37,11 @@ import type {
 } from "@autogal/engine";
 
 const MODULE_ID = "sengoku-raid";
+
+// Resolve our own directory so we can find maps/ alongside us.
+// Engine doesn't tell modules where the game root is, so we infer.
+const MODULE_DIR = dirname(fileURLToPath(import.meta.url));
+const MAPS_DIR = join(MODULE_DIR, "..", "maps");
 
 // ============================================================================
 // Persistent player stats (baseline.flags). Engine's flag delta is
@@ -134,97 +150,89 @@ interface CharacterSpawnRule {
   // weapon power, etc.) but vertical slice keeps it simple.
 }
 
-const MAPS: Record<string, MapDef> = {
-  kuro_swamp: {
-    id: "kuro_swamp",
-    name: "黒沼地",
-    difficulty: 1,
-    description: "江戸の南三里。霧深く、夜になると啼くものがいる。",
-    spawnZoneId: "edge",
-    zones: [
-      {
-        id: "edge",
-        name: "沼の縁",
-        connections: [{ dir: "奥", target: "crossroads" }],
-        encounterTable: [{ enemyId: null, weight: 1 }],
-        lootTable: [
-          { itemId: "ryo", min: 5, max: 12, weight: 30 },
-          { itemId: null, min: 0, max: 0, weight: 70 },
-        ],
-      },
-      {
-        id: "crossroads",
-        name: "三叉路",
-        connections: [
-          { dir: "東", target: "shrine" },
-          { dir: "北", target: "ruined_hut" },
-          { dir: "西奥", target: "deep_grove" },
-        ],
-        encounterTable: [
-          { enemyId: "oni_lesser", weight: 70 },
-          { enemyId: null, weight: 30 },
-        ],
-        lootTable: [
-          { itemId: "ryo", min: 8, max: 20, weight: 50 },
-          { itemId: "soul_shard", min: 1, max: 2, weight: 30 },
-          { itemId: null, min: 0, max: 0, weight: 20 },
-        ],
-      },
-      {
-        id: "shrine",
-        name: "潰れた社",
-        connections: [{ dir: "戻る", target: "crossroads" }],
-        isExtract: true,
-        encounterTable: [{ enemyId: null, weight: 1 }],
-        lootTable: [
-          { itemId: "soul_shard", min: 1, max: 1, weight: 100 },
-        ],
-      },
-      {
-        id: "ruined_hut",
-        name: "廃れた茅屋",
-        connections: [{ dir: "戻る", target: "crossroads" }],
-        encounterTable: [
-          { enemyId: "oni_lesser", weight: 80 },
-          { enemyId: null, weight: 20 },
-        ],
-        lootTable: [
-          { itemId: "ryo", min: 15, max: 30, weight: 60 },
-          { itemId: "soul_shard", min: 1, max: 2, weight: 30 },
-          { itemId: null, min: 0, max: 0, weight: 10 },
-        ],
-      },
-      {
-        id: "deep_grove",
-        name: "奥の杜",
-        connections: [{ dir: "戻る", target: "crossroads" }],
-        isExtract: true,
-        encounterTable: [
-          { enemyId: "oni_lesser", weight: 100 },
-        ],
-        lootTable: [
-          { itemId: "soul_shard", min: 2, max: 3, weight: 70 },
-          { itemId: "ryo", min: 20, max: 40, weight: 30 },
-        ],
-      },
-    ],
-    characterSpawns: [
-      {
-        characterId: "kagari",
-        zones: ["crossroads", "ruined_hut"],
-        // 1.0 = guaranteed on first qualifying zone entry. Keeps the
-        // vertical slice's narrative pacing predictable; later maps can
-        // dial this back when there are multiple characters competing.
-        chance: 1.0,
-        encounterScriptId: "encounter_kagari_first",
-      },
-    ],
-  },
-};
+// MAPS are loaded eagerly at module evaluation time from maps/*.yaml.
+// We use synchronous fs reads here so the table is populated by the
+// time Module.initialize() runs — engine doesn't have a "load maps"
+// asset category, so this is the module's own asset registry.
+// Adding a new map = drop a YAML file in maps/, no code changes.
+const MAPS: Record<string, MapDef> = loadMapsFromDisk();
+
+function loadMapsFromDisk(): Record<string, MapDef> {
+  const out: Record<string, MapDef> = {};
+  let files: string[];
+  try {
+    files = readdirSync(MAPS_DIR).filter(
+      (f) => f.endsWith(".yaml") || f.endsWith(".yml"),
+    );
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return out;
+    throw err;
+  }
+  for (const f of files.sort()) {
+    const raw = readFileSync(join(MAPS_DIR, f), "utf-8");
+    const parsed = parseYaml(raw) as Record<string, unknown>;
+    const map = normalizeMapDef(parsed, f);
+    out[map.id] = map;
+  }
+  return out;
+}
+
+function normalizeMapDef(raw: Record<string, unknown>, src: string): MapDef {
+  const id = String(raw.id ?? "");
+  if (!id) throw new Error(`${src}: missing id`);
+  const zonesRaw = raw.zones;
+  if (!Array.isArray(zonesRaw)) {
+    throw new Error(`${src}: zones must be an array`);
+  }
+  const zones: MapZoneDef[] = zonesRaw.map((z, i) => {
+    const zo = z as Record<string, unknown>;
+    return {
+      id: String(zo.id ?? ""),
+      name: String(zo.name ?? zo.id ?? `zone_${i}`),
+      connections: (zo.connections as Array<{ dir: string; target: string }>) ?? [],
+      isExtract: !!zo.is_extract,
+      encounterTable: ((zo.encounter_table as Array<Record<string, unknown>>) ?? []).map(
+        (e) => ({
+          enemyId: (e.enemy as string | null) ?? null,
+          weight: Number(e.weight ?? 1),
+        }),
+      ),
+      lootTable: ((zo.loot_table as Array<Record<string, unknown>>) ?? []).map(
+        (l) => ({
+          itemId: (l.item as string | null) ?? null,
+          min: Number(l.min ?? 0),
+          max: Number(l.max ?? 0),
+          weight: Number(l.weight ?? 1),
+        }),
+      ),
+    };
+  });
+  const spawnsRaw = (raw.character_spawns as Array<Record<string, unknown>>) ?? [];
+  const characterSpawns: CharacterSpawnRule[] = spawnsRaw.map((s) => ({
+    characterId: String(s.character ?? ""),
+    zones: (s.zones as string[]) ?? [],
+    chance: Number(s.chance ?? 0.5),
+    encounterScriptId: String(s.encounter_script ?? ""),
+  }));
+  return {
+    id,
+    name: String(raw.name ?? id),
+    difficulty: Number(raw.difficulty ?? 1),
+    description: String(raw.description ?? ""),
+    spawnZoneId: String(raw.spawn_zone_id ?? zones[0]?.id ?? ""),
+    zones,
+    characterSpawns,
+  };
+}
 
 function discoverableMaps(_ctx: PresetContext): string[] {
-  // For now all maps are always discoverable. Phase 3+ can gate.
-  return Object.keys(MAPS);
+  // For now all maps are always discoverable. Future: gate harder maps
+  // behind raidsCompleted thresholds or quest flags.
+  return Object.keys(MAPS).sort((a, b) => {
+    const da = MAPS[a]?.difficulty ?? 0;
+    const db = MAPS[b]?.difficulty ?? 0;
+    return da - db;
+  });
 }
 
 // ============================================================================
@@ -547,6 +555,7 @@ function buildRaidMenu(ctx: PresetContext): Output {
 const SELL_VALUES: Record<string, number> = {
   soul_shard: 30,
   oni_horn: 80,
+  cursed_blade_fragment: 300,
 };
 
 function isLoot(_ctx: PresetContext, itemId: string): boolean {
@@ -817,25 +826,35 @@ function doFlee(ctx: PresetContext): void {
   if (!m.raid) return;
   const zone = m.raid.zones[m.raid.currentZoneId]!;
   if (!zone.encounter) return;
+  const enemyId = zone.encounter.enemyId;
+
+  // Hayagake (taught by 霞): flee always succeeds, no damage, no mental
+  // cost. The "猟師の足" is the technical reason; narratively this is the
+  // one favor she asked for in return.
+  if (ctx.state.baseline.knownSkills.includes("hayagake")) {
+    ctx.state.runtime.pendingNarrations.push(
+      `霞に教わった足運び——${enemyName(ctx, enemyId)}が振り向く半秒前に、お主はもう間合いの外。`,
+    );
+    zone.encounter = null;
+    zone.encounterCleared = true;
+    return;
+  }
+
   const spec = getFlag(ctx, "spectral");
   const dc = 30 + spec; // higher spec = harder (you're slow)
   const roll = ctx.rng() * 100;
   if (roll > dc - 10) {
-    // success — over the threshold
-    const wid = zone.encounter.enemyId;
     ctx.state.runtime.pendingNarrations.push(
-      `${enemyName(ctx, wid)}の隙を縫って退いた。`,
+      `${enemyName(ctx, enemyId)}の隙を縫って退いた。`,
     );
     zone.encounter = null;
     zone.encounterCleared = true;
-    // Move player back to previous zone (or stay put — for simplicity stay)
     setFlag(ctx, "mental", Math.max(0, getFlag(ctx, "mental") - 1));
   } else {
-    // failure — eat a hit, encounter persists
-    const dmg = Math.max(2, enemyAttackPower(ctx, zone.encounter.enemyId) + 1);
+    const dmg = Math.max(2, enemyAttackPower(ctx, enemyId) + 1);
     setFlag(ctx, "hp", getFlag(ctx, "hp") - dmg);
     ctx.state.runtime.pendingNarrations.push(
-      `背を見せた瞬間、${enemyName(ctx, zone.encounter.enemyId)}に追いつかれた——${dmg} のダメージ。`,
+      `背を見せた瞬間、${enemyName(ctx, enemyId)}に追いつかれた——${dmg} のダメージ。`,
     );
   }
 }

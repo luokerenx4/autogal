@@ -45,6 +45,9 @@ export function evaluateCondition(
     if (!w) return false;
     return rangeMatch(w.power, cond.weaponPower);
   }
+  if ("knowsSkill" in cond) {
+    return state.baseline.knownSkills.includes(cond.knowsSkill);
+  }
   if ("day" in cond) {
     if (!state.training) return false;
     return rangeMatch(state.training.day, cond.day);

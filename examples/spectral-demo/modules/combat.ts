@@ -188,10 +188,26 @@ const spectralCombatHandler: ActionHandler = ({ state, action, game, rng }) => {
 
 const combatModule: Module = {
   id: "spectral-combat",
-  version: "1.1.0",
+  version: "1.2.0",
   actionHandlers: {
     combat: spectralCombatHandler,
   },
+  triggers: [
+    // Once the yaodao crosses power 10 (via night_study + combat wins),
+    // the player has internalized enough of the sword's structure to
+    // perform 净化术式 — granted as a learnable skill. once: true.
+    // Silent learn — observable via knownSkills. Authors who want a
+    // narrative reveal can pair this with a script that requires
+    // knowsSkill and shows the "you've learned X" beat.
+    {
+      id: "learn_purify",
+      when: { weaponPower: { weaponId: "yaodao", min: 10 } },
+      once: true,
+      do: () => ({
+        deltas: { skills: { learn: ["purify"] } },
+      }),
+    },
+  ],
 };
 
 export default combatModule;

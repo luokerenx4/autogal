@@ -98,6 +98,12 @@ export function parseCondition(raw: unknown): Condition | undefined {
       },
     };
   }
+  if ("knowsSkill" in obj) {
+    if (typeof obj.knowsSkill !== "string") {
+      throw new ConditionParseError("`knowsSkill` must be a string");
+    }
+    return { knowsSkill: obj.knowsSkill };
+  }
   if ("weaponPower" in obj) {
     const w = obj.weaponPower as Record<string, unknown> | undefined;
     if (!w || typeof w !== "object") {

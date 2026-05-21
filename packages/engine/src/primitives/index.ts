@@ -12,6 +12,7 @@ export {
   getWeaponPower,
   equipWeapon,
 } from "./weapons";
+export { hasSkill, learnSkill, forgetSkill } from "./skills";
 export {
   fireHook,
   fireOnSessionStart,

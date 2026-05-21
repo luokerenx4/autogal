@@ -45,6 +45,79 @@ const useItemHandler: ActionHandler = ({ state, action, game }) => {
   return { deltas };
 };
 
+// useSkill action handler. Validates ownership (knownSkills), then
+// applies both cost and effects in a single combined delta — atomic
+// so triggers see both at once.
+const useSkillHandler: ActionHandler = ({ state, action, game }) => {
+  if (!action.skillId) return {};
+  const skillDef = (game.skills ?? []).find((s) => s.id === action.skillId);
+  if (!skillDef) return {};
+  if (!state.baseline.knownSkills.includes(action.skillId)) return {};
+
+  // Merge cost + effects. Both can touch any StateDelta field; later
+  // entries (effects) override earlier (cost) on simple keys. For
+  // stats/affection/inventory/weapons (which are records summed
+  // additively), we sum field-by-field.
+  const deltas: StateDelta = {};
+  if (skillDef.cost) mergeDelta(deltas, skillDef.cost);
+  if (skillDef.effects) mergeDelta(deltas, skillDef.effects);
+  return { deltas };
+};
+
+// Merge `src` into `dst` — additive on numeric record fields,
+// last-write-wins on flag values. Used by useSkill to combine the
+// skill's cost + effects into one atomic delta.
+function mergeDelta(dst: StateDelta, src: StateDelta): void {
+  if (src.affection) {
+    dst.affection = dst.affection ?? {};
+    for (const [k, v] of Object.entries(src.affection)) {
+      dst.affection[k] = (dst.affection[k] ?? 0) + v;
+    }
+  }
+  if (src.stats) {
+    dst.stats = dst.stats ?? {};
+    for (const [k, v] of Object.entries(src.stats)) {
+      dst.stats[k] = (dst.stats[k] ?? 0) + v;
+    }
+  }
+  if (src.statMax) {
+    dst.statMax = dst.statMax ?? {};
+    for (const [k, v] of Object.entries(src.statMax)) {
+      dst.statMax[k] = (dst.statMax[k] ?? 0) + v;
+    }
+  }
+  if (src.flags) {
+    dst.flags = { ...(dst.flags ?? {}), ...src.flags };
+  }
+  if (src.inventory) {
+    dst.inventory = dst.inventory ?? {};
+    for (const [k, v] of Object.entries(src.inventory)) {
+      dst.inventory[k] = (dst.inventory[k] ?? 0) + v;
+    }
+  }
+  if (src.weapons) {
+    dst.weapons = dst.weapons ?? {};
+    for (const [k, v] of Object.entries(src.weapons)) {
+      const cur = dst.weapons[k] ?? {};
+      dst.weapons[k] = {
+        power: (cur.power ?? 0) + (v.power ?? 0),
+      };
+    }
+  }
+  if (src.skills) {
+    dst.skills = dst.skills ?? {};
+    if (src.skills.learn) {
+      dst.skills.learn = [...(dst.skills.learn ?? []), ...src.skills.learn];
+    }
+    if (src.skills.forget) {
+      dst.skills.forget = [
+        ...(dst.skills.forget ?? []),
+        ...src.skills.forget,
+      ];
+    }
+  }
+}
+
 export function createBaselineState(
   characters: CharacterDef[],
   weapons: WeaponDef[] = [],
@@ -72,6 +145,7 @@ export function createBaselineState(
     inventory: {},
     weapons: weaponMap,
     equippedWeaponId,
+    knownSkills: [],
   };
 }
 
@@ -83,6 +157,7 @@ export const baselineModule: Module = {
   },
   actionHandlers: {
     useItem: useItemHandler,
+    useSkill: useSkillHandler,
   },
 };
 

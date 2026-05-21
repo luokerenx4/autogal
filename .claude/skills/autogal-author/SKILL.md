@@ -122,6 +122,7 @@ flag: { name: coins, min: 100 }           # flags.coins >= 100 (numeric flags on
 stat: { name: spectral, min: 80 }         # training-mode stat >= 80
 inventory: { itemId: talisman, min: 1 }   # player holds >= 1 talisman
 weaponPower: { weaponId: yaodao, min: 20 } # equipped/registered weapon's power >= 20
+knowsSkill: purify                         # player has learned the skill
 day: { min: 8 }                           # training calendar
 slot: { eq: 2 }                           # training-mode slot index
 
@@ -280,6 +281,61 @@ Combat modules read the equipped weapon's current power via the
 `getEquippedWeaponPower(ctx)` primitive (or
 `state.baseline.weapons[state.baseline.equippedWeaponId].power` from
 inside an ActionHandler).
+
+## Skill file format — `skills/<id>.md`
+
+Optional directory. Skills are learnable abilities — distinct from
+actions in that they're owned (in `state.baseline.knownSkills`) and
+gated by knowledge, not by stat thresholds. Engine ships a bundled
+`useSkill` action handler.
+
+```markdown
+---
+id: purify
+name: 净化术式
+cost:
+  stats: { intellect: -3 }      # what the skill consumes
+effects:
+  stats: { spectral: -15, mental: -1 }   # what it does
+requires:
+  stat: { name: intellect, min: 5 }      # gate on usability (in addition to ownership)
+---
+
+Markdown body becomes the skill's description.
+```
+
+To **teach** the player a skill, put `skills: { learn: [...] }` in
+any action's or beat's `effects`, OR — more interesting — declare a
+reactive trigger in a game module that watches state and grants the
+skill on milestones:
+
+```ts
+// modules/combat.ts
+triggers: [
+  {
+    id: "learn_purify",
+    when: { weaponPower: { weaponId: "yaodao", min: 10 } },
+    once: true,
+    do: () => ({ deltas: { skills: { learn: ["purify"] } } }),
+  },
+]
+```
+
+To **use** a skill, declare an action with `kind: useSkill` and
+`skillId: <id>`. The engine's bundled handler validates ownership +
+applies cost + effects in one combined atomic delta:
+
+```yaml
+# actions/use_purify.yaml
+id: use_purify
+title: 发动净化术式
+kind: useSkill
+skillId: purify
+requires:
+  all:
+    - knowsSkill: purify
+    - stat: { name: intellect, min: 3 }
+```
 
 ## Script ID conventions (suggested, not enforced)
 

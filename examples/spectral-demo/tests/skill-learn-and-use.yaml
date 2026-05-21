@@ -1,0 +1,51 @@
+name: 技能解锁 + 发动 — 全周期资源 schema 验证
+description: |
+  C9 end-to-end: seed weapon power at 8 + intellect at 8. Run
+  night_study once (action effect: weapons.yaodao.power +2) → weapon
+  power crosses 10 → spectral-combat's `learn_purify` trigger fires
+  (rising edge) → knownSkills picks up "purify" → use_purify becomes
+  usable → assert spectral drops by skill effect.
+state:
+  baseline:
+    completedScripts: [001_arrival, 002_first_youkai]
+    weapons:
+      yaodao: { power: 8 }
+  training:
+    day: 3
+    slot: 2
+    stats:
+      spectral: 30
+      physical: 18
+      mental: 5
+      intellect: 8
+    statMax:
+      spectral: 100
+      physical: 20
+      mental: 10
+      intellect: 99
+inputs:
+  # Night-study bumps weapon power 8 → 10 (rising edge of learn_purify
+  # trigger when: weaponPower >= 10). Trigger learns the skill silently.
+  - { type: doActivity, id: "action:night_study" }
+  # Day rolled to 4 morning; use_purify is now learnable (slot: any,
+  # knowsSkill: purify, stat.intellect >= 3 — all met).
+  - { type: doActivity, id: "action:use_purify" }
+assertions:
+  - kind: state
+    path: baseline.knownSkills
+    includes: purify
+  # purify effect: spectral -15. Start: 30. After night_study (+2 spec)
+  # and decay (no decay since slot 2 → slot 3 → day rollover → +2 spec
+  # actually): spectral was 30, ns added +2, decay +2 = 34. Then
+  # purify -15 = 19.
+  - kind: state
+    path: training.stats.spectral
+    eq: 19
+  # purify cost: intellect -3. Start 8 → after purify 5.
+  - kind: state
+    path: training.stats.intellect
+    eq: 5
+  # Trigger lands in firedTriggers (once: true)
+  - kind: state
+    path: runtime.firedTriggers
+    includes: learn_purify

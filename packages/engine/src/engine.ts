@@ -66,28 +66,27 @@ export class Engine {
         continue;
       }
 
-      const endCheck = this.checkEndConditions();
-      if (endCheck) {
-        if (
-          endCheck.goto &&
-          !this.state.baseline.completedScripts.includes(endCheck.goto)
-        ) {
-          const endingScript = this.scriptMap.get(endCheck.goto);
-          if (endingScript) {
+      // Only check end conditions when no script is mid-flight. Setting
+      // currentScriptId + beatIndex here used to clobber an in-progress
+      // ending script every loop iteration; in step mode (fresh engine per
+      // call, no in-memory continuation) that meant the ending narration
+      // got stuck on beat 1 forever. Now we queue the ending via the normal
+      // currentScriptId path and let the existing resumption logic drive it.
+      if (this.state.baseline.currentScriptId === null) {
+        const endCheck = this.checkEndConditions();
+        if (endCheck) {
+          if (
+            endCheck.goto &&
+            !this.state.baseline.completedScripts.includes(endCheck.goto) &&
+            this.scriptMap.has(endCheck.goto)
+          ) {
             this.state.baseline.currentScriptId = endCheck.goto;
             this.state.baseline.beatIndex = 0;
-            const finished = yield* this.runScript(endingScript);
-            if (finished) {
-              this.state.baseline.completedScripts.push(endCheck.goto);
-              this.state.baseline.currentScriptId = null;
-              this.state.baseline.beatIndex = 0;
-            } else {
-              return;
-            }
+            continue;
           }
+          yield { type: "gameEnd", reason: endCheck.reason };
+          return;
         }
-        yield { type: "gameEnd", reason: endCheck.reason };
-        return;
       }
 
       if (this.state.baseline.currentScriptId !== null) {

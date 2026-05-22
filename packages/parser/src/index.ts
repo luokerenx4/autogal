@@ -10,6 +10,7 @@ import type {
   WeaponDef,
 } from "@autogal/engine";
 import type { Manifest } from "./manifest";
+import { validateGame } from "./validate";
 
 export { parseScript, ScriptParseError } from "./script";
 export { parseManifest, ManifestParseError } from "./manifest";
@@ -20,6 +21,7 @@ export { parseItem, ItemParseError } from "./item";
 export { parseEnemy, EnemyParseError } from "./enemy";
 export { parseWeapon, WeaponParseError } from "./weapon";
 export { parseSkill, SkillParseError } from "./skill";
+export { validateGame, GameValidationError } from "./validate";
 export type { Manifest } from "./manifest";
 
 export function buildGame(
@@ -52,5 +54,6 @@ export function buildGame(
   }
   if (modules && modules.length > 0) game.modules = modules;
   if (manifest.preset) game.preset = manifest.preset;
+  validateGame(game);
   return game;
 }

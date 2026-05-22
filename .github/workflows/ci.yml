@@ -22,3 +22,4 @@ jobs:
       - run: bun run autogal test examples/hook-test
       - run: bun run autogal test examples/eject-test
       - run: bun run autogal test examples/sengoku-raid
+      - run: bun run test:validate-negative

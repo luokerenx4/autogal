@@ -23,6 +23,18 @@ Three packages, never cross-import internals:
 7. **No comments in source code.** Names and types must document themselves. Add a comment only when the WHY would surprise a future reader. Architecture docs go in `docs/`.
 8. **Frontmatter is the only place imperative-looking syntax lives in content.** Scripts are declarative.
 
+## Documentation sediment
+
+Engine/parser/schema changes outrun docs by default — readers and future AI co-authors then work from stale information. When a PR changes behavior or shape, the docs update ships in the **same** PR, not as follow-up. Checklist:
+
+1. **Engine schema** (new field on a `Def`, new `StateDelta` slot, new `Output` / `Input` variant, new `Condition` operator) → update `docs/ARCHITECTURE.md` resource table / relevant section.
+2. **New frontmatter convention** (new fields in an asset format, new beat syntax, new effect shape) → update `.claude/skills/autogal-author/SKILL.md` so AI authors discover it.
+3. **New game-mode shape** (a fundamentally different preset / hub pattern, like sengoku-raid's raid-as-mode) → add `examples/<game>/README.md` AND extend the "game modes" section of top-level `README.md`.
+4. **New hard rule or repeating pattern** (something other modules should copy, like the `.custom` field passthrough) → add to this file's "Hard rules" or "Common tasks".
+5. Run the full fixture suite (`bun run autogal test examples/<each>`) and typecheck for every package before opening the PR.
+
+Precedents to imitate: commit `cd02df8` ("docs: sediment architecture + co-author docs to reflect post-PR-#7 reality") updated three docs in one go after PR #7. PR #12 (sengoku-raid + custom field + dispatcher hygiene) was the exception this checklist exists to prevent.
+
 ## File map
 
 ```
@@ -77,6 +89,8 @@ examples/
   hook-test/            hook integration smoke test (notify-all + first-wins + veto + triggers)
   eject-test/           ejection smoke test (just verifies an ejected preset still runs)
   spectral-demo/        full game: training preset, ejected, all 5 typed resources, custom combat module
+  sengoku-raid/         extraction-shooter: raid-as-preset-mode, prefix-routed dispatch, maps/*.yaml,
+                        per-character affection bond + skill unlocks, no training: block
 ```
 
 ## How a step happens
@@ -111,6 +125,14 @@ Follow the pattern established by `Item` / `Enemy` / `Weapon` / `Skill`:
 14. **`.claude/skills/autogal-author/SKILL.md`** — document the file format for AI authors.
 
 Recent precedents: read the diffs for commits `cb7b9f3` (items), `0220799` (enemies), `6470ff8` (weapons), `c2efdb5` (skills). They're the template.
+
+### Game-specific metadata on resource Defs (the `.custom` field)
+
+Every parsed Def (`ItemDef` / `EnemyDef` / `WeaponDef` / `SkillDef` / `CharacterDef`) carries an optional `custom?: Record<string, unknown>` populated by `extractCustom()` in `packages/parser/src/frontmatter.ts` — any frontmatter key not in the parser's known-fields list lands there verbatim. Game modules read e.g. `enemy.custom.attack_power` or `item.custom.sell_value` straight from the engine's resource registry.
+
+This is the preferred way to attach per-game data to a resource. **Do not** add fields to the engine `Def` interfaces just because one game needs them; that bloats the schema for every other game. Engine-side fields are for things every game needs (id, name, hp, etc.). `custom` is for everything else.
+
+Originally needed because sengoku-raid was maintaining a `SELL_VALUES: Record<string, number>` workaround table in its module — the engine schema dropped the field and the module had to mirror it. After PR #12 the workaround is gone; the item .md is the single source of truth.
 
 ### Add a new Output type
 

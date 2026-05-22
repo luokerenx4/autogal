@@ -201,6 +201,12 @@ requires:
 The engine deletes the inventory key when its count hits zero — you
 don't need to clean up explicitly. Counts never go below zero.
 
+**Custom metadata**: any frontmatter key not listed above (e.g.
+`sell_value`, `rarity`, `weight`) is preserved under `item.custom`.
+Game modules read `item.custom.sell_value` etc. directly from the
+engine's item registry. Use this for game-specific numbers; the
+engine doesn't interpret it.
+
 ## Enemy file format — `enemies/<id>.md`
 
 Optional directory. Enemies are engine-level data; combat modules
@@ -238,6 +244,12 @@ The engine **does not dispatch on `enemyId` itself** — it just makes
 the enemy data available via `game.enemies` to whatever combat handler
 the game registers. Combat modules are responsible for picking up the
 enemy and using its fields.
+
+**Custom metadata**: any frontmatter key not listed above (e.g.
+`attack_power`, `tier`, `weakness`) is preserved under `enemy.custom`.
+Combat modules read `enemy.custom.attack_power` directly. Use this
+for game-specific combat parameters that aren't engine-universal
+(`hp` is universal; how hard the enemy hits back isn't).
 
 ## Weapon file format — `weapons/<id>.md`
 
@@ -281,6 +293,10 @@ Combat modules read the equipped weapon's current power via the
 `getEquippedWeaponPower(ctx)` primitive (or
 `state.baseline.weapons[state.baseline.equippedWeaponId].power` from
 inside an ActionHandler).
+
+**Custom metadata**: any frontmatter key not listed above is
+preserved under `weapon.custom`. Use this for game-specific affinity
+tags, lore IDs, rarity etc.
 
 ## Skill file format — `skills/<id>.md`
 
@@ -336,6 +352,10 @@ requires:
     - knowsSkill: purify
     - stat: { name: intellect, min: 3 }
 ```
+
+**Custom metadata**: any frontmatter key not listed above is preserved
+under `skill.custom`. Combat / spirit modules read game-specific tags
+(school, element, passive marker) via `skill.custom.<key>`.
 
 ## Script ID conventions (suggested, not enforced)
 

@@ -341,7 +341,7 @@ function buildHubMenu(ctx: PresetContext): Output {
   // affection-gated `requires:` clauses. They're surfaced here as
   // "script:" activities, dispatched through the engine's standard
   // dispatch (NOT the raid module's prefix), so script completion
-  // hooks fire normally and the script gets logged to completedScripts.
+  // hooks fire normally and the script gets logged to completionOrder.
   for (const charId of m.metCharacters) {
     const char = ctx.game.characters.find((c) => c.id === charId);
     if (!char) continue;
@@ -362,7 +362,7 @@ function buildHubMenu(ctx: PresetContext): Output {
     // forward the unfilled ones for this character.
     for (const script of ctx.game.scripts) {
       if (!script.id.startsWith(`bond_${charId}_`)) continue;
-      if (ctx.state.baseline.completedScripts.includes(script.id)) continue;
+      if (ctx.state.baseline.scripts[script.id]?.completed === true) continue;
       // Check the script's requires manually since we're not going
       // through the engine's hub builder (which would do this for us).
       const reqs = script.requires;
@@ -1188,7 +1188,7 @@ const raidModule: Module = {
       ctx.state.baseline.inventory.ryo = 100;
     }
     if (
-      !ctx.state.baseline.completedScripts.includes("000_intro") &&
+      ctx.state.baseline.scripts["000_intro"]?.completed !== true &&
       ctx.scriptMap.has("000_intro") &&
       ctx.state.baseline.currentScriptId === null
     ) {

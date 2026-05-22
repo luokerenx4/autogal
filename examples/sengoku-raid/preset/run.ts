@@ -24,6 +24,7 @@ import {
   fireOnHubBuild,
   fireOnScriptComplete,
   fireOnSessionStart,
+  markScriptCompleted,
   runScript,
 } from "@autogal/engine";
 import type { Action, Input, Output, PresetContext } from "@autogal/engine";
@@ -55,7 +56,7 @@ export async function* raidRun(
       const finished = yield* runScript(ctx, script);
       if (finished) {
         const completedId = script.id;
-        ctx.state.baseline.completedScripts.push(completedId);
+        markScriptCompleted(ctx.state, completedId);
         ctx.state.baseline.currentScriptId = null;
         ctx.state.baseline.beatIndex = 0;
         fireOnScriptComplete(ctx, completedId);

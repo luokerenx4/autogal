@@ -10,7 +10,7 @@
     "autogal": "bun packages/cli/src/bin.ts",
     "play": "bun packages/cli/src/bin.ts play",
     "test:unit": "bun test packages/engine packages/parser",
-    "test:fixtures": "bun packages/cli/src/bin.ts test examples/starter && bun packages/cli/src/bin.ts test examples/spectral-demo && bun packages/cli/src/bin.ts test examples/hook-test && bun packages/cli/src/bin.ts test examples/eject-test",
+    "test:fixtures": "bun packages/cli/src/bin.ts test examples/starter && bun packages/cli/src/bin.ts test examples/spectral-demo && bun packages/cli/src/bin.ts test examples/hook-test && bun packages/cli/src/bin.ts test examples/eject-test && bun packages/cli/src/bin.ts test examples/sengoku-raid",
     "test": "bun run test:unit && bun run test:fixtures",
     "autoplay": "bun packages/cli/src/bin.ts autoplay examples/starter --persona greedy -v",
     "typecheck": "bunx tsc -p packages/engine/tsconfig.json --noEmit && bunx tsc -p packages/parser/tsconfig.json --noEmit && bunx tsc -p packages/cli/tsconfig.json --noEmit"

@@ -111,8 +111,8 @@ assertions:
     path: baseline.characters.alice.affection
     eq: 2
   - kind: state
-    path: baseline.completedScripts
-    includes: 001_intro
+    path: baseline.scripts.001_intro.completed
+    eq: true
 `;
 
 const VN_SCAFFOLD: PresetScaffold = {
@@ -209,7 +209,9 @@ const TRAINING_TEST = `name: 拉满 trust 应该触发结局
 description: 注入 trust=50 验证 end_trust 触发
 state:
   baseline:
-    completedScripts: [001_intro]
+    scripts:
+      001_intro: { completed: true, selfSwitches: { A: false, B: false, C: false, D: false } }
+    completionOrder: [001_intro]
   training:
     day: 2
     slot: 0
@@ -223,8 +225,8 @@ inputs:
   - { type: next }
 assertions:
   - kind: state
-    path: baseline.completedScripts
-    includes: end_trust
+    path: baseline.scripts.end_trust.completed
+    eq: true
   - kind: output
     type: gameEnd
     present: true

@@ -75,10 +75,56 @@ export function parseFixture(content: string, source?: string): Fixture {
   };
   if (typeof obj.description === "string") fixture.description = obj.description;
   if (obj.state && typeof obj.state === "object") {
-    fixture.state = obj.state as Partial<ComposedState>;
+    fixture.state = expandSeedSugar(obj.state as Partial<ComposedState>);
   }
   if (typeof obj.maxSteps === "number") fixture.maxSteps = obj.maxSteps;
   return fixture;
+}
+
+// Fixture-loader sugar. The engine state shape doesn't have a flat
+// `completedScripts: string[]` field anymore (Phase 2: it's
+// `scripts: Record<id, ScriptState>` + `completionOrder: string[]`).
+// To keep test fixtures readable, the loader accepts the legacy
+// shorthand `baseline.completedScripts: [a, b, c]` and expands it
+// into the new shape before merging into the engine's initial state.
+// Authors writing new fixtures can use either form.
+function expandSeedSugar(
+  raw: Partial<ComposedState>,
+): Partial<ComposedState> {
+  const baseline = (raw as { baseline?: Record<string, unknown> }).baseline;
+  if (!baseline) return raw;
+  const legacyList = baseline.completedScripts;
+  if (!Array.isArray(legacyList)) return raw;
+  const expanded: Record<string, unknown> = {
+    completed: true,
+    selfSwitches: { A: false, B: false, C: false, D: false },
+  };
+  const scriptsRecord: Record<string, unknown> = {
+    ...((baseline.scripts as Record<string, unknown>) ?? {}),
+  };
+  for (const id of legacyList) {
+    if (typeof id === "string" && !scriptsRecord[id]) {
+      scriptsRecord[id] = expanded;
+    }
+  }
+  const order = Array.isArray(baseline.completionOrder)
+    ? [...(baseline.completionOrder as unknown[])]
+    : [];
+  for (const id of legacyList) {
+    if (typeof id === "string" && !order.includes(id)) order.push(id);
+  }
+  const { completedScripts: _stripped, ...restBaseline } = baseline as {
+    completedScripts?: unknown;
+    [k: string]: unknown;
+  };
+  return {
+    ...raw,
+    baseline: {
+      ...restBaseline,
+      scripts: scriptsRecord,
+      completionOrder: order,
+    },
+  } as Partial<ComposedState>;
 }
 
 export function mergeState(

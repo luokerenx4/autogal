@@ -116,7 +116,7 @@ export class Engine {
     return this.game.scripts
       .filter(
         (s) =>
-          !this.state.baseline.completedScripts.includes(s.id) &&
+          this.state.baseline.scripts[s.id]?.completed !== true &&
           (s.requires === undefined || evaluateCondition(s.requires, this.state)),
       )
       .map((s) => ({ id: s.id, title: s.title }));

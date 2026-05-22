@@ -150,7 +150,7 @@ describe("Engine class", () => {
       }),
     );
     const state = engine.getState();
-    state.baseline.completedScripts.push("001");
+    state.baseline.scripts["001"] = { completed: true, selfSwitches: { A: false, B: false, C: false, D: false } };
     // getState returns a clone, so mutating it doesn't affect engine —
     // construct a new engine with the mutated state to verify filtering.
     const engine2 = new Engine(

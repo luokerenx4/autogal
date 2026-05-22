@@ -6,9 +6,12 @@ export {
   cloneState,
   hydrateState,
   defaultModules,
+  isScriptCompleted,
+  markScriptCompleted,
   resolveModules,
   resolveRunFn,
 } from "./state";
+export { makeScriptState } from "./types";
 export {
   trainingPreset,
   TRAINING_NAMESPACE,
@@ -102,6 +105,7 @@ export type {
   RuntimeState,
   Script,
   ScriptInfo,
+  ScriptState,
   SkillDef,
   StatDef,
   StatSnapshot,

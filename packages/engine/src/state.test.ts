@@ -268,7 +268,8 @@ describe("createInitialState", () => {
     expect(state.baseline).toBeDefined();
     expect(state.baseline.switches).toEqual({});
     expect(state.baseline.variables).toEqual({});
-    expect(state.baseline.completedScripts).toEqual([]);
+    expect(state.baseline.scripts).toEqual({});
+    expect(state.baseline.completionOrder).toEqual([]);
     expect(state.baseline.inventory).toEqual({});
     expect(state.runtime.pendingNarrations).toEqual([]);
     expect(state.runtime.activeTriggers).toEqual([]);
@@ -278,6 +279,66 @@ describe("createInitialState", () => {
   test("accepts a bare character array (legacy overload)", () => {
     const state = createInitialState([makeCharacter("alice")]);
     expect(state.baseline.characters.alice).toBeDefined();
+  });
+});
+
+describe("applyDelta — selfSwitches", () => {
+  test("flips A on an existing scripts entry", () => {
+    const state = makeState();
+    state.baseline.scripts.q1 = {
+      completed: false,
+      selfSwitches: { A: false, B: false, C: false, D: false },
+    };
+    applyDelta(state, { selfSwitches: { q1: { A: true } } });
+    expect(state.baseline.scripts.q1.selfSwitches.A).toBe(true);
+  });
+
+  test("auto-creates ScriptState when scripts entry missing", () => {
+    const state = makeState();
+    applyDelta(state, { selfSwitches: { fresh_quest: { B: true } } });
+    expect(state.baseline.scripts.fresh_quest).toEqual({
+      completed: false,
+      selfSwitches: { A: false, B: true, C: false, D: false },
+    });
+  });
+
+  test("multiple switches in one delta", () => {
+    const state = makeState();
+    applyDelta(state, {
+      selfSwitches: { q: { A: true, C: true } },
+    });
+    expect(state.baseline.scripts.q?.selfSwitches).toEqual({
+      A: true,
+      B: false,
+      C: true,
+      D: false,
+    });
+  });
+
+  test("invalid switch names silently ignored", () => {
+    const state = makeState();
+    applyDelta(state, {
+      selfSwitches: { q: { Z: true } as never },
+    });
+    expect(state.baseline.scripts.q?.selfSwitches.A).toBe(false);
+  });
+});
+
+describe("markScriptCompleted", () => {
+  test("flips completed + appends to completionOrder", () => {
+    const state = makeState();
+    const { markScriptCompleted } = require("./state");
+    markScriptCompleted(state, "001");
+    expect(state.baseline.scripts["001"]?.completed).toBe(true);
+    expect(state.baseline.completionOrder).toEqual(["001"]);
+  });
+
+  test("idempotent: completing twice doesn't double-add to order", () => {
+    const state = makeState();
+    const { markScriptCompleted } = require("./state");
+    markScriptCompleted(state, "001");
+    markScriptCompleted(state, "001");
+    expect(state.baseline.completionOrder).toEqual(["001"]);
   });
 });
 

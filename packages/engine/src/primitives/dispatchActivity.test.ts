@@ -59,7 +59,7 @@ describe("dispatchActivity — script:", () => {
       scripts: [makeScript("001_intro")],
     });
     const ctx = makeCtx(game);
-    ctx.state.baseline.completedScripts.push("001_intro");
+    ctx.state.baseline.scripts["001_intro"] = { completed: true, selfSwitches: { A: false, B: false, C: false, D: false } };
 
     await drain(dispatchActivity(ctx, "script:001_intro"));
 

@@ -9,6 +9,7 @@
 // `@autogal/engine`, so an ejected copy of this file works unchanged
 // outside the engine source tree.
 
+import { markScriptCompleted } from "../../state";
 import {
   checkEndConditions,
   checkTriggers,
@@ -49,7 +50,7 @@ export async function* trainingRun(
         fireOnEndConditionFire(ctx, endCheck);
         if (
           endCheck.goto &&
-          !ctx.state.baseline.completedScripts.includes(endCheck.goto) &&
+          ctx.state.baseline.scripts[endCheck.goto]?.completed !== true &&
           ctx.scriptMap.has(endCheck.goto)
         ) {
           ctx.state.baseline.currentScriptId = endCheck.goto;
@@ -72,7 +73,7 @@ export async function* trainingRun(
       const finished = yield* runScript(ctx, script);
       if (finished) {
         const completedId = script.id;
-        ctx.state.baseline.completedScripts.push(completedId);
+        markScriptCompleted(ctx.state, completedId);
         ctx.state.baseline.currentScriptId = null;
         ctx.state.baseline.beatIndex = 0;
         fireOnScriptComplete(ctx, completedId);

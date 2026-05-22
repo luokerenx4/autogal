@@ -26,11 +26,38 @@ export interface CharacterState {
   custom: Record<string, FlagValue>;
 }
 
+// Per-script state. Mirrors RPGMaker's "event self-switches + completed
+// flag". `completed` flips to true when the engine finishes running the
+// script (any of [end] beat / endScript / fall-off-last-beat). The
+// four self-switches A/B/C/D are author-controllable: they let a script
+// remember per-instance state ("did I show this beat once" / "branch X
+// already taken") without polluting the global variables namespace.
+export interface ScriptState {
+  completed: boolean;
+  selfSwitches: { A: boolean; B: boolean; C: boolean; D: boolean };
+}
+
+export function makeScriptState(): ScriptState {
+  return {
+    completed: false,
+    selfSwitches: { A: false, B: false, C: false, D: false },
+  };
+}
+
 export interface BaselineState {
   characters: Record<string, CharacterState>;
   switches: Record<string, boolean>;
   variables: Record<string, VariableValue>;
-  completedScripts: string[];
+  // Per-script completed flag + A/B/C/D self-switches. Lazy: missing
+  // ids read as default ScriptState (completed=false, all switches
+  // false). Engine creates/updates entries via mutateState; the
+  // run-loop sets completed=true automatically when a script ends.
+  scripts: Record<string, ScriptState>;
+  // Ordered audit log of script ids in the order they completed. Used
+  // for telemetry (last-script-run / "what ending was reached" in
+  // autoplay output / session selector) — game logic should consult
+  // baseline.scripts[id].completed instead.
+  completionOrder: string[];
   currentScriptId: string | null;
   beatIndex: number;
   // Engine-owned standard inventory schema. Counts keyed by item id.
@@ -264,7 +291,14 @@ export type Condition =
     }
   | { knowsSkill: string }
   | { day: { min?: number; max?: number; eq?: number } }
-  | { slot: { min?: number; max?: number; eq?: number } };
+  | { slot: { min?: number; max?: number; eq?: number } }
+  | {
+      selfSwitch: {
+        scriptId: string;
+        name: "A" | "B" | "C" | "D";
+        eq?: boolean;
+      };
+    };
 
 export interface StateDelta {
   affection?: Record<string, number>;
@@ -291,6 +325,11 @@ export interface StateDelta {
   // already present; `forget: ["x"]` removes. Order is learn-then-forget
   // within one applyDelta call.
   skills?: { learn?: string[]; forget?: string[] };
+  // Per-script self-switch flips. Keyed by scriptId. The engine
+  // auto-creates the ScriptState if missing. Authors typically use
+  // these for "did this branch run before" without registering a
+  // global switch. Example: `selfSwitches: { my_quest: { A: true } }`.
+  selfSwitches?: Record<string, Partial<ScriptState["selfSwitches"]>>;
 }
 
 export type Beat =

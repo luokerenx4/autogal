@@ -14,7 +14,15 @@ export function evaluateCondition(
     return !evaluateCondition(cond.not, state);
   }
   if ("scriptCompleted" in cond) {
-    return state.baseline.completedScripts.includes(cond.scriptCompleted);
+    return (
+      state.baseline.scripts[cond.scriptCompleted]?.completed === true
+    );
+  }
+  if ("selfSwitch" in cond) {
+    const entry = state.baseline.scripts[cond.selfSwitch.scriptId];
+    const value = entry?.selfSwitches[cond.selfSwitch.name] ?? false;
+    const eq = cond.selfSwitch.eq ?? true;
+    return value === eq;
   }
   if ("affection" in cond) {
     const c = state.baseline.characters[cond.affection.character];

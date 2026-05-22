@@ -157,7 +157,7 @@ describe("evaluateCondition — switch", () => {
 describe("evaluateCondition — scriptCompleted", () => {
   test("returns true when script id is in completedScripts", () => {
     const state = makeState();
-    state.baseline.completedScripts.push("001_intro");
+    state.baseline.scripts["001_intro"] = { completed: true, selfSwitches: { A: false, B: false, C: false, D: false } };
     expect(
       evaluateCondition({ scriptCompleted: "001_intro" }, state),
     ).toBe(true);
@@ -178,7 +178,7 @@ describe("evaluateCondition — composite (all/any/not)", () => {
       affection: { alice: 3 },
       variables: { route: "alice" },
     });
-    state.baseline.completedScripts.push("001_intro");
+    state.baseline.scripts["001_intro"] = { completed: true, selfSwitches: { A: false, B: false, C: false, D: false } };
     return state;
   }
 
@@ -347,6 +347,52 @@ describe("evaluateCondition — inventory / weaponPower / knowsSkill", () => {
     expect(evaluateCondition({ knowsSkill: "purify" }, state)).toBe(false);
     applyDelta(state, { skills: { learn: ["purify"] } });
     expect(evaluateCondition({ knowsSkill: "purify" }, state)).toBe(true);
+  });
+});
+
+describe("evaluateCondition — selfSwitch", () => {
+  test("reads false for missing entry", () => {
+    const state = makeState();
+    expect(
+      evaluateCondition(
+        { selfSwitch: { scriptId: "q", name: "A" } },
+        state,
+      ),
+    ).toBe(false);
+  });
+
+  test("eq true (bare) matches a flipped switch", () => {
+    const state = makeState();
+    applyDelta(state, { selfSwitches: { q: { A: true } } });
+    expect(
+      evaluateCondition(
+        { selfSwitch: { scriptId: "q", name: "A" } },
+        state,
+      ),
+    ).toBe(true);
+    expect(
+      evaluateCondition(
+        { selfSwitch: { scriptId: "q", name: "A", eq: true } },
+        state,
+      ),
+    ).toBe(true);
+    expect(
+      evaluateCondition(
+        { selfSwitch: { scriptId: "q", name: "A", eq: false } },
+        state,
+      ),
+    ).toBe(false);
+  });
+
+  test("independent per scriptId", () => {
+    const state = makeState();
+    applyDelta(state, { selfSwitches: { q1: { A: true } } });
+    expect(
+      evaluateCondition(
+        { selfSwitch: { scriptId: "q2", name: "A" } },
+        state,
+      ),
+    ).toBe(false);
   });
 });
 

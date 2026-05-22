@@ -20,7 +20,7 @@ export function buildHubSnapshot(state: ComposedState, game: Game): Output {
   const activities: HubActivity[] = [];
 
   for (const s of game.scripts) {
-    if (state.baseline.completedScripts.includes(s.id)) continue;
+    if (state.baseline.scripts[s.id]?.completed === true) continue;
     const available =
       s.requires === undefined || evaluateCondition(s.requires, state);
     if (!available) continue;

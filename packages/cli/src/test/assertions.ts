@@ -114,6 +114,13 @@ function checkOutput(
 }
 
 function readPath(obj: unknown, path: string): unknown {
+  // Phase 2 legacy-path alias: `baseline.completedScripts` now lives at
+  // `baseline.completionOrder` (an ordered list of completed script ids).
+  // Existing fixtures continue to assert against the old path until they're
+  // rewritten, so transparently rewrite the alias here.
+  if (path === "baseline.completedScripts") {
+    return readPath(obj, "baseline.completionOrder");
+  }
   const parts = path.split(".");
   let cursor: unknown = obj;
   for (const p of parts) {

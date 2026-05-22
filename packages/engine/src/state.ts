@@ -6,6 +6,7 @@ import type {
   RunFunction,
   StateDelta,
 } from "./types";
+import { makeScriptState } from "./types";
 import { baselineModule } from "./modules/baseline";
 import { runtimeModule } from "./modules/runtime";
 import { trainingPreset, trainingRun } from "./presets/training";
@@ -123,6 +124,52 @@ export function applyDelta(state: ComposedState, delta: StateDelta): void {
       );
     }
   }
+  if (delta.selfSwitches) {
+    for (const [scriptId, flips] of Object.entries(delta.selfSwitches)) {
+      let entry = state.baseline.scripts[scriptId];
+      if (!entry) {
+        entry = makeScriptState();
+        state.baseline.scripts[scriptId] = entry;
+      }
+      for (const [name, value] of Object.entries(flips)) {
+        if (
+          (name === "A" || name === "B" || name === "C" || name === "D") &&
+          typeof value === "boolean"
+        ) {
+          entry.selfSwitches[name] = value;
+        }
+      }
+    }
+  }
+}
+
+// Engine-internal helper: mark a script as completed in baseline.scripts
+// AND append to completionOrder. Called by preset run loops at script
+// end. Lazy-creates ScriptState if missing.
+export function markScriptCompleted(
+  state: ComposedState,
+  scriptId: string,
+): void {
+  let entry = state.baseline.scripts[scriptId];
+  if (!entry) {
+    entry = makeScriptState();
+    state.baseline.scripts[scriptId] = entry;
+  }
+  const wasCompleted = entry.completed;
+  entry.completed = true;
+  if (!wasCompleted) {
+    state.baseline.completionOrder.push(scriptId);
+  }
+}
+
+// True if the script was previously completed. Equivalent to
+// state.baseline.scripts[id]?.completed === true but reads more like
+// English at call sites.
+export function isScriptCompleted(
+  state: ComposedState,
+  scriptId: string,
+): boolean {
+  return state.baseline.scripts[scriptId]?.completed === true;
 }
 
 export function clamp(n: number, min: number, max: number): number {

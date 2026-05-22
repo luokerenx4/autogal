@@ -64,6 +64,11 @@ export interface CharacterDef {
   id: string;
   name: string;
   defaultAffection?: number;
+  // Game-specific frontmatter the engine doesn't interpret. Anything
+  // the parser found in <character>.md that isn't a known field lands
+  // here verbatim, so game modules can read e.g. character.custom.gift_preference
+  // without each parser growing a per-game vocabulary.
+  custom?: Record<string, unknown>;
 }
 
 // Engine-level standard item resource. Defined here (not in any
@@ -86,6 +91,9 @@ export interface ItemDef {
   // giveItem primitive refuses to push count above 1 for non-stack
   // items so authors don't need to guard against double-pickup.
   stack?: boolean;
+  // Game-specific frontmatter — sell_value, rarity, weight, etc.
+  // Engine doesn't interpret it; game modules read via item.custom.<key>.
+  custom?: Record<string, unknown>;
 }
 
 // Engine-level standard enemy resource. Combat modules read these to
@@ -110,6 +118,10 @@ export interface EnemyDef {
     victory?: string;
     escape?: string;
   };
+  // Game-specific frontmatter — tier tags, loot table refs, AI hints,
+  // etc. Engine doesn't interpret it; combat modules read via
+  // enemy.custom.<key>.
+  custom?: Record<string, unknown>;
 }
 
 // Engine-level standard weapon resource. Engine owns the static
@@ -132,6 +144,9 @@ export interface WeaponDef {
   // Open-ended properties for combat-module-specific use (crit bonus,
   // affinity, durability, etc.). Engine just stores them.
   properties?: Record<string, number>;
+  // Game-specific frontmatter — rarity, lore tags, etc. Engine doesn't
+  // interpret it; modules read via weapon.custom.<key>.
+  custom?: Record<string, unknown>;
 }
 
 // Runtime state per weapon. Engine initializes each weapon's `power`
@@ -161,6 +176,9 @@ export interface SkillDef {
   // — checked by the useSkill handler in addition to the knowledge
   // check.
   requires?: Condition;
+  // Game-specific frontmatter — passive marker, school tag, etc.
+  // Engine doesn't interpret it; modules read via skill.custom.<key>.
+  custom?: Record<string, unknown>;
 }
 
 export interface StatDef {

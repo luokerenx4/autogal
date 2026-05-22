@@ -1,0 +1,87 @@
+name: 死亡：HP≤0 → 触发器把模式切回 hub、raidsFailed +1、当次 pendingLoot 清零
+description: |
+  Pre-seeds the player mid-raid at deep_grove with:
+    - hp = 1 (one good hit and they're done)
+    - encounter present (1 HP 鬼)
+    - pendingLoot already accumulated (verifies it's gone after death)
+    - already-completed intro (so no script eats inputs)
+  One raid:attack:
+    - Player deals damage (varies)
+    - If kills enemy → spectral falls, no death; assertion fails — see below
+    - Enemy retaliates for 3-4+ → hp goes ≤ 0 → trigger fires → mode = hub
+
+  We use sword=1 so player damage < enemy HP (8) → enemy always retaliates.
+  We use spectral=0 to suppress crit/fumble (crit 0%, fumble 0%).
+  Variance gives 1 × 1 × (0.8~1.2) = 0~1 damage; enemy hp=8 stays > 0.
+  Enemy attack_power=3, variance 0.8-1.2 → 2-3 damage. hp starts at 1.
+  → hp = 1 - (2 or 3) = -1 or -2 ≤ 0. Trigger fires.
+
+state:
+  baseline:
+    completedScripts: [000_intro]
+    weapons:
+      ancestor_yaodao: { power: 1 }
+    flags:
+      hp: 1
+      hpMax: 30
+      mental: 10
+      mentalMax: 10
+      spectral: 0
+      intellect: 0
+      raidsCompleted: 0
+      raidsFailed: 0
+  sengoku-raid:
+    mode: raid
+    metCharacters: []
+    raid:
+      mapId: kuro_swamp
+      mapName: 黒沼地
+      currentZoneId: deep_grove
+      turnsTaken: 1
+      pendingLoot:
+        soul_shard: 2
+      zones:
+        deep_grove:
+          id: deep_grove
+          name: 奥の杜
+          visited: true
+          searched: false
+          encounter:
+            enemyId: oni_lesser
+            enemyHp: 8
+            enemyHpMax: 8
+          encounterCleared: false
+          encounterTable:
+            - { enemyId: oni_lesser, weight: 100 }
+          lootTable: []
+          connections:
+            - { dir: 戻る, target: crossroads }
+          isExtract: true
+          pendingLoot: {}
+inputs:
+  - { type: doActivity, id: "raid:attack" }
+  # Drain any pending narrations the trigger pushes.
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+assertions:
+  - kind: state
+    path: sengoku-raid.mode
+    eq: hub
+  - kind: state
+    path: sengoku-raid.raid
+    eq: null
+  - kind: state
+    path: baseline.flags.raidsFailed
+    eq: 1
+  # raid.pendingLoot is implicitly gone because raid itself is null (asserted above).
+  # The loot was never copied into baseline.inventory — death prevented the
+  # extract path, which is the only way loot transfers. Asserting the
+  # absence of a non-existent inventory key is awkward (fixture has no
+  # "absent" matcher), so we rely on the `raid: null` assertion above.
+
+  # Player HP reset to 1 by endRaidFailure (so they have to rest).
+  - kind: state
+    path: baseline.flags.hp
+    eq: 1

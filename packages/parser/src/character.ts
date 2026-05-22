@@ -1,7 +1,9 @@
 import type { CharacterDef } from "@autogal/engine";
-import { splitFrontmatter } from "./frontmatter";
+import { extractCustom, splitFrontmatter } from "./frontmatter";
 
 export class CharacterParseError extends Error {}
+
+const KNOWN_KEYS = ["id", "name", "defaultAffection"] as const;
 
 export function parseCharacter(content: string): CharacterDef {
   const { meta } = splitFrontmatter(content);
@@ -15,5 +17,7 @@ export function parseCharacter(content: string): CharacterDef {
   if (typeof meta.defaultAffection === "number") {
     def.defaultAffection = meta.defaultAffection;
   }
+  const custom = extractCustom(meta, KNOWN_KEYS);
+  if (custom) def.custom = custom;
   return def;
 }

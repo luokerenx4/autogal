@@ -1,0 +1,29 @@
+name: hub:upgrade_weapon 资源不足时给出明确说明 (#11)
+description: |
+  Pre-seeds the player in hub with 0 soul_shards (default starting
+  ryo=100 from onSessionStart). Dispatch upgrade — should narrate
+  why the upgrade was refused. Asserts weapon power unchanged.
+
+state:
+  baseline:
+    completedScripts: [000_intro]
+    weapons:
+      ancestor_yaodao: { power: 4 }
+  sengoku-raid:
+    mode: hub
+    raid: null
+    metCharacters: []
+inputs:
+  - { type: doActivity, id: "hub:upgrade_weapon" }
+  # Drain the denial narration into a real Output so we can assert on it
+  - { type: next }
+assertions:
+  # Weapon untouched
+  - kind: state
+    path: baseline.weapons.ancestor_yaodao.power
+    eq: 4
+  # The narration mentions the missing resource
+  - kind: output
+    type: narration
+    present: true
+    textIncludes: 魂石碎片

@@ -1,0 +1,71 @@
+name: 撤離成功：raid.pendingLoot 全部轉到 baseline.inventory、raidsCompleted +1
+description: |
+  Pre-seeds the player at shrine (extract zone, no encounter) with
+  pendingLoot waiting to be cashed in. Dispatches raid:extract → mode
+  flips to hub, loot lands in baseline.inventory.
+
+state:
+  baseline:
+    completedScripts: [000_intro]
+    weapons:
+      ancestor_yaodao: { power: 6 }
+    flags:
+      hp: 25
+      hpMax: 30
+      mental: 8
+      mentalMax: 10
+      spectral: 12
+      intellect: 0
+      raidsCompleted: 0
+      raidsFailed: 0
+  sengoku-raid:
+    mode: raid
+    metCharacters: []
+    raid:
+      mapId: kuro_swamp
+      mapName: 黒沼地
+      currentZoneId: shrine
+      turnsTaken: 4
+      pendingLoot:
+        ryo: 25
+        soul_shard: 2
+      zones:
+        shrine:
+          id: shrine
+          name: 潰れた社
+          visited: true
+          searched: true
+          encounter: null
+          encounterCleared: false
+          encounterTable: []
+          lootTable: []
+          connections:
+            - { dir: 戻る, target: crossroads }
+          isExtract: true
+          pendingLoot: {}
+inputs:
+  - { type: doActivity, id: "raid:extract" }
+  - { type: next }
+  - { type: next }
+assertions:
+  - kind: state
+    path: sengoku-raid.mode
+    eq: hub
+  - kind: state
+    path: sengoku-raid.raid
+    eq: null
+  - kind: state
+    path: baseline.flags.raidsCompleted
+    eq: 1
+  # Loot landed in stash.
+  - kind: state
+    path: baseline.inventory.soul_shard
+    eq: 2
+  # ryo: starts at 100 (onSessionStart bootstrap), +25 from extracted loot = 125.
+  - kind: state
+    path: baseline.inventory.ryo
+    eq: 125
+  # HP not restored (only failure resets HP — success keeps it).
+  - kind: state
+    path: baseline.flags.hp
+    eq: 25

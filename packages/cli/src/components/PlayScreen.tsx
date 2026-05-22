@@ -33,6 +33,7 @@ export function PlayScreen({
   const [done, setDone] = useState(false);
   const [reloadFlash, setReloadFlash] = useState(0);
   const [reloadError, setReloadError] = useState<string | null>(null);
+  const [bootError, setBootError] = useState<string | null>(null);
   const gameRef = useRef<Game>(initialGame);
   const engineRef = useRef<Engine | null>(null);
   const runnerRef = useRef<AsyncGenerator<Output, void, Input> | null>(null);
@@ -41,20 +42,26 @@ export function PlayScreen({
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const initialState = await loadSession(gameDir, sessionName, initialGame);
-      const engine = new Engine(initialGame, initialState);
-      const runner = engine.run();
-      gameRef.current = initialGame;
-      engineRef.current = engine;
-      runnerRef.current = runner;
-      const { value, done: isDone } = await runner.next();
-      if (cancelled) return;
-      if (isDone) {
-        setDone(true);
-      } else {
-        setTimeline([value]);
-        setState(engine.getState());
-        await saveSession(gameDir, sessionName, engine.getState());
+      try {
+        const initialState = await loadSession(gameDir, sessionName, initialGame);
+        const engine = new Engine(initialGame, initialState);
+        const runner = engine.run();
+        gameRef.current = initialGame;
+        engineRef.current = engine;
+        runnerRef.current = runner;
+        const { value, done: isDone } = await runner.next();
+        if (cancelled) return;
+        if (isDone) {
+          setDone(true);
+        } else {
+          setTimeline([value]);
+          setState(engine.getState());
+          await saveSession(gameDir, sessionName, engine.getState());
+        }
+      } catch (err) {
+        if (cancelled) return;
+        const e = err as Error;
+        setBootError(`${e.message}\n${e.stack ?? ""}`);
       }
     })();
     return () => {
@@ -147,7 +154,16 @@ export function PlayScreen({
           setDone(true);
         } else {
           setTimeline((prev) => {
-            if (value.type === "clear") return [value];
+            // hubMenu / scriptComplete / clear are page-transitions: wipe
+            // scrollback so the new "screen" starts fresh instead of being
+            // pushed past the terminal viewport by accumulated narrations.
+            if (
+              value.type === "clear" ||
+              value.type === "hubMenu" ||
+              value.type === "scriptComplete"
+            ) {
+              return [value];
+            }
             return [...prev, value].slice(-SCROLLBACK_LIMIT);
           });
           setState(finalState);
@@ -221,6 +237,18 @@ export function PlayScreen({
       <Box flexDirection="column" paddingY={1} paddingX={2}>
         <Text color="gray">— 完 —</Text>
         <Text color="gray">感谢游玩。按 Esc 回主菜单。</Text>
+      </Box>
+    );
+  }
+
+  if (bootError) {
+    return (
+      <Box flexDirection="column" paddingY={1} paddingX={2}>
+        <Text color="red" bold>启动失败:</Text>
+        <Text color="red">{bootError}</Text>
+        <Box marginTop={1}>
+          <Text dimColor>按 Esc 回主菜单</Text>
+        </Box>
       </Box>
     );
   }

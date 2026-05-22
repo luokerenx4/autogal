@@ -1,0 +1,41 @@
+name: 提案E：infoshop_hidden は学識 80 + 欠片 + 300 両がなければ denial
+description: |
+  Player has plenty of 両 (400) and 1 cursed_blade_fragment but only
+  intellect 70. The handler denies with the intellect-gate message.
+  No state mutation occurs.
+state:
+  baseline:
+    completedScripts: [000_intro]
+    inventory:
+      ryo: 400
+      cursed_blade_fragment: 1
+    characters:
+      player:
+        stats: { hp: 30, mental: 8, spectral: 10, intellect: 70 }
+    variables:
+      intel_active: ""
+      intel_count: 0
+  sengoku-raid:
+    mode: hub
+    metCharacters: []
+    raid: null
+    companion: null
+    companionHp: 0
+    pulsePending: null
+inputs:
+  - { type: doActivity, id: "infoshop_hidden" }
+  - { type: next }
+assertions:
+  - kind: state
+    path: baseline.inventory.ryo
+    eq: 400
+  - kind: state
+    path: baseline.inventory.cursed_blade_fragment
+    eq: 1
+  - kind: state
+    path: baseline.variables.intel_active
+    eq: ""
+  - kind: output
+    type: narration
+    present: true
+    textIncludes: 学識

@@ -1,0 +1,43 @@
+name: 提案E：script:intel_briefing は onScriptSelect で intel_briefing_<level> に redirect される
+description: |
+  Seed intel_active="loot". Player picks script:intel_briefing in hub.
+  onScriptSelect first-wins → redirect to intel_briefing_loot. Script
+  runs to completion; intel_active is cleared by onScriptComplete.
+  Assert the LOOT variant ran (not the generic placeholder).
+state:
+  baseline:
+    completedScripts: [000_intro]
+    inventory:
+      ryo: 50
+    characters:
+      player:
+        stats: { hp: 30, mental: 8, spectral: 10, intellect: 35 }
+    variables:
+      intel_active: loot
+      intel_count: 1
+  sengoku-raid:
+    mode: hub
+    metCharacters: []
+    raid: null
+    companion: null
+    companionHp: 0
+    pulsePending: null
+maxSteps: 40
+inputs:
+  - { type: doActivity, id: "script:intel_briefing" }
+  # intel_briefing_loot is ~6 beats
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+assertions:
+  - kind: state
+    path: baseline.completedScripts
+    includes: intel_briefing_loot
+  - kind: state
+    path: baseline.variables.intel_active
+    eq: ""

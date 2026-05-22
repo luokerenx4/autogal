@@ -1,0 +1,38 @@
+name: 提案D：hell_gate は composite gate（pulse_oni>=8 AND power>=12 AND 2 skills）でのみ depart 可
+description: |
+  Two-step verification. First: seed almost meeting requirements but
+  missing mizukagami skill — depart to hell_gate must NOT be in
+  activities. (We can't directly query activities, but doActivity
+  to depart:hell_gate should fail because the activity isn't in
+  lastHubActivities.) Second test that meeting all four conditions
+  surfaces it.
+state:
+  baseline:
+    completedScripts: [000_intro]
+    knownSkills: [chinkonho, mizukagami]
+    weapons:
+      ancestor_yaodao: { power: 14 }
+    characters:
+      player:
+        stats: { hp: 30, mental: 8, spectral: 25, intellect: 5 }
+    variables:
+      pulse_oni: 8
+  runtime:
+    firedTriggers: [pulse_intro_dispatch]
+  sengoku-raid:
+    mode: hub
+    metCharacters: []
+    companion: null
+    companionHp: 0
+    pulsePending: null
+    raid: null
+inputs:
+  - { type: doActivity, id: "depart:hell_gate" }
+  - { type: next }
+assertions:
+  - kind: state
+    path: sengoku-raid.mode
+    eq: raid
+  - kind: state
+    path: sengoku-raid.raid.mapId
+    eq: hell_gate

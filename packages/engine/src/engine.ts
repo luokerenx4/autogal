@@ -25,6 +25,71 @@ import type {
   Trigger,
 } from "./types";
 
+// Build a PresetContext from a Game + (optional pre-built) state.
+// Same logic the Engine constructor uses; exported so tests can drive
+// primitives (dispatchActivity, checkTriggers, applyActionResult, ...)
+// without instantiating an Engine. Pass `rng` to override Math.random
+// for deterministic combat / choice tests.
+export function buildPresetContext(
+  game: Game,
+  state?: ComposedState,
+  rng: () => number = Math.random,
+): PresetContext {
+  const composed = state ?? createInitialState(game);
+  const scriptMap = new Map(game.scripts.map((s) => [s.id, s]));
+  const actionMap = new Map((game.actions ?? []).map((a) => [a.id, a]));
+  const itemMap = new Map((game.items ?? []).map((i) => [i.id, i]));
+  const enemyMap = new Map((game.enemies ?? []).map((e) => [e.id, e]));
+  const weaponMap = new Map((game.weapons ?? []).map((w) => [w.id, w]));
+  const skillMap = new Map((game.skills ?? []).map((s) => [s.id, s]));
+  const characterNameMap = new Map(
+    game.characters.map((c) => [c.id, c.name]),
+  );
+  const modules = resolveModules(game);
+
+  const actionHandlerRegistry: Record<string, ActionHandler> = {};
+  for (const mod of modules) {
+    for (const [kind, handler] of Object.entries(mod.actionHandlers ?? {})) {
+      if (actionHandlerRegistry[kind]) {
+        throw new Error(
+          `Engine: duplicate action handler for kind "${kind}" (module ${mod.id})`,
+        );
+      }
+      actionHandlerRegistry[kind] = handler;
+    }
+  }
+
+  const triggerRegistry: Trigger[] = [];
+  const seenTriggerIds = new Set<string>();
+  for (const mod of modules) {
+    for (const trig of mod.triggers ?? []) {
+      if (seenTriggerIds.has(trig.id)) {
+        throw new Error(
+          `Engine: duplicate trigger id "${trig.id}" (module ${mod.id})`,
+        );
+      }
+      seenTriggerIds.add(trig.id);
+      triggerRegistry.push(trig);
+    }
+  }
+
+  return {
+    state: composed,
+    game,
+    modules,
+    actionHandlerRegistry,
+    triggerRegistry,
+    scriptMap,
+    actionMap,
+    itemMap,
+    enemyMap,
+    weaponMap,
+    skillMap,
+    characterNameMap,
+    rng,
+  };
+}
+
 export class Engine {
   private state: ComposedState;
   private readonly ctx: PresetContext;
@@ -35,59 +100,7 @@ export class Engine {
     initialState?: ComposedState,
   ) {
     this.state = initialState ?? createInitialState(game);
-    const scriptMap = new Map(game.scripts.map((s) => [s.id, s]));
-    const actionMap = new Map((game.actions ?? []).map((a) => [a.id, a]));
-    const itemMap = new Map((game.items ?? []).map((i) => [i.id, i]));
-    const enemyMap = new Map((game.enemies ?? []).map((e) => [e.id, e]));
-    const weaponMap = new Map((game.weapons ?? []).map((w) => [w.id, w]));
-    const skillMap = new Map((game.skills ?? []).map((s) => [s.id, s]));
-    const characterNameMap = new Map(
-      game.characters.map((c) => [c.id, c.name]),
-    );
-    const modules = resolveModules(game);
-
-    const actionHandlerRegistry: Record<string, ActionHandler> = {};
-    for (const mod of modules) {
-      for (const [kind, handler] of Object.entries(mod.actionHandlers ?? {})) {
-        if (actionHandlerRegistry[kind]) {
-          throw new Error(
-            `Engine: duplicate action handler for kind "${kind}" (module ${mod.id})`,
-          );
-        }
-        actionHandlerRegistry[kind] = handler;
-      }
-    }
-
-    const triggerRegistry: Trigger[] = [];
-    const seenTriggerIds = new Set<string>();
-    for (const mod of modules) {
-      for (const trig of mod.triggers ?? []) {
-        if (seenTriggerIds.has(trig.id)) {
-          throw new Error(
-            `Engine: duplicate trigger id "${trig.id}" (module ${mod.id})`,
-          );
-        }
-        seenTriggerIds.add(trig.id);
-        triggerRegistry.push(trig);
-      }
-    }
-
-    this.ctx = {
-      state: this.state,
-      game,
-      modules,
-      actionHandlerRegistry,
-      triggerRegistry,
-      scriptMap,
-      actionMap,
-      itemMap,
-      enemyMap,
-      weaponMap,
-      skillMap,
-      characterNameMap,
-      rng: Math.random,
-    };
-
+    this.ctx = buildPresetContext(game, this.state);
     this.runFn = resolveRunFn(game);
   }
 

@@ -1,4 +1,4 @@
-export { Engine } from "./engine";
+export { Engine, buildPresetContext } from "./engine";
 export { evaluateCondition } from "./condition";
 export {
   createInitialState,

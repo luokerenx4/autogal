@@ -1,0 +1,71 @@
+name: 战斗激活时 dispatcher 拒绝 move/search/extract (#10)
+description: |
+  Pre-seeds the player at deep_grove (extract zone) with an active
+  encounter. Tries to dispatch raid:move:crossroads, raid:search, and
+  raid:extract — each should be refused with a narration, and the
+  encounter / zone / HP should remain unchanged.
+
+  Asserts: after all three rejected dispatches, the player is still
+  at deep_grove, still in combat mode, still with full HP, and the
+  enemy's HP hasn't moved. The pendingNarrations queue accumulated
+  three refusal lines.
+
+state:
+  baseline:
+    completedScripts: [000_intro]
+    weapons:
+      ancestor_yaodao: { power: 6 }
+  sengoku-raid:
+    mode: raid
+    metCharacters: []
+    raid:
+      mapId: kuro_swamp
+      mapName: 黒沼地
+      currentZoneId: deep_grove
+      turnsTaken: 1
+      pendingLoot: {}
+      zones:
+        deep_grove:
+          id: deep_grove
+          name: 奥の杜
+          visited: true
+          searched: false
+          encounter:
+            enemyId: oni_lesser
+            enemyHp: 8
+            enemyHpMax: 8
+          encounterCleared: false
+          encounterTable:
+            - { enemyId: oni_lesser, weight: 100 }
+          lootTable:
+            - { itemId: soul_shard, min: 2, max: 2, weight: 100 }
+          connections:
+            - { dir: 戻る, target: crossroads }
+          isExtract: true
+          pendingLoot:
+            soul_shard: 2
+inputs:
+  - { type: doActivity, id: "raid:move:crossroads" }
+  - { type: doActivity, id: "raid:search" }
+  - { type: doActivity, id: "raid:extract" }
+assertions:
+  # Encounter still active and unmodified
+  - kind: state
+    path: sengoku-raid.raid.zones.deep_grove.encounter.enemyHp
+    eq: 8
+  # Still at deep_grove
+  - kind: state
+    path: sengoku-raid.raid.currentZoneId
+    eq: deep_grove
+  # Still in raid mode (didn't extract)
+  - kind: state
+    path: sengoku-raid.mode
+    eq: raid
+  # Zone wasn't searched
+  - kind: state
+    path: sengoku-raid.raid.zones.deep_grove.searched
+    eq: false
+  # HP unchanged
+  - kind: state
+    path: baseline.flags.hp
+    eq: 30

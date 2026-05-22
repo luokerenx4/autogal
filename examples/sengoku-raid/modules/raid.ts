@@ -607,6 +607,30 @@ function getSwordPower(ctx: PresetContext): number {
 }
 
 // ============================================================================
+// Dispatcher guards (issues #10 + #11)
+// ============================================================================
+// Tiny rejection helper so each handler can `return denyWithNarration(...)`
+// in a single line. Always returns "ok" — the dispatch finished, it just
+// did nothing — and pushes a narration the player will actually see.
+function denyWithNarration(ctx: PresetContext, message: string): "ok" {
+  ctx.state.runtime.pendingNarrations.push(message);
+  return "ok";
+}
+
+// Returns a denial message if the current zone has an active encounter,
+// or null when it's safe to do non-combat actions. Centralized so all
+// three callers (move/search/extract) use the same invariant.
+function combatBlock(ctx: PresetContext): string | null {
+  const m = moduleState(ctx);
+  if (!m.raid) return null;
+  const zone = m.raid.zones[m.raid.currentZoneId];
+  if (zone?.encounter) {
+    return `${enemyName(ctx, zone.encounter.enemyId)}に背を向けるわけにはいかぬ。斬るか、抜けるかだ。`;
+  }
+  return null;
+}
+
+// ============================================================================
 // Raid lifecycle
 // ============================================================================
 
@@ -882,13 +906,27 @@ async function* doDispatchRaidActivity(
   // ────────── HUB-side ──────────
   if (activityId.startsWith("hub:depart:")) {
     const mapId = activityId.slice("hub:depart:".length);
+    // Same prereq as buildHubMenu — block when HP isn't full.
+    const hp = getFlag(ctx, "hp");
+    const hpMax = getFlag(ctx, "hpMax");
+    if (hp < hpMax) {
+      return denyWithNarration(ctx, "体力が満たぬ。先に宿で休め。");
+    }
+    if (!(mapId in MAPS)) {
+      return denyWithNarration(ctx, `その地は地図にない（${mapId}）。`);
+    }
     startRaid(ctx, mapId);
     return "ok";
   }
   if (activityId.startsWith("hub:bond:")) {
     const charId = activityId.slice("hub:bond:".length);
     const ryo = ctx.state.baseline.inventory.ryo ?? 0;
-    if (ryo < 50) return "ok";
+    if (ryo < 50) {
+      return denyWithNarration(ctx, `両が足りない。あと ${50 - ryo} 両要る。`);
+    }
+    if (!m.metCharacters.includes(charId)) {
+      return denyWithNarration(ctx, "まだ会ったことのない相手だ。");
+    }
     ctx.state.baseline.inventory.ryo = ryo - 50;
     const c = ctx.state.baseline.characters[charId];
     if (c) c.affection += 1;
@@ -899,10 +937,15 @@ async function* doDispatchRaidActivity(
     return "ok";
   }
   if (activityId === "hub:sell_all_loot") {
+    const sellable = Object.entries(ctx.state.baseline.inventory).filter(
+      ([id, n]) => n > 0 && isLoot(ctx, id),
+    );
+    if (sellable.length === 0) {
+      return denyWithNarration(ctx, "売れる戦利品が手元にない。");
+    }
     let total = 0;
     const lines: string[] = [];
-    for (const [itemId, count] of Object.entries(ctx.state.baseline.inventory)) {
-      if (!isLoot(ctx, itemId) || count <= 0) continue;
+    for (const [itemId, count] of sellable) {
       const val = sellValue(ctx, itemId) * count;
       total += val;
       lines.push(`${itemName(ctx, itemId)} ×${count} → ${val}両`);
@@ -918,7 +961,18 @@ async function* doDispatchRaidActivity(
   if (activityId === "hub:upgrade_weapon") {
     const shards = ctx.state.baseline.inventory.soul_shard ?? 0;
     const ryo = ctx.state.baseline.inventory.ryo ?? 0;
-    if (shards < 3 || ryo < 100) return "ok";
+    if (shards < 3) {
+      return denyWithNarration(
+        ctx,
+        `炼器師「魂石碎片が足りない。あと ${3 - shards} 枚要る。」`,
+      );
+    }
+    if (ryo < 100) {
+      return denyWithNarration(
+        ctx,
+        `炼器師「持ち合わせが ${ryo} 両か。あと ${100 - ryo} 両要る。」`,
+      );
+    }
     const nextShards = shards - 3;
     if (nextShards <= 0) delete ctx.state.baseline.inventory.soul_shard;
     else ctx.state.baseline.inventory.soul_shard = nextShards;
@@ -934,7 +988,12 @@ async function* doDispatchRaidActivity(
     return "ok";
   }
   if (activityId === "hub:rest") {
-    setFlag(ctx, "hp", getFlag(ctx, "hpMax"));
+    const hp = getFlag(ctx, "hp");
+    const hpMax = getFlag(ctx, "hpMax");
+    if (hp >= hpMax) {
+      return denyWithNarration(ctx, "もう休む必要はない。体力は満たされている。");
+    }
+    setFlag(ctx, "hp", hpMax);
     setFlag(ctx, "mental", getFlag(ctx, "mentalMax"));
     ctx.state.runtime.pendingNarrations.push(
       `宿で一晩明かす。体力と精神を回復した。霊体化は鎮まらないが、刀は静かに鞘に収まっている。`,
@@ -942,9 +1001,16 @@ async function* doDispatchRaidActivity(
     return "ok";
   }
   if (activityId === "hub:use_chinkonho") {
-    if (!ctx.state.baseline.knownSkills.includes("chinkonho")) return "ok";
+    if (!ctx.state.baseline.knownSkills.includes("chinkonho")) {
+      return denyWithNarration(ctx, "鎮魂法はまだ伝授されていない。");
+    }
     const spec = getFlag(ctx, "spectral");
-    if (spec < 10) return "ok";
+    if (spec < 10) {
+      return denyWithNarration(
+        ctx,
+        "霊体化がまだ低い。今鎮める意味はない。",
+      );
+    }
     setFlag(ctx, "spectral", Math.max(0, spec - 20));
     ctx.state.runtime.pendingNarrations.push(
       `刀を逆手に取り、心臓の真上に当てる。長く、一度息を吐く。胸の奥でうねっていたものが、二十、押し戻された。`,
@@ -953,12 +1019,24 @@ async function* doDispatchRaidActivity(
   }
 
   // ────────── RAID-side ──────────
+  // The hub menu hides move/search/extract while an encounter is
+  // active (see buildRaidMenu's `if (zone.encounter)` branch). The
+  // dispatcher must enforce the same invariant — a scripted player
+  // or AI persona that synthesizes activity ids from state could
+  // otherwise walk past combat without consequence.
   if (activityId.startsWith("raid:move:")) {
+    const denial = combatBlock(ctx);
+    if (denial) return denyWithNarration(ctx, denial);
     const target = activityId.slice("raid:move:".length);
     if (!m.raid) return "ok";
     const cur = m.raid.zones[m.raid.currentZoneId]!;
     const conn = cur.connections.find((c) => c.target === target);
-    if (!conn) return "ok";
+    if (!conn) {
+      return denyWithNarration(
+        ctx,
+        `${cur.name}からそちらへ通じる道はない。`,
+      );
+    }
     m.raid.currentZoneId = target;
     m.raid.turnsTaken += 1;
     const zone = m.raid.zones[target]!;
@@ -1004,9 +1082,13 @@ async function* doDispatchRaidActivity(
     return "ok";
   }
   if (activityId === "raid:search") {
+    const denial = combatBlock(ctx);
+    if (denial) return denyWithNarration(ctx, denial);
     if (!m.raid) return "ok";
     const zone = m.raid.zones[m.raid.currentZoneId]!;
-    if (zone.searched) return "ok";
+    if (zone.searched) {
+      return denyWithNarration(ctx, `${zone.name}はもう探った。`);
+    }
     zone.searched = true;
     const lines: string[] = [];
     for (const [itemId, count] of Object.entries(zone.pendingLoot)) {
@@ -1034,9 +1116,16 @@ async function* doDispatchRaidActivity(
     return "ok";
   }
   if (activityId === "raid:extract") {
+    const denial = combatBlock(ctx);
+    if (denial) return denyWithNarration(ctx, denial);
     if (!m.raid) return "ok";
     const zone = m.raid.zones[m.raid.currentZoneId]!;
-    if (!zone.isExtract) return "ok";
+    if (!zone.isExtract) {
+      return denyWithNarration(
+        ctx,
+        `${zone.name}は撤退点ではない。社か杜まで戻れ。`,
+      );
+    }
     endRaidExtract(ctx);
     return "ok";
   }

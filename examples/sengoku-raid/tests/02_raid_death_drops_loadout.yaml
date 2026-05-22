@@ -21,13 +21,15 @@ state:
     completedScripts: [000_intro]
     weapons:
       ancestor_yaodao: { power: 1 }
+    characters:
+      player:
+        stats:
+          hp: 1
+          mental: 10
+          spectral: 0
+          intellect: 0
+        custom: {}
     variables:
-      hp: 1
-      hpMax: 30
-      mental: 10
-      mentalMax: 10
-      spectral: 0
-      intellect: 0
       raidsCompleted: 0
       raidsFailed: 0
   sengoku-raid:
@@ -59,7 +61,7 @@ state:
           isExtract: true
           pendingLoot: {}
 inputs:
-  - { type: doActivity, id: "raid:attack" }
+  - { type: doActivity, id: "attack" }
   # Drain any pending narrations the trigger pushes.
   - { type: next }
   - { type: next }
@@ -83,5 +85,5 @@ assertions:
 
   # Player HP reset to 1 by endRaidFailure (so they have to rest).
   - kind: state
-    path: baseline.variables.hp
+    path: baseline.characters.player.stats.hp
     eq: 1

@@ -11,6 +11,14 @@ import { fireOnNarrationDrain } from "./hooks";
 //
 // Fires onNarrationDrain (observer) after each shift, so modules can
 // observe / log narration playback.
+//
+// Input protocol: only `next` (or `quit`) advances past a narration.
+// Other input types (`choose` / `doActivity` / `select`) re-yield the
+// same narration — same idiom as `choice` in runScript. Without this,
+// a `doActivity` sent while a narration is pending would silently
+// drain the narration AND swallow the dispatch, leaving the caller
+// wondering why their action didn't fire. Strict re-yield surfaces
+// the input-order mistake immediately.
 export async function* drainNarrations(
   ctx: PresetContext,
 ): AsyncGenerator<Output, void, Input> {
@@ -19,6 +27,7 @@ export async function* drainNarrations(
     const text = q[0]!;
     const input = yield { type: "narration", text };
     if (input.type === "quit") return;
+    if (input.type !== "next") continue;
     q.shift();
     fireOnNarrationDrain(ctx, text);
   }

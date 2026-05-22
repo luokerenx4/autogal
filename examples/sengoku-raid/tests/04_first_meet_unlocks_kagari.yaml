@@ -17,10 +17,10 @@ state:
     weapons:
       ancestor_yaodao: { power: 4 }
 inputs:
-  - { type: doActivity, id: "hub:depart:kuro_swamp" }
+  - { type: doActivity, id: "depart:kuro_swamp" }
   - { type: next }          # raid-start narration
   # We're at edge. Move to crossroads → spawn fires → script launches.
-  - { type: doActivity, id: "raid:move:crossroads" }
+  - { type: doActivity, id: "move:crossroads" }
   # Drain encounter script's narrations + dialogue
   - { type: next }
   - { type: next }

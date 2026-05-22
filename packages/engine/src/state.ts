@@ -50,13 +50,28 @@ export function createInitialState(
   return composed;
 }
 
-export function applyDelta(state: ComposedState, delta: StateDelta): void {
+// Apply a StateDelta to the state. When `game` is provided, characterStats
+// changes clamp against the declared CharacterStatDef.min/max for each
+// stat (RPGMaker-style bounded stats — hp can't exceed hpMax, can't drop
+// below 0). When `game` is omitted (e.g. fixture-loader state restore),
+// no clamping happens. Most callers go through `mutateState` which passes
+// ctx.game in automatically.
+export function applyDelta(
+  state: ComposedState,
+  delta: StateDelta,
+  game?: Game,
+): void {
   if (delta.characterStats) {
     for (const [charId, statDeltas] of Object.entries(delta.characterStats)) {
       const c = state.baseline.characters[charId];
       if (!c) continue;
+      const def = game?.characters.find((cd) => cd.id === charId);
       for (const [name, change] of Object.entries(statDeltas)) {
-        c.stats[name] = (c.stats[name] ?? 0) + change;
+        const next = (c.stats[name] ?? 0) + change;
+        const statDef = def?.stats?.[name];
+        const min = statDef?.min ?? Number.NEGATIVE_INFINITY;
+        const max = statDef?.max ?? Number.POSITIVE_INFINITY;
+        c.stats[name] = Math.max(min, Math.min(max, next));
       }
     }
   }

@@ -280,3 +280,91 @@ describe("dispatchActivity — hook composition", () => {
     ]);
   });
 });
+
+describe("dispatchActivity — dynamic activity resolution via lastHubActivities", () => {
+  test("synthesizes Action from HubActivity (actionKind + payload)", async () => {
+    let received: { kind?: string; payload?: unknown } = {};
+    const mod: Module = {
+      id: "mymod",
+      provides: ["sengoku-raid:move"],
+      actionHandlers: {
+        "sengoku-raid:move": ({ action }) => {
+          received = {
+            kind: action.kind,
+            payload: action.payload,
+          };
+          return {};
+        },
+      },
+    };
+    const game = makeGame({
+      characters: [makeCharacter("alice")],
+      modules: [mod],
+    });
+    const ctx = makeCtx(game);
+    // Simulate fireOnHubBuild recording the snapshot:
+    ctx.state.runtime.lastHubActivities = [
+      {
+        id: "move:crossroads",
+        kind: "action",
+        title: "→ crossroads",
+        cost: 0,
+        available: true,
+        actionKind: "sengoku-raid:move",
+        payload: { zoneId: "crossroads" },
+      },
+    ];
+
+    await drain(dispatchActivity(ctx, "move:crossroads"));
+
+    expect(received.kind).toBe("sengoku-raid:move");
+    expect(received.payload).toEqual({ zoneId: "crossroads" });
+  });
+
+  test("dispatches even when available:false — handler decides denial", async () => {
+    // The HubActivity's `available: false` is for UI display. The
+    // handler still runs when the player picks the activity, so it
+    // can surface a denial narration explaining WHY it's locked.
+    let called = 0;
+    const mod: Module = {
+      id: "mymod",
+      provides: ["m:rest"],
+      actionHandlers: {
+        "m:rest": () => {
+          called++;
+          return { narrations: ["denied: not actually unavailable"] };
+        },
+      },
+    };
+    const ctx = makeCtx(
+      makeGame({
+        characters: [makeCharacter("alice")],
+        modules: [mod],
+      }),
+    );
+    ctx.state.runtime.lastHubActivities = [
+      {
+        id: "rest",
+        kind: "action",
+        title: "rest",
+        cost: 0,
+        available: false,
+        actionKind: "m:rest",
+      },
+    ];
+
+    await drain(dispatchActivity(ctx, "rest"));
+    expect(called).toBe(1);
+    expect(ctx.state.runtime.pendingNarrations).toContain(
+      "denied: not actually unavailable",
+    );
+  });
+
+  test("unknown activity id is silent no-op", async () => {
+    const ctx = makeCtx(
+      makeGame({ characters: [makeCharacter("alice")] }),
+    );
+    const { ret } = await drain(dispatchActivity(ctx, "ghost-activity"));
+    expect(ret).toBe("ok");
+  });
+});

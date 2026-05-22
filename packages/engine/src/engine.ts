@@ -42,6 +42,7 @@ export function buildPresetContext(
   const enemyMap = new Map((game.enemies ?? []).map((e) => [e.id, e]));
   const weaponMap = new Map((game.weapons ?? []).map((w) => [w.id, w]));
   const skillMap = new Map((game.skills ?? []).map((s) => [s.id, s]));
+  const mapMap = new Map((game.maps ?? []).map((m) => [m.id, m]));
   const characterNameMap = new Map(
     game.characters.map((c) => [c.id, c.name]),
   );
@@ -129,6 +130,7 @@ export function buildPresetContext(
     enemyMap,
     weaponMap,
     skillMap,
+    mapMap,
     characterNameMap,
     rng,
   };

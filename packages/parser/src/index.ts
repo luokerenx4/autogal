@@ -4,6 +4,7 @@ import type {
   EnemyDef,
   Game,
   ItemDef,
+  MapDef,
   Module,
   Script,
   SkillDef,
@@ -21,6 +22,7 @@ export { parseItem, ItemParseError } from "./item";
 export { parseEnemy, EnemyParseError } from "./enemy";
 export { parseWeapon, WeaponParseError } from "./weapon";
 export { parseSkill, SkillParseError } from "./skill";
+export { parseMap, MapParseError } from "./map";
 export { validateGame, GameValidationError } from "./validate";
 export type { Manifest } from "./manifest";
 
@@ -34,6 +36,7 @@ export function buildGame(
   enemies?: EnemyDef[],
   weapons?: WeaponDef[],
   skills?: SkillDef[],
+  maps?: MapDef[],
 ): Game {
   const game: Game = {
     title: manifest.title,
@@ -45,6 +48,7 @@ export function buildGame(
   if (enemies && enemies.length > 0) game.enemies = enemies;
   if (weapons && weapons.length > 0) game.weapons = weapons;
   if (skills && skills.length > 0) game.skills = skills;
+  if (maps && maps.length > 0) game.maps = maps;
   if (manifest.training) game.training = manifest.training;
   if (manifest.switches && manifest.switches.length > 0) {
     game.switches = manifest.switches;

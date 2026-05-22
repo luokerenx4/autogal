@@ -109,6 +109,14 @@ export interface RuntimeState {
   // triggers declared with `once: true`). Prevents re-firing even on
   // future rising edges.
   firedTriggers: string[];
+  // Snapshot of the most recent hubMenu Output's activities. The run
+  // loop populates this whenever it yields a hubMenu; when the user
+  // submits an Input.doActivity, the engine resolves the chosen id by
+  // looking it up here to recover the activity's actionKind + payload.
+  // This is what lets onHubBuild emit fully-dynamic activities (per-zone
+  // move actions, per-character bond gifts, etc.) without each module
+  // implementing its own prefix-string router.
+  lastHubActivities: HubActivity[];
 }
 
 export interface ComposedState {
@@ -247,6 +255,65 @@ export interface SkillDef {
   // Game-specific frontmatter — passive marker, school tag, etc.
   // Engine doesn't interpret it; modules read via skill.custom.<key>.
   custom?: Record<string, unknown>;
+}
+
+// Engine-level standard map resource. A map is a graph of zones connected
+// by named directions. Modules that drive an exploration / extraction loop
+// (e.g. sengoku-raid) read these via ctx.mapMap and instantiate per-run
+// state from the static structure here. The engine itself does not
+// interpret zones — encounter / loot resolution + extraction semantics
+// stay with the consuming module. Maps are loaded from `maps/*.yaml`.
+export interface MapDef {
+  id: string;
+  name: string;
+  description: string;
+  // Coarse author-declared progression hint. Modules can read this to
+  // gate map availability (e.g. only show difficulty<=2 maps until the
+  // player has completed an early raid). Engine doesn't enforce.
+  difficulty: number;
+  zones: MapZoneDef[];
+  // Default entry zone when the player enters the map. Must reference
+  // one of `zones[].id`. Validated at parse time.
+  spawnZoneId: string;
+  // Per-character spawn rules (RPGMaker analogue: map events with
+  // self-switch + chance + zone gating). Module evaluates these when
+  // the player enters a zone.
+  characterSpawns?: CharacterSpawnRule[];
+  // Game-specific frontmatter — lore tags, music cues, etc. Engine
+  // doesn't interpret it; modules read via mapDef.custom.<key>.
+  custom?: Record<string, unknown>;
+}
+
+export interface MapZoneDef {
+  id: string;
+  name: string;
+  // Outgoing connections — `dir` is a short author label (北 / east /
+  // 戻る …) the module surfaces in the menu; `target` references
+  // another zone's `id` in the same map.
+  connections: { dir: string; target: string }[];
+  // Marks a zone as a successful-exit point. Modules typically
+  // surface a "raid:extract" action when the player is here.
+  isExtract?: boolean;
+  // Encounter table: weighted draw at zone entry. `enemyId: null`
+  // means "no encounter this draw". enemyId values are validated
+  // against game.enemies at parse time.
+  encounterTable?: { enemyId: string | null; weight: number }[];
+  // Loot table: weighted draw of items + counts. `itemId: null`
+  // means "no loot". itemId values are validated against game.items.
+  lootTable?: { itemId: string | null; min: number; max: number; weight: number }[];
+}
+
+export interface CharacterSpawnRule {
+  // Which character spawns. Must reference game.characters[].id.
+  characterId: string;
+  // Zones where this rule is eligible. Must reference zone ids in
+  // the same map.
+  zones: string[];
+  // Probability per zone entry, 0..1. Module rolls; engine doesn't.
+  chance: number;
+  // Script to launch when the spawn triggers. Must reference
+  // game.scripts[].id.
+  encounterScriptId: string;
 }
 
 export interface StatDef {
@@ -418,6 +485,18 @@ export interface Action {
   // invokes. Resolved against ctx.skillMap by the bundled useSkill
   // handler in baseline module.
   skillId?: string;
+  // Optional: id of a map referenced by this action. Used by modules
+  // that drive a multi-map exploration loop (sengoku-raid's "depart"
+  // action). Validated against game.maps[] at parse time; resolved at
+  // dispatch time via ctx.mapMap.
+  mapId?: string;
+  // Free-form per-action payload. Module handlers read whatever keys
+  // they expect (e.g. raid:move reads `zoneId`, raid:bond reads
+  // `characterId`). Used primarily by dynamically-constructed
+  // HubActivities (see HubActivity.payload) but also valid on
+  // statically-declared actions when a generic handler can be
+  // parameterized via YAML.
+  payload?: Record<string, unknown>;
 }
 
 // Where a state mutation came from. Passed to onStateMutated so
@@ -665,6 +744,9 @@ export interface Game {
   // Engine-level skill registry — see SkillDef. Empty / absent for
   // games that declare no skills/ directory.
   skills?: SkillDef[];
+  // Engine-level map registry — see MapDef. Empty / absent for games
+  // that declare no maps/ directory.
+  maps?: MapDef[];
   training?: TrainingConfig;
   modules?: Module[];
   // Preset selector. Either a built-in name ("vn" / "training") or a
@@ -689,6 +771,12 @@ export interface RenderedChoice {
 
 export interface HubActivity {
   id: string;
+  // High-level activity type. "script" dispatches via
+  // baseline.currentScriptId; "action" dispatches via the action
+  // handler registry (either a preregistered Action in game.actions
+  // OR — when actionKind is set — a synthetic Action with that kind
+  // + payload). This is the dispatch-protocol layer; actionKind is
+  // the handler-resolution layer.
   kind: "script" | "action";
   title: string;
   description?: string;
@@ -697,6 +785,16 @@ export interface HubActivity {
   effectsHint?: string;
   available: boolean;
   lockedReason?: string;
+  // Module-supplied action handler kind for dynamic activities that
+  // don't have a preregistered Action in game.actions. The engine
+  // synthesizes an Action { id, title, kind: actionKind, payload, ...}
+  // and routes it through the standard dispatchActivity path. Only
+  // meaningful when kind === "action".
+  actionKind?: string;
+  // Free-form params passed to the handler (via Action.payload). Used
+  // when the same actionKind is dispatched with different per-activity
+  // parameters (e.g. `raid:move` with a `zoneId` payload).
+  payload?: Record<string, unknown>;
 }
 
 export interface StatSnapshot {
@@ -759,6 +857,7 @@ export interface PresetContext {
   enemyMap: Map<string, EnemyDef>;
   weaponMap: Map<string, WeaponDef>;
   skillMap: Map<string, SkillDef>;
+  mapMap: Map<string, MapDef>;
   characterNameMap: Map<string, string>;
   // Injected RNG. Defaults to Math.random; tests can override for
   // deterministic combat / choice outcomes.

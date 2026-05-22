@@ -6,11 +6,13 @@
 // lives at state["sengoku-raid"].mode; the module's onHubBuild returns a
 // mode-appropriate hubMenu snapshot.
 //
-// Activity dispatch is routed by prefix:
-//   - "script:..."  → engine's dispatchActivity (standard one-time scripts)
-//   - "action:..."  → engine's dispatchActivity (standard registered actions)
-//   - "raid:..."    → module's dispatchRaidActivity (move/search/fight/etc.)
-//   - "hub:..."     → module's dispatchRaidActivity (bond/sell/upgrade/depart)
+// Activity dispatch goes through the engine's standard dispatchActivity:
+//   - "script:<id>"  → engine sets baseline.currentScriptId
+//   - bare action id → engine resolves via runtime.lastHubActivities
+//     (populated by fireOnHubBuild). The HubActivity carries
+//     `actionKind` + `payload`; the engine synthesizes an Action and
+//     routes it through the actionHandlerRegistry, where the raid
+//     module's declared handlers pick it up.
 //
 // The raid module owns onHubBuild and wins the first-wins arbitration
 // because we don't enable the engine's `training:` config (training
@@ -29,7 +31,6 @@ import {
 } from "@autogal/engine";
 import type { Action, Input, Output, PresetContext } from "@autogal/engine";
 
-import { dispatchRaidActivity } from "../modules/raid";
 
 export default raidRun;
 
@@ -84,17 +85,7 @@ export async function* raidRun(
     const input = yield hubOutput;
     if (input.type === "quit") return;
     if (input.type !== "doActivity") continue;
-
-    // Prefix-routed dispatch.
-    if (
-      input.id.startsWith("raid:") ||
-      input.id.startsWith("hub:")
-    ) {
-      const r = yield* dispatchRaidActivity(ctx, input.id);
-      if (r === "quit") return;
-    } else {
-      const r = yield* dispatchActivity(ctx, input.id);
-      if (r === "quit") return;
-    }
+    const r = yield* dispatchActivity(ctx, input.id);
+    if (r === "quit") return;
   }
 }

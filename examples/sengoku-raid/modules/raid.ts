@@ -1,72 +1,106 @@
-// sengoku-raid: the headless extraction-shooter module.
+// sengoku-raid: the headless extraction-shooter module. Reference
+// implementation for "what an RPGMaker-native autogal module looks
+// like" after Phase 6.
 //
 // Owns:
-//   - mode flag (HUB / RAID)
-//   - per-raid sub-state (current zone, encounter, pending loot)
-//   - persistent player flags (HP/mental/spectral/intellect via baseline.flags)
+//   - mode flag (HUB / RAID), per-raid sub-state (current zone,
+//     encounter, pending loot), and the metCharacters tracker — all
+//     in the module's own state slice at state["sengoku-raid"]
 //   - the hub menu (mode-dependent activities) via onHubBuild
-//   - all raid + hub actions via the raid:/hub: prefix, dispatched from
-//     the preset (NOT through engine actionMap — that's for static
-//     actions/*.yaml only)
-//   - reactive triggers: death, spectral overload
+//   - 12 raid/hub action handlers declared via module.actionHandlers
+//     + provides. Dispatched by the engine's standard
+//     actionHandlerRegistry; activities carry actionKind + payload
+//     so the engine routes Input.doActivity through one code path.
+//   - reactive triggers: death (player.hp ≤ 0), spectral overload
+//     (player.spectral ≥ 100)
 //
-// Why not training preset?
-//   We want HP/spectral as free-form clampable numbers and we want our
-//   onHubBuild to win first-wins. Skipping game.training avoids both.
+// Storage layout:
+//   - Player stats (HP / mental / spectral / intellect) live on the
+//     `player` character (characters/player.md) with declared
+//     min/max. Engine clamps on every mutateState write.
+//   - raidsCompleted / raidsFailed are declared variables (game.yaml).
+//   - Maps load via the engine's parser as a first-class resource
+//     (maps/*.yaml → ctx.game.maps / ctx.mapMap). The module reads
+//     them; it no longer touches the filesystem.
+//
+// Why not the training preset?
+//   We want raid/hub modes instead of day/slot calendar, and we want
+//   our onHubBuild to win first-wins. Skipping game.training avoids
+//   both.
 
-import { readdirSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-
-import { checkTriggers, evaluateCondition } from "@autogal/engine";
-
-// Bun ships with a built-in YAML parser; we use it here so games don't
-// need to declare a `yaml` dependency to load map data files. If we
-// later want to run under Node, swap to the `yaml` package (already in
-// the workspace's devDependencies).
-declare const Bun: { YAML: { parse: (s: string) => unknown } };
-const parseYaml = (s: string) => Bun.YAML.parse(s);
+import { evaluateCondition } from "@autogal/engine";
 import type {
+  ActionContext,
+  ActionHandler,
+  ActionResult,
+  CharacterSpawnRule,
+  ComposedState,
   Game,
   HubActivity,
   Input,
+  MapDef,
+  MapZoneDef,
   Module,
   Output,
   PresetContext,
+  StateDelta,
   Trigger,
 } from "@autogal/engine";
 
-const MODULE_ID = "sengoku-raid";
-
-// Resolve our own directory so we can find maps/ alongside us.
-// Engine doesn't tell modules where the game root is, so we infer.
-const MODULE_DIR = dirname(fileURLToPath(import.meta.url));
-const MAPS_DIR = join(MODULE_DIR, "..", "maps");
-
-// ============================================================================
-// Persistent player stats (baseline.variables). Engine's variable delta
-// is additive for numbers, so { variables: { hp: -5 } } subtracts.
-// ============================================================================
-
-const STAT_DEFAULTS = {
-  hp: 30,
-  hpMax: 30,
-  mental: 10,
-  mentalMax: 10,
-  spectral: 5,
-  intellect: 0,
-  raidsCompleted: 0,
-  raidsFailed: 0,
+// Most helpers take a minimal ctx (state + game + rng) so they work for
+// both PresetContext callers (the preset / onHubBuild) and ActionContext
+// callers (handler dispatch). RNG is optional because pure-read helpers
+// don't need it.
+type Ctx = {
+  state: ComposedState;
+  game: Game;
+  rng: () => number;
 };
 
-type Stat = keyof typeof STAT_DEFAULTS;
+const MODULE_ID = "sengoku-raid";
 
-function getFlag(ctx: PresetContext, name: Stat): number {
-  const v = ctx.state.baseline.variables[name];
-  return typeof v === "number" ? v : STAT_DEFAULTS[name];
+// ============================================================================
+// Player stats live on the `player` character (characters/player.md)
+// with declared min/max — the engine clamps automatically through
+// mutateState. `playerStat` / `setPlayerStat` are thin readers/writers
+// kept until R2 converts every site to ActionResult { deltas } returns.
+// ============================================================================
+
+type PlayerStat = "hp" | "mental" | "spectral" | "intellect";
+
+function playerStat(ctx: Ctx, name: PlayerStat): number {
+  return ctx.state.baseline.characters.player?.stats[name] ?? 0;
 }
 
-function setFlag(ctx: PresetContext, name: Stat, value: number): void {
+function playerStatMax(ctx: Ctx, name: PlayerStat): number {
+  return (
+    ctx.game.characters.find((c) => c.id === "player")?.stats?.[name]?.max ?? 0
+  );
+}
+
+function setPlayerStat(
+  ctx: Ctx,
+  name: PlayerStat,
+  value: number,
+): void {
+  const c = ctx.state.baseline.characters.player;
+  if (!c) return;
+  const def = ctx.game.characters.find((cd) => cd.id === "player")?.stats?.[
+    name
+  ];
+  const min = def?.min ?? Number.NEGATIVE_INFINITY;
+  const max = def?.max ?? Number.POSITIVE_INFINITY;
+  c.stats[name] = Math.max(min, Math.min(max, value));
+}
+
+type GameVariable = "raidsCompleted" | "raidsFailed";
+
+function getVar(ctx: Ctx, name: GameVariable): number {
+  const v = ctx.state.baseline.variables[name];
+  return typeof v === "number" ? v : 0;
+}
+
+function setVar(ctx: Ctx, name: GameVariable, value: number): void {
   ctx.state.baseline.variables[name] = value;
 }
 
@@ -111,128 +145,29 @@ interface RaidModuleState {
   metCharacters: string[];
 }
 
-function moduleState(ctx: PresetContext): RaidModuleState {
+function moduleState(ctx: Ctx): RaidModuleState {
   const s = ctx.state[MODULE_ID] as RaidModuleState | undefined;
   if (!s) throw new Error(`${MODULE_ID}: module state missing`);
   return s;
 }
 
 // ============================================================================
-// Map definitions — module-private data (not registered with engine)
+// Maps — loaded by the engine's parser as a first-class resource type
+// (packages/parser/src/map.ts). Module consumes them via ctx.game.maps
+// or the per-id ctx.mapMap lookup that buildPresetContext exposes.
 // ============================================================================
 
-interface MapDef {
-  id: string;
-  name: string;
-  difficulty: number;
-  description: string;
-  spawnZoneId: string;
-  zones: MapZoneDef[];
-  characterSpawns?: CharacterSpawnRule[];
+function getMap(ctx: Ctx, mapId: string): MapDef | undefined {
+  return ctx.game.maps?.find((m) => m.id === mapId);
 }
 
-interface MapZoneDef {
-  id: string;
-  name: string;
-  connections: { dir: string; target: string }[];
-  isExtract?: boolean;
-  encounterTable?: { enemyId: string | null; weight: number }[];
-  lootTable?: { itemId: string | null; min: number; max: number; weight: number }[];
-}
-
-interface CharacterSpawnRule {
-  characterId: string;
-  zones: string[];
-  chance: number;          // 0..1
-  encounterScriptId: string;
-  // Module evaluates: never re-spawn after first meeting (we check
-  // metCharacters). Additional gates could go here later (day count,
-  // weapon power, etc.) but vertical slice keeps it simple.
-}
-
-// MAPS are loaded eagerly at module evaluation time from maps/*.yaml.
-// We use synchronous fs reads here so the table is populated by the
-// time Module.initialize() runs — engine doesn't have a "load maps"
-// asset category, so this is the module's own asset registry.
-// Adding a new map = drop a YAML file in maps/, no code changes.
-const MAPS: Record<string, MapDef> = loadMapsFromDisk();
-
-function loadMapsFromDisk(): Record<string, MapDef> {
-  const out: Record<string, MapDef> = {};
-  let files: string[];
-  try {
-    files = readdirSync(MAPS_DIR).filter(
-      (f) => f.endsWith(".yaml") || f.endsWith(".yml"),
-    );
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") return out;
-    throw err;
-  }
-  for (const f of files.sort()) {
-    const raw = readFileSync(join(MAPS_DIR, f), "utf-8");
-    const parsed = parseYaml(raw) as Record<string, unknown>;
-    const map = normalizeMapDef(parsed, f);
-    out[map.id] = map;
-  }
-  return out;
-}
-
-function normalizeMapDef(raw: Record<string, unknown>, src: string): MapDef {
-  const id = String(raw.id ?? "");
-  if (!id) throw new Error(`${src}: missing id`);
-  const zonesRaw = raw.zones;
-  if (!Array.isArray(zonesRaw)) {
-    throw new Error(`${src}: zones must be an array`);
-  }
-  const zones: MapZoneDef[] = zonesRaw.map((z, i) => {
-    const zo = z as Record<string, unknown>;
-    return {
-      id: String(zo.id ?? ""),
-      name: String(zo.name ?? zo.id ?? `zone_${i}`),
-      connections: (zo.connections as Array<{ dir: string; target: string }>) ?? [],
-      isExtract: !!zo.is_extract,
-      encounterTable: ((zo.encounter_table as Array<Record<string, unknown>>) ?? []).map(
-        (e) => ({
-          enemyId: (e.enemy as string | null) ?? null,
-          weight: Number(e.weight ?? 1),
-        }),
-      ),
-      lootTable: ((zo.loot_table as Array<Record<string, unknown>>) ?? []).map(
-        (l) => ({
-          itemId: (l.item as string | null) ?? null,
-          min: Number(l.min ?? 0),
-          max: Number(l.max ?? 0),
-          weight: Number(l.weight ?? 1),
-        }),
-      ),
-    };
-  });
-  const spawnsRaw = (raw.character_spawns as Array<Record<string, unknown>>) ?? [];
-  const characterSpawns: CharacterSpawnRule[] = spawnsRaw.map((s) => ({
-    characterId: String(s.character ?? ""),
-    zones: (s.zones as string[]) ?? [],
-    chance: Number(s.chance ?? 0.5),
-    encounterScriptId: String(s.encounter_script ?? ""),
-  }));
-  return {
-    id,
-    name: String(raw.name ?? id),
-    difficulty: Number(raw.difficulty ?? 1),
-    description: String(raw.description ?? ""),
-    spawnZoneId: String(raw.spawn_zone_id ?? zones[0]?.id ?? ""),
-    zones,
-    characterSpawns,
-  };
-}
-
-function discoverableMaps(_ctx: PresetContext): string[] {
+function discoverableMaps(ctx: Ctx): string[] {
   // For now all maps are always discoverable. Future: gate harder maps
   // behind raidsCompleted thresholds or quest flags.
-  return Object.keys(MAPS).sort((a, b) => {
-    const da = MAPS[a]?.difficulty ?? 0;
-    const db = MAPS[b]?.difficulty ?? 0;
-    return da - db;
-  });
+  return (ctx.game.maps ?? [])
+    .slice()
+    .sort((a, b) => a.difficulty - b.difficulty)
+    .map((m) => m.id);
 }
 
 // ============================================================================
@@ -261,7 +196,7 @@ function rollIntInclusive(rng: () => number, lo: number, hi: number): number {
 // Hub menu construction (mode-dependent)
 // ============================================================================
 
-function buildSnapshot(activities: HubActivity[], ctx: PresetContext): Output {
+function buildSnapshot(activities: HubActivity[], ctx: Ctx): Output {
   return {
     type: "hubMenu",
     snapshot: {
@@ -277,15 +212,15 @@ function buildSnapshot(activities: HubActivity[], ctx: PresetContext): Output {
   };
 }
 
-function buildStatSnapshots(ctx: PresetContext) {
+function buildStatSnapshots(ctx: Ctx) {
   const ryo = ctx.state.baseline.inventory.ryo ?? 0;
   return [
     {
       id: "hp",
       name: "体力",
-      value: getFlag(ctx, "hp"),
+      value: playerStat(ctx, "hp"),
       min: 0,
-      max: getFlag(ctx, "hpMax"),
+      max: playerStatMax(ctx, "hp"),
       thresholds: [
         { min: 0, label: "瀕死", color: "red" as const },
         { min: 6, label: "負傷", color: "yellow" as const },
@@ -295,9 +230,9 @@ function buildStatSnapshots(ctx: PresetContext) {
     {
       id: "mental",
       name: "精神",
-      value: getFlag(ctx, "mental"),
+      value: playerStat(ctx, "mental"),
       min: 0,
-      max: getFlag(ctx, "mentalMax"),
+      max: playerStatMax(ctx, "mental"),
       thresholds: [
         { min: 0, label: "崩壊", color: "red" as const },
         { min: 3, label: "安定", color: "green" as const },
@@ -306,7 +241,7 @@ function buildStatSnapshots(ctx: PresetContext) {
     {
       id: "spectral",
       name: "霊体化",
-      value: getFlag(ctx, "spectral"),
+      value: playerStat(ctx, "spectral"),
       min: 0,
       max: 100,
       thresholds: [
@@ -316,12 +251,12 @@ function buildStatSnapshots(ctx: PresetContext) {
         { min: 80, label: "暴走寸前", color: "red" as const },
       ],
     },
-    { id: "intellect", name: "学識", value: getFlag(ctx, "intellect"), min: 0, max: 99 },
+    { id: "intellect", name: "学識", value: playerStat(ctx, "intellect"), min: 0, max: 99 },
     { id: "ryo", name: "両", value: ryo, min: 0, max: 99999 },
   ];
 }
 
-function buildAffectionSnapshots(ctx: PresetContext) {
+function buildAffectionSnapshots(ctx: Ctx) {
   const m = moduleState(ctx);
   return ctx.game.characters
     .filter((c) => m.metCharacters.includes(c.id))
@@ -332,7 +267,7 @@ function buildAffectionSnapshots(ctx: PresetContext) {
     }));
 }
 
-function buildHubMenu(ctx: PresetContext): Output {
+function buildHubMenu(ctx: Ctx): Output {
   const m = moduleState(ctx);
   const activities: HubActivity[] = [];
 
@@ -347,8 +282,10 @@ function buildHubMenu(ctx: PresetContext): Output {
     if (!char) continue;
     const ryo = ctx.state.baseline.inventory.ryo ?? 0;
     activities.push({
-      id: `hub:bond:${charId}`,
+      id: `bond:${charId}`,
       kind: "action",
+      actionKind: "bond",
+      payload: { characterId: charId },
       title: `${char.name}に贈り物をする`,
       description: "好感度 +1（50 両）",
       category: "social",
@@ -386,8 +323,9 @@ function buildHubMenu(ctx: PresetContext): Output {
   if (lootIds.length > 0) {
     const total = lootIds.reduce((sum, [id, n]) => sum + n * sellValue(ctx, id), 0);
     activities.push({
-      id: "hub:sell_all_loot",
+      id: "sell_all_loot",
       kind: "action",
+      actionKind: "sell_all_loot",
       title: `戦利品を炼器師に売る（${total} 両）`,
       description: lootIds.map(([id, n]) => `${itemName(ctx, id)} ×${n}`).join("、"),
       category: "shop",
@@ -401,8 +339,9 @@ function buildHubMenu(ctx: PresetContext): Output {
   const ryo = ctx.state.baseline.inventory.ryo ?? 0;
   const canUpgrade = shards >= 3 && ryo >= 100;
   activities.push({
-    id: "hub:upgrade_weapon",
+    id: "upgrade_weapon",
     kind: "action",
+    actionKind: "upgrade_weapon",
     title: "炼器師に妖刀を鍛え直させる（威力 +2）",
     description: "魂石碎片 ×3 + 100 両",
     category: "shop",
@@ -414,12 +353,13 @@ function buildHubMenu(ctx: PresetContext): Output {
   });
 
   // Rest (recover HP/mental)
-  const hp = getFlag(ctx, "hp");
-  const hpMax = getFlag(ctx, "hpMax");
+  const hp = playerStat(ctx, "hp");
+  const hpMax = playerStatMax(ctx, "hp");
   if (hp < hpMax) {
     activities.push({
-      id: "hub:rest",
+      id: "rest",
       kind: "action",
+      actionKind: "rest",
       title: "宿で休む（体力・精神を全回復）",
       description: "霊体化は変わらない",
       category: "rest",
@@ -432,10 +372,11 @@ function buildHubMenu(ctx: PresetContext): Output {
   // Only available in hub (combat is too tense per篝's teaching), and
   // only when player actually has the skill.
   if (ctx.state.baseline.knownSkills.includes("chinkonho")) {
-    const spec = getFlag(ctx, "spectral");
+    const spec = playerStat(ctx, "spectral");
     activities.push({
-      id: "hub:use_chinkonho",
+      id: "use_chinkonho",
       kind: "action",
+      actionKind: "use_chinkonho",
       title: "鎮魂法を行う（霊体化 -20）",
       description: "篝伝授の口伝。集中して長く息を吐く",
       category: "spirit",
@@ -447,12 +388,14 @@ function buildHubMenu(ctx: PresetContext): Output {
 
   // Depart on raid
   for (const mapId of discoverableMaps(ctx)) {
-    const map = MAPS[mapId];
+    const map = getMap(ctx, mapId);
     if (!map) continue;
     const hpFull = hp >= hpMax;
     activities.push({
-      id: `hub:depart:${mapId}`,
+      id: `depart:${mapId}`,
       kind: "action",
+      actionKind: "depart",
+      payload: { mapId },
       title: `出立 — ${map.name}（難度 ${map.difficulty}）`,
       description: map.description,
       category: "raid",
@@ -465,7 +408,7 @@ function buildHubMenu(ctx: PresetContext): Output {
   return buildSnapshot(activities, ctx);
 }
 
-function buildRaidMenu(ctx: PresetContext): Output {
+function buildRaidMenu(ctx: Ctx): Output {
   const m = moduleState(ctx);
   if (!m.raid) return buildHubMenu(ctx);
 
@@ -476,8 +419,9 @@ function buildRaidMenu(ctx: PresetContext): Output {
 
   if (zone.encounter) {
     activities.push({
-      id: "raid:attack",
+      id: "attack",
       kind: "action",
+      actionKind: "attack",
       title: `斬る — ${enemyName(ctx, zone.encounter.enemyId)}（HP ${zone.encounter.enemyHp}/${zone.encounter.enemyHpMax}）`,
       description: "妖刀威力 × (1 + 霊体化×0.04) × ばらつき",
       category: "combat",
@@ -485,8 +429,9 @@ function buildRaidMenu(ctx: PresetContext): Output {
       available: true,
     });
     activities.push({
-      id: "raid:sneak_strike",
+      id: "sneak_strike",
       kind: "action",
+      actionKind: "sneak_strike",
       title: "不意打ちを狙う",
       description: "学識+霊体化判定。成功で大ダメージ、失敗で外す",
       category: "combat",
@@ -494,8 +439,9 @@ function buildRaidMenu(ctx: PresetContext): Output {
       available: true,
     });
     activities.push({
-      id: "raid:flee",
+      id: "flee",
       kind: "action",
+      actionKind: "flee",
       title: "逃げる",
       description: "霊体化判定。失敗で一発被弾",
       category: "combat",
@@ -505,8 +451,9 @@ function buildRaidMenu(ctx: PresetContext): Output {
   } else {
     if (!zone.searched && Object.keys(zone.pendingLoot).length > 0) {
       activities.push({
-        id: "raid:search",
+        id: "search",
         kind: "action",
+        actionKind: "search",
         title: "この区域を探る",
         category: "raid",
         cost: 0,
@@ -515,8 +462,9 @@ function buildRaidMenu(ctx: PresetContext): Output {
     }
     if (zone.isExtract) {
       activities.push({
-        id: "raid:extract",
+        id: "extract",
         kind: "action",
+        actionKind: "extract",
         title: `${zone.name} から撤退して大名府に戻る`,
         description: "戦利品を蔵に納める",
         category: "raid",
@@ -528,8 +476,10 @@ function buildRaidMenu(ctx: PresetContext): Output {
       const target = m.raid.zones[conn.target];
       const visitedNote = target?.visited ? "（既訪）" : "";
       activities.push({
-        id: `raid:move:${conn.target}`,
+        id: `move:${conn.target}`,
         kind: "action",
+        actionKind: "move",
+        payload: { zoneId: conn.target },
         title: `${conn.dir}へ進む — ${target?.name ?? conn.target}${visitedNote}`,
         category: "raid",
         cost: 0,
@@ -550,41 +500,41 @@ function buildRaidMenu(ctx: PresetContext): Output {
 // (parseItem) which now preserves unknown fields on item.custom, so
 // adding a new sellable item is purely a content change (drop a new
 // items/<id>.md with a `sell_value:` line).
-function isLoot(ctx: PresetContext, itemId: string): boolean {
+function isLoot(ctx: Ctx, itemId: string): boolean {
   return typeof sellValueOf(ctx, itemId) === "number";
 }
 
-function sellValue(ctx: PresetContext, itemId: string): number {
+function sellValue(ctx: Ctx, itemId: string): number {
   return sellValueOf(ctx, itemId) ?? 0;
 }
 
-function sellValueOf(ctx: PresetContext, itemId: string): number | undefined {
+function sellValueOf(ctx: Ctx, itemId: string): number | undefined {
   const item = ctx.game.items?.find((i) => i.id === itemId);
   const v = item?.custom?.sell_value;
   return typeof v === "number" ? v : undefined;
 }
 
-function itemName(ctx: PresetContext, itemId: string): string {
+function itemName(ctx: Ctx, itemId: string): string {
   return ctx.game.items?.find((i) => i.id === itemId)?.name ?? itemId;
 }
 
-function enemyName(ctx: PresetContext, enemyId: string): string {
+function enemyName(ctx: Ctx, enemyId: string): string {
   return ctx.game.enemies?.find((e) => e.id === enemyId)?.name ?? enemyId;
 }
 
-function enemyAttackPower(ctx: PresetContext, enemyId: string): number {
+function enemyAttackPower(ctx: Ctx, enemyId: string): number {
   const e = ctx.game.enemies?.find((x) => x.id === enemyId);
   if (!e) return 1;
   const raw = e.custom?.attack_power;
   return typeof raw === "number" ? raw : 1;
 }
 
-function enemyHp(ctx: PresetContext, enemyId: string): number {
+function enemyHp(ctx: Ctx, enemyId: string): number {
   return ctx.game.enemies?.find((e) => e.id === enemyId)?.hp ?? 1;
 }
 
 function getEnemyNarration(
-  ctx: PresetContext,
+  ctx: Ctx,
   enemyId: string,
   key: "intro" | "victory" | "escape",
 ): string | undefined {
@@ -600,7 +550,7 @@ function fillTemplate(tmpl: string, vars: Record<string, string | number>): stri
   return out;
 }
 
-function getSwordPower(ctx: PresetContext): number {
+function getSwordPower(ctx: Ctx): number {
   const id = ctx.state.baseline.equippedWeaponId;
   if (!id) return 1;
   return ctx.state.baseline.weapons[id]?.power ?? 1;
@@ -609,18 +559,10 @@ function getSwordPower(ctx: PresetContext): number {
 // ============================================================================
 // Dispatcher guards (issues #10 + #11)
 // ============================================================================
-// Tiny rejection helper so each handler can `return denyWithNarration(...)`
-// in a single line. Always returns "ok" — the dispatch finished, it just
-// did nothing — and pushes a narration the player will actually see.
-function denyWithNarration(ctx: PresetContext, message: string): "ok" {
-  ctx.state.runtime.pendingNarrations.push(message);
-  return "ok";
-}
-
 // Returns a denial message if the current zone has an active encounter,
 // or null when it's safe to do non-combat actions. Centralized so all
 // three callers (move/search/extract) use the same invariant.
-function combatBlock(ctx: PresetContext): string | null {
+function combatBlock(ctx: Ctx): string | null {
   const m = moduleState(ctx);
   if (!m.raid) return null;
   const zone = m.raid.zones[m.raid.currentZoneId];
@@ -634,8 +576,8 @@ function combatBlock(ctx: PresetContext): string | null {
 // Raid lifecycle
 // ============================================================================
 
-function startRaid(ctx: PresetContext, mapId: string): void {
-  const map = MAPS[mapId];
+function startRaid(ctx: Ctx, mapId: string): void {
+  const map = getMap(ctx, mapId);
   if (!map) throw new Error(`${MODULE_ID}: unknown map ${mapId}`);
   const m = moduleState(ctx);
 
@@ -678,7 +620,7 @@ function startRaid(ctx: PresetContext, mapId: string): void {
 }
 
 function rollEncounter(
-  ctx: PresetContext,
+  ctx: Ctx,
   zone: ZoneInstance,
 ): null | { enemyId: string; enemyHp: number; enemyHpMax: number } {
   if (zone.encounterTable.length === 0) return null;
@@ -689,11 +631,11 @@ function rollEncounter(
 }
 
 function rollCharacterSpawn(
-  ctx: PresetContext,
+  ctx: Ctx,
   mapId: string,
   zoneId: string,
 ): CharacterSpawnRule | null {
-  const map = MAPS[mapId];
+  const map = getMap(ctx, mapId);
   if (!map?.characterSpawns) return null;
   const m = moduleState(ctx);
   for (const rule of map.characterSpawns) {
@@ -704,7 +646,7 @@ function rollCharacterSpawn(
   return null;
 }
 
-function rollLoot(ctx: PresetContext, zone: ZoneInstance): Record<string, number> {
+function rollLoot(ctx: Ctx, zone: ZoneInstance): Record<string, number> {
   if (zone.lootTable.length === 0) return {};
   const pick = pickWeighted(ctx.rng, zone.lootTable);
   if (pick.itemId === null) return {};
@@ -712,7 +654,7 @@ function rollLoot(ctx: PresetContext, zone: ZoneInstance): Record<string, number
   return { [pick.itemId]: count };
 }
 
-function endRaidExtract(ctx: PresetContext): void {
+function endRaidExtract(ctx: Ctx): void {
   const m = moduleState(ctx);
   if (!m.raid) return;
   // Transfer pendingLoot to baseline.inventory.
@@ -726,25 +668,25 @@ function endRaidExtract(ctx: PresetContext): void {
   const mapName = m.raid.mapName;
   m.raid = null;
   m.mode = "hub";
-  setFlag(ctx, "raidsCompleted", getFlag(ctx, "raidsCompleted") + 1);
+  setVar(ctx, "raidsCompleted", getVar(ctx, "raidsCompleted") + 1);
 
   ctx.state.runtime.pendingNarrations.push(
     `${mapName}から撤退に成功。${lootSummary.length > 0 ? "持ち帰った戦利品：" + lootSummary.join("、") + "。" : "今回は手ぶら。"}`,
   );
 }
 
-function endRaidFailure(ctx: PresetContext, reason: string): void {
+function endRaidFailure(ctx: Ctx, reason: string): void {
   const m = moduleState(ctx);
   if (!m.raid) return;
   const mapName = m.raid.mapName;
   m.raid = null;
   m.mode = "hub";
-  setFlag(ctx, "raidsFailed", getFlag(ctx, "raidsFailed") + 1);
+  setVar(ctx, "raidsFailed", getVar(ctx, "raidsFailed") + 1);
   // Reset HP/mental/spectral to defaults (death/overload triggered).
   // hp = 1 so player has to rest; mental partial; spectral cut.
-  setFlag(ctx, "hp", 1);
-  setFlag(ctx, "mental", Math.max(1, Math.floor(getFlag(ctx, "mentalMax") / 2)));
-  setFlag(ctx, "spectral", Math.max(5, Math.floor(getFlag(ctx, "spectral") / 2)));
+  setPlayerStat(ctx, "hp", 1);
+  setPlayerStat(ctx, "mental", Math.max(1, Math.floor(playerStatMax(ctx, "mental") / 2)));
+  setPlayerStat(ctx, "spectral", Math.max(5, Math.floor(playerStat(ctx, "spectral") / 2)));
   ctx.state.runtime.pendingNarrations.push(
     `${mapName}での討伐は失敗——${reason}。戦利品は全て失われた。気がついたら大名府の御殿医の枕元。`,
   );
@@ -754,15 +696,15 @@ function endRaidFailure(ctx: PresetContext, reason: string): void {
 // Combat
 // ============================================================================
 
-function doAttackRound(ctx: PresetContext, kind: "normal" | "sneak"): void {
+function doAttackRound(ctx: Ctx, kind: "normal" | "sneak"): void {
   const m = moduleState(ctx);
   if (!m.raid) return;
   const zone = m.raid.zones[m.raid.currentZoneId]!;
   if (!zone.encounter) return;
 
   const sword = getSwordPower(ctx);
-  const spec = getFlag(ctx, "spectral");
-  const intellect = getFlag(ctx, "intellect");
+  const spec = playerStat(ctx, "spectral");
+  const intellect = playerStat(ctx, "intellect");
 
   // Player strikes first.
   let damage: number;
@@ -792,7 +734,7 @@ function doAttackRound(ctx: PresetContext, kind: "normal" | "sneak"): void {
   zone.encounter.enemyHp -= damage;
 
   // Spectral creep from striking
-  setFlag(ctx, "spectral", Math.min(100, spec + 1));
+  setPlayerStat(ctx, "spectral", Math.min(100, spec + 1));
 
   if (zone.encounter.enemyHp <= 0) {
     // Victory
@@ -812,7 +754,7 @@ function doAttackRound(ctx: PresetContext, kind: "normal" | "sneak"): void {
         }),
       );
     }
-    setFlag(ctx, "spectral", Math.max(0, getFlag(ctx, "spectral") - absorb));
+    setPlayerStat(ctx, "spectral", Math.max(0, playerStat(ctx, "spectral") - absorb));
     const wid = ctx.state.baseline.equippedWeaponId;
     if (wid) {
       const w = ctx.state.baseline.weapons[wid];
@@ -834,16 +776,16 @@ function doAttackRound(ctx: PresetContext, kind: "normal" | "sneak"): void {
   // High spectral makes the player less coordinated defending.
 
   const finalEnemyDamage = isFumble ? Math.floor(enemyHit * 1.6) : enemyHit;
-  setFlag(ctx, "hp", getFlag(ctx, "hp") - finalEnemyDamage);
+  setPlayerStat(ctx, "hp", playerStat(ctx, "hp") - finalEnemyDamage);
   ctx.state.runtime.pendingNarrations.push(
     isFumble
       ? `${enemyName(ctx, zone.encounter.enemyId)}の反撃。霊体化が暴れて体が思うように動かず——${finalEnemyDamage} のダメージ。`
       : `${enemyName(ctx, zone.encounter.enemyId)}の反撃。${finalEnemyDamage} のダメージ。`,
   );
-  setFlag(ctx, "mental", Math.max(0, getFlag(ctx, "mental") - 1));
+  setPlayerStat(ctx, "mental", Math.max(0, playerStat(ctx, "mental") - 1));
 }
 
-function doFlee(ctx: PresetContext): void {
+function doFlee(ctx: Ctx): void {
   const m = moduleState(ctx);
   if (!m.raid) return;
   const zone = m.raid.zones[m.raid.currentZoneId]!;
@@ -862,7 +804,7 @@ function doFlee(ctx: PresetContext): void {
     return;
   }
 
-  const spec = getFlag(ctx, "spectral");
+  const spec = playerStat(ctx, "spectral");
   const dc = 30 + spec; // higher spec = harder (you're slow)
   const roll = ctx.rng() * 100;
   if (roll > dc - 10) {
@@ -871,10 +813,10 @@ function doFlee(ctx: PresetContext): void {
     );
     zone.encounter = null;
     zone.encounterCleared = true;
-    setFlag(ctx, "mental", Math.max(0, getFlag(ctx, "mental") - 1));
+    setPlayerStat(ctx, "mental", Math.max(0, playerStat(ctx, "mental") - 1));
   } else {
     const dmg = Math.max(2, enemyAttackPower(ctx, enemyId) + 1);
-    setFlag(ctx, "hp", getFlag(ctx, "hp") - dmg);
+    setPlayerStat(ctx, "hp", playerStat(ctx, "hp") - dmg);
     ctx.state.runtime.pendingNarrations.push(
       `背を見せた瞬間、${enemyName(ctx, enemyId)}に追いつかれた——${dmg} のダメージ。`,
     );
@@ -882,258 +824,249 @@ function doFlee(ctx: PresetContext): void {
 }
 
 // ============================================================================
-// Activity dispatcher (called by preset/run.ts for raid:/hub: prefixes)
+// Action handlers — declared on the module's actionHandlers map below.
+// Engine routes Input.doActivity through actionHandlerRegistry; each
+// handler returns ActionResult { narrations? }. Module-private mutations
+// (zone state, m.raid sub-state, m.metCharacters) stay in-place because
+// they live on the module's own state slice that the engine doesn't
+// model in StateDelta. After each handler the engine calls checkTriggers
+// unconditionally (engine/src/primitives/applyActionResult.ts) so the
+// HP=0 / spectral=100 triggers still fire even when mutations bypass
+// StateDelta.
+//
+// Narrations are returned in the ActionResult so the engine queues
+// them through pendingNarrations. The `denial` helper builds an
+// ActionResult that carries just the rejection message.
 // ============================================================================
 
-export async function* dispatchRaidActivity(
-  ctx: PresetContext,
-  activityId: string,
-): AsyncGenerator<Output, "ok" | "quit", Input> {
-  const result = yield* doDispatchRaidActivity(ctx, activityId);
-  // Module mutates baseline.variables directly via setFlag (bypassing
-  // mutateState), so triggers wouldn't otherwise fire. Force a check
-  // after every handler completes.
-  checkTriggers(ctx);
-  return result;
+function denial(message: string): ActionResult {
+  return { narrations: [message] };
 }
 
-async function* doDispatchRaidActivity(
-  ctx: PresetContext,
-  activityId: string,
-): AsyncGenerator<Output, "ok" | "quit", Input> {
+const departHandler: ActionHandler = (ctx) => {
+  const mapId = ctx.action.payload?.mapId as string | undefined;
+  if (!mapId) return denial(`出立先が指定されていない。`);
+  if (playerStat(ctx, "hp") < playerStatMax(ctx, "hp")) {
+    return denial("体力が満たぬ。先に宿で休め。");
+  }
+  if (!getMap(ctx, mapId)) {
+    return denial(`その地は地図にない（${mapId}）。`);
+  }
+  startRaid(ctx, mapId);
+  return {};
+};
+
+const bondHandler: ActionHandler = (ctx) => {
+  const charId = ctx.action.payload?.characterId as string | undefined;
+  if (!charId) return denial("贈る相手が指定されていない。");
   const m = moduleState(ctx);
-
-  // ────────── HUB-side ──────────
-  if (activityId.startsWith("hub:depart:")) {
-    const mapId = activityId.slice("hub:depart:".length);
-    // Same prereq as buildHubMenu — block when HP isn't full.
-    const hp = getFlag(ctx, "hp");
-    const hpMax = getFlag(ctx, "hpMax");
-    if (hp < hpMax) {
-      return denyWithNarration(ctx, "体力が満たぬ。先に宿で休め。");
-    }
-    if (!(mapId in MAPS)) {
-      return denyWithNarration(ctx, `その地は地図にない（${mapId}）。`);
-    }
-    startRaid(ctx, mapId);
-    return "ok";
+  const ryo = ctx.state.baseline.inventory.ryo ?? 0;
+  if (ryo < 50) return denial(`両が足りない。あと ${50 - ryo} 両要る。`);
+  if (!m.metCharacters.includes(charId)) {
+    return denial("まだ会ったことのない相手だ。");
   }
-  if (activityId.startsWith("hub:bond:")) {
-    const charId = activityId.slice("hub:bond:".length);
-    const ryo = ctx.state.baseline.inventory.ryo ?? 0;
-    if (ryo < 50) {
-      return denyWithNarration(ctx, `両が足りない。あと ${50 - ryo} 両要る。`);
-    }
-    if (!m.metCharacters.includes(charId)) {
-      return denyWithNarration(ctx, "まだ会ったことのない相手だ。");
-    }
-    ctx.state.baseline.inventory.ryo = ryo - 50;
-    const c = ctx.state.baseline.characters[charId];
-    if (c) c.affection += 1;
-    const charName = ctx.game.characters.find((x) => x.id === charId)?.name ?? charId;
-    ctx.state.runtime.pendingNarrations.push(
+  const charName =
+    ctx.game.characters.find((x) => x.id === charId)?.name ?? charId;
+  return {
+    deltas: {
+      inventory: { ryo: -50 },
+      characterStats: { [charId]: { affection: 1 } },
+    },
+    narrations: [
       `${charName}に贈り物を渡した。受け取り際の目が、いつもより少しだけ柔らかい。`,
-    );
-    return "ok";
+    ],
+  };
+};
+
+const sellAllLootHandler: ActionHandler = (ctx) => {
+  const sellable = Object.entries(ctx.state.baseline.inventory).filter(
+    ([id, n]) => n > 0 && isLoot(ctx, id),
+  );
+  if (sellable.length === 0) return denial("売れる戦利品が手元にない。");
+
+  let total = 0;
+  const lines: string[] = [];
+  const inventoryDelta: Record<string, number> = {};
+  for (const [itemId, count] of sellable) {
+    const val = sellValue(ctx, itemId) * count;
+    total += val;
+    lines.push(`${itemName(ctx, itemId)} ×${count} → ${val}両`);
+    inventoryDelta[itemId] = -count;
   }
-  if (activityId === "hub:sell_all_loot") {
-    const sellable = Object.entries(ctx.state.baseline.inventory).filter(
-      ([id, n]) => n > 0 && isLoot(ctx, id),
-    );
-    if (sellable.length === 0) {
-      return denyWithNarration(ctx, "売れる戦利品が手元にない。");
-    }
-    let total = 0;
-    const lines: string[] = [];
-    for (const [itemId, count] of sellable) {
-      const val = sellValue(ctx, itemId) * count;
-      total += val;
-      lines.push(`${itemName(ctx, itemId)} ×${count} → ${val}両`);
-      delete ctx.state.baseline.inventory[itemId];
-    }
-    ctx.state.baseline.inventory.ryo =
-      (ctx.state.baseline.inventory.ryo ?? 0) + total;
-    ctx.state.runtime.pendingNarrations.push(
-      `炼器師に納めた：${lines.join("、")}。合計 ${total} 両。`,
-    );
-    return "ok";
+  inventoryDelta.ryo = (inventoryDelta.ryo ?? 0) + total;
+  return {
+    deltas: { inventory: inventoryDelta },
+    narrations: [`炼器師に納めた：${lines.join("、")}。合計 ${total} 両。`],
+  };
+};
+
+const upgradeWeaponHandler: ActionHandler = (ctx) => {
+  const shards = ctx.state.baseline.inventory.soul_shard ?? 0;
+  const ryo = ctx.state.baseline.inventory.ryo ?? 0;
+  if (shards < 3) {
+    return denial(`炼器師「魂石碎片が足りない。あと ${3 - shards} 枚要る。」`);
   }
-  if (activityId === "hub:upgrade_weapon") {
-    const shards = ctx.state.baseline.inventory.soul_shard ?? 0;
-    const ryo = ctx.state.baseline.inventory.ryo ?? 0;
-    if (shards < 3) {
-      return denyWithNarration(
-        ctx,
-        `炼器師「魂石碎片が足りない。あと ${3 - shards} 枚要る。」`,
-      );
-    }
-    if (ryo < 100) {
-      return denyWithNarration(
-        ctx,
-        `炼器師「持ち合わせが ${ryo} 両か。あと ${100 - ryo} 両要る。」`,
-      );
-    }
-    const nextShards = shards - 3;
-    if (nextShards <= 0) delete ctx.state.baseline.inventory.soul_shard;
-    else ctx.state.baseline.inventory.soul_shard = nextShards;
-    ctx.state.baseline.inventory.ryo = ryo - 100;
-    const wid = ctx.state.baseline.equippedWeaponId;
-    if (wid) {
-      const w = ctx.state.baseline.weapons[wid];
-      if (w) w.power = w.power + 2;
-    }
-    ctx.state.runtime.pendingNarrations.push(
+  if (ryo < 100) {
+    return denial(`炼器師「持ち合わせが ${ryo} 両か。あと ${100 - ryo} 両要る。」`);
+  }
+  const wid = ctx.state.baseline.equippedWeaponId;
+  const deltas: StateDelta = {
+    inventory: { soul_shard: -3, ryo: -100 },
+  };
+  if (wid) deltas.weapons = { [wid]: { power: 2 } };
+  return {
+    deltas,
+    narrations: [
       `炼器師は無言で碎片を炉に投じた。一夜明け、妖刀の刃に新しい紋様が浮いている——威力 +2。`,
-    );
-    return "ok";
+    ],
+  };
+};
+
+const restHandler: ActionHandler = (ctx) => {
+  const hp = playerStat(ctx, "hp");
+  const hpMax = playerStatMax(ctx, "hp");
+  if (hp >= hpMax) {
+    return denial("もう休む必要はない。体力は満たされている。");
   }
-  if (activityId === "hub:rest") {
-    const hp = getFlag(ctx, "hp");
-    const hpMax = getFlag(ctx, "hpMax");
-    if (hp >= hpMax) {
-      return denyWithNarration(ctx, "もう休む必要はない。体力は満たされている。");
-    }
-    setFlag(ctx, "hp", hpMax);
-    setFlag(ctx, "mental", getFlag(ctx, "mentalMax"));
-    ctx.state.runtime.pendingNarrations.push(
+  return {
+    deltas: {
+      characterStats: {
+        player: {
+          hp: hpMax - hp,
+          mental: playerStatMax(ctx, "mental") - playerStat(ctx, "mental"),
+        },
+      },
+    },
+    narrations: [
       `宿で一晩明かす。体力と精神を回復した。霊体化は鎮まらないが、刀は静かに鞘に収まっている。`,
-    );
-    return "ok";
+    ],
+  };
+};
+
+const useChinkonhoHandler: ActionHandler = (ctx) => {
+  if (!ctx.state.baseline.knownSkills.includes("chinkonho")) {
+    return denial("鎮魂法はまだ伝授されていない。");
   }
-  if (activityId === "hub:use_chinkonho") {
-    if (!ctx.state.baseline.knownSkills.includes("chinkonho")) {
-      return denyWithNarration(ctx, "鎮魂法はまだ伝授されていない。");
-    }
-    const spec = getFlag(ctx, "spectral");
-    if (spec < 10) {
-      return denyWithNarration(
-        ctx,
-        "霊体化がまだ低い。今鎮める意味はない。",
-      );
-    }
-    setFlag(ctx, "spectral", Math.max(0, spec - 20));
-    ctx.state.runtime.pendingNarrations.push(
+  const spec = playerStat(ctx, "spectral");
+  if (spec < 10) {
+    return denial("霊体化がまだ低い。今鎮める意味はない。");
+  }
+  return {
+    deltas: {
+      characterStats: { player: { spectral: -Math.min(20, spec) } },
+    },
+    narrations: [
       `刀を逆手に取り、心臓の真上に当てる。長く、一度息を吐く。胸の奥でうねっていたものが、二十、押し戻された。`,
-    );
-    return "ok";
+    ],
+  };
+};
+
+const moveHandler: ActionHandler = (ctx) => {
+  const blocker = combatBlock(ctx);
+  if (blocker) return denial(blocker);
+  const target = ctx.action.payload?.zoneId as string | undefined;
+  if (!target) return denial("行き先が指定されていない。");
+
+  const m = moduleState(ctx);
+  if (!m.raid) return {};
+  const cur = m.raid.zones[m.raid.currentZoneId]!;
+  const conn = cur.connections.find((c) => c.target === target);
+  if (!conn) return denial(`${cur.name}からそちらへ通じる道はない。`);
+
+  // Module-private state writes (zone graph traversal). The engine
+  // doesn't model these in StateDelta — they live on the module's own
+  // state slice.
+  m.raid.currentZoneId = target;
+  m.raid.turnsTaken += 1;
+  const zone = m.raid.zones[target]!;
+
+  if (zone.visited) {
+    return { narrations: [`${zone.name}に戻る。一度通った道。`] };
+  }
+  zone.visited = true;
+  zone.pendingLoot = rollLoot(ctx, zone);
+  zone.encounter = rollEncounter(ctx, zone);
+
+  // Character spawn check. If a rule fires, launch the encounter
+  // script instead of narrating zone entry. Setting currentScriptId
+  // is engine-state mutation but predates StateDelta; the preset's
+  // run loop picks it up next iteration.
+  const spawnedChar = rollCharacterSpawn(ctx, m.raid.mapId, target);
+  if (spawnedChar) {
+    m.metCharacters.push(spawnedChar.characterId);
+    ctx.state.baseline.currentScriptId = spawnedChar.encounterScriptId;
+    ctx.state.baseline.beatIndex = 0;
+    return {};
   }
 
-  // ────────── RAID-side ──────────
-  // The hub menu hides move/search/extract while an encounter is
-  // active (see buildRaidMenu's `if (zone.encounter)` branch). The
-  // dispatcher must enforce the same invariant — a scripted player
-  // or AI persona that synthesizes activity ids from state could
-  // otherwise walk past combat without consequence.
-  if (activityId.startsWith("raid:move:")) {
-    const denial = combatBlock(ctx);
-    if (denial) return denyWithNarration(ctx, denial);
-    const target = activityId.slice("raid:move:".length);
-    if (!m.raid) return "ok";
-    const cur = m.raid.zones[m.raid.currentZoneId]!;
-    const conn = cur.connections.find((c) => c.target === target);
-    if (!conn) {
-      return denyWithNarration(
-        ctx,
-        `${cur.name}からそちらへ通じる道はない。`,
-      );
+  if (zone.encounter) {
+    const intro = getEnemyNarration(ctx, zone.encounter.enemyId, "intro");
+    if (intro) {
+      return {
+        narrations: [
+          fillTemplate(intro, {
+            name: enemyName(ctx, zone.encounter.enemyId),
+            hp: zone.encounter.enemyHpMax,
+          }),
+        ],
+      };
     }
-    m.raid.currentZoneId = target;
-    m.raid.turnsTaken += 1;
-    const zone = m.raid.zones[target]!;
-    if (!zone.visited) {
-      zone.visited = true;
-      zone.pendingLoot = rollLoot(ctx, zone);
-      zone.encounter = rollEncounter(ctx, zone);
-
-      // Character spawn check: rolls against character_spawns rules.
-      // If a rule fires, we launch the encounter script INSTEAD of
-      // narrating zone entry. The script runs in the preset's main
-      // loop the next iteration. Combat/loot interactions are deferred
-      // until the script returns control.
-      const spawnedChar = rollCharacterSpawn(ctx, m.raid.mapId, target);
-      if (spawnedChar) {
-        m.metCharacters.push(spawnedChar.characterId);
-        // Set the launch target; preset picks it up on next iter.
-        ctx.state.baseline.currentScriptId = spawnedChar.encounterScriptId;
-        ctx.state.baseline.beatIndex = 0;
-        return "ok";
-      }
-
-      if (zone.encounter) {
-        const intro = getEnemyNarration(ctx, zone.encounter.enemyId, "intro");
-        if (intro) {
-          ctx.state.runtime.pendingNarrations.push(
-            fillTemplate(intro, {
-              name: enemyName(ctx, zone.encounter.enemyId),
-              hp: zone.encounter.enemyHpMax,
-            }),
-          );
-        }
-      } else {
-        ctx.state.runtime.pendingNarrations.push(
-          `${zone.name}に出る。静かだ。`,
-        );
-      }
-    } else {
-      ctx.state.runtime.pendingNarrations.push(
-        `${zone.name}に戻る。一度通った道。`,
-      );
-    }
-    return "ok";
+    return {};
   }
-  if (activityId === "raid:search") {
-    const denial = combatBlock(ctx);
-    if (denial) return denyWithNarration(ctx, denial);
-    if (!m.raid) return "ok";
-    const zone = m.raid.zones[m.raid.currentZoneId]!;
-    if (zone.searched) {
-      return denyWithNarration(ctx, `${zone.name}はもう探った。`);
-    }
-    zone.searched = true;
-    const lines: string[] = [];
-    for (const [itemId, count] of Object.entries(zone.pendingLoot)) {
-      if (count <= 0) continue;
-      m.raid.pendingLoot[itemId] = (m.raid.pendingLoot[itemId] ?? 0) + count;
-      lines.push(`${itemName(ctx, itemId)} ×${count}`);
-    }
-    ctx.state.runtime.pendingNarrations.push(
+  return { narrations: [`${zone.name}に出る。静かだ。`] };
+};
+
+const searchHandler: ActionHandler = (ctx) => {
+  const blocker = combatBlock(ctx);
+  if (blocker) return denial(blocker);
+  const m = moduleState(ctx);
+  if (!m.raid) return {};
+  const zone = m.raid.zones[m.raid.currentZoneId]!;
+  if (zone.searched) return denial(`${zone.name}はもう探った。`);
+
+  zone.searched = true;
+  const lines: string[] = [];
+  for (const [itemId, count] of Object.entries(zone.pendingLoot)) {
+    if (count <= 0) continue;
+    m.raid.pendingLoot[itemId] = (m.raid.pendingLoot[itemId] ?? 0) + count;
+    lines.push(`${itemName(ctx, itemId)} ×${count}`);
+  }
+  return {
+    narrations: [
       lines.length > 0
         ? `${zone.name}を探った。見つけたもの：${lines.join("、")}。`
         : `${zone.name}は何もなかった。`,
-    );
-    return "ok";
-  }
-  if (activityId === "raid:attack") {
-    doAttackRound(ctx, "normal");
-    return "ok";
-  }
-  if (activityId === "raid:sneak_strike") {
-    doAttackRound(ctx, "sneak");
-    return "ok";
-  }
-  if (activityId === "raid:flee") {
-    doFlee(ctx);
-    return "ok";
-  }
-  if (activityId === "raid:extract") {
-    const denial = combatBlock(ctx);
-    if (denial) return denyWithNarration(ctx, denial);
-    if (!m.raid) return "ok";
-    const zone = m.raid.zones[m.raid.currentZoneId]!;
-    if (!zone.isExtract) {
-      return denyWithNarration(
-        ctx,
-        `${zone.name}は撤退点ではない。社か杜まで戻れ。`,
-      );
-    }
-    endRaidExtract(ctx);
-    return "ok";
-  }
+    ],
+  };
+};
 
-  // Unknown
-  ctx.state.runtime.pendingNarrations.push(`(未対応のアクション：${activityId})`);
-  return "ok";
-}
+const attackHandler: ActionHandler = (ctx) => {
+  doAttackRound(ctx, "normal");
+  return {};
+};
+
+const sneakStrikeHandler: ActionHandler = (ctx) => {
+  doAttackRound(ctx, "sneak");
+  return {};
+};
+
+const fleeHandler: ActionHandler = (ctx) => {
+  doFlee(ctx);
+  return {};
+};
+
+const extractHandler: ActionHandler = (ctx) => {
+  const blocker = combatBlock(ctx);
+  if (blocker) return denial(blocker);
+  const m = moduleState(ctx);
+  if (!m.raid) return {};
+  const zone = m.raid.zones[m.raid.currentZoneId]!;
+  if (!zone.isExtract) {
+    return denial(`${zone.name}は撤退点ではない。社か杜まで戻れ。`);
+  }
+  endRaidExtract(ctx);
+  return {};
+};
 
 // ============================================================================
 // Triggers: HP <= 0 or spectral >= 100 during a raid → failure
@@ -1142,7 +1075,7 @@ async function* doDispatchRaidActivity(
 const triggers: Trigger[] = [
   {
     id: "raid_death_hp",
-    when: { variable: { name: "hp", max: 0 } },
+    when: { characterStat: { character: "player", name: "hp", max: 0 } },
     do: (ctx) => {
       const m = moduleState(ctx);
       if (m.mode === "raid") {
@@ -1153,7 +1086,7 @@ const triggers: Trigger[] = [
   },
   {
     id: "raid_death_spectral",
-    when: { variable: { name: "spectral", min: 100 } },
+    when: { characterStat: { character: "player", name: "spectral", min: 100 } },
     do: (ctx) => {
       const m = moduleState(ctx);
       if (m.mode === "raid") {
@@ -1170,7 +1103,7 @@ const triggers: Trigger[] = [
 
 const raidModule: Module = {
   id: MODULE_ID,
-  version: "0.2.0",
+  version: "0.3.0",
 
   initialize: (_game: Game): RaidModuleState => ({
     mode: "hub",
@@ -1178,12 +1111,44 @@ const raidModule: Module = {
     metCharacters: [],
   }),
 
+  // Action handler kinds the module supplies. Engine namespaces them as
+  // "sengoku-raid:<kind>"; bare form resolves uniquely since no other
+  // module claims these names. HubActivities built by onHubBuild
+  // reference the bare form via HubActivity.actionKind.
+  provides: [
+    "depart",
+    "bond",
+    "sell_all_loot",
+    "upgrade_weapon",
+    "rest",
+    "use_chinkonho",
+    "move",
+    "search",
+    "attack",
+    "sneak_strike",
+    "flee",
+    "extract",
+  ],
+  actionHandlers: {
+    depart: departHandler,
+    bond: bondHandler,
+    sell_all_loot: sellAllLootHandler,
+    upgrade_weapon: upgradeWeaponHandler,
+    rest: restHandler,
+    use_chinkonho: useChinkonhoHandler,
+    move: moveHandler,
+    search: searchHandler,
+    attack: attackHandler,
+    sneak_strike: sneakStrikeHandler,
+    flee: fleeHandler,
+    extract: extractHandler,
+  },
+
   onSessionStart: (ctx) => {
-    for (const [key, value] of Object.entries(STAT_DEFAULTS)) {
-      if (ctx.state.baseline.variables[key] === undefined) {
-        ctx.state.baseline.variables[key] = value;
-      }
-    }
+    // Player stats (hp/mental/spectral/intellect) are pre-populated from
+    // characters/player.md's declared initials — no manual bootstrap
+    // here. raidsCompleted/raidsFailed are declared variables — engine
+    // pre-populates from game.yaml.
     if (ctx.state.baseline.inventory.ryo === undefined) {
       ctx.state.baseline.inventory.ryo = 100;
     }

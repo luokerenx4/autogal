@@ -6,6 +6,7 @@ import type {
   EnemyDef,
   Game,
   ItemDef,
+  MapDef,
   Module,
   RunFunction,
   Script,
@@ -19,6 +20,7 @@ import {
   parseEnemy,
   parseItem,
   parseManifest,
+  parseMap,
   parseScript,
   parseSkill,
   parseWeapon,
@@ -74,6 +76,13 @@ export async function loadGame(dir: string): Promise<Game> {
   );
   skills.sort((a, b) => a.id.localeCompare(b.id));
 
+  const maps = await loadDir<MapDef>(
+    path.join(dir, "maps"),
+    [".yaml", ".yml"],
+    (content, source) => parseMap(content, source),
+  );
+  maps.sort((a, b) => a.id.localeCompare(b.id));
+
   const modules = await loadModules(dir, manifest.modules ?? []);
 
   const game = buildGame(
@@ -86,6 +95,7 @@ export async function loadGame(dir: string): Promise<Game> {
     enemies,
     weapons,
     skills,
+    maps,
   );
 
   // If game.yaml's preset: is a relative path (the ejected-preset case),

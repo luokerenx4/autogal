@@ -122,6 +122,13 @@ export function fireOnHubBuild(ctx: PresetContext): Output | undefined {
     const r = mod.onHubBuild?.(ctx);
     if (winner === undefined && r !== undefined) winner = r;
   }
+  // Record the hubMenu's activities so dispatchActivity can resolve
+  // Input.doActivity ids back to their actionKind + payload. This is
+  // what lets onHubBuild emit fully-dynamic activities without each
+  // module implementing a string-prefix router.
+  if (winner && winner.type === "hubMenu") {
+    ctx.state.runtime.lastHubActivities = winner.snapshot.activities;
+  }
   return winner;
 }
 

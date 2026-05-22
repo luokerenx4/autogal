@@ -18,7 +18,7 @@ export function mutateState(
   delta: StateDelta,
   source: StateMutationSource,
 ): void {
-  applyDelta(ctx.state, delta);
+  applyDelta(ctx.state, delta, ctx.game);
   fireOnStateMutated(ctx, delta, source);
   checkTriggers(ctx);
 }

@@ -233,3 +233,132 @@ describe("validateGame — module triggers", () => {
     expect(() => validateGame(game)).toThrow(/typo_real/);
   });
 });
+
+describe("validateGame — maps", () => {
+  test("zone connection target must reference a zone in this map", () => {
+    const game = baseGame({
+      maps: [
+        {
+          id: "m",
+          name: "M",
+          description: "",
+          difficulty: 1,
+          spawnZoneId: "a",
+          zones: [
+            {
+              id: "a",
+              name: "a",
+              connections: [{ dir: "東", target: "ghost" }],
+            },
+          ],
+        },
+      ],
+    });
+    expect(() => validateGame(game)).toThrow(/ghost/);
+  });
+
+  test("encounter_table enemy ids validated", () => {
+    const game = baseGame({
+      enemies: [
+        { id: "ogre", name: "O", description: "", hp: 5 },
+      ],
+      maps: [
+        {
+          id: "m",
+          name: "M",
+          description: "",
+          difficulty: 1,
+          spawnZoneId: "a",
+          zones: [
+            {
+              id: "a",
+              name: "a",
+              connections: [],
+              encounterTable: [
+                { enemyId: "wraith", weight: 1 },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    expect(() => validateGame(game)).toThrow(/wraith/);
+  });
+
+  test("loot_table item ids validated", () => {
+    const game = baseGame({
+      items: [
+        { id: "gold", name: "gold", description: "", kind: "consumable" },
+      ],
+      maps: [
+        {
+          id: "m",
+          name: "M",
+          description: "",
+          difficulty: 1,
+          spawnZoneId: "a",
+          zones: [
+            {
+              id: "a",
+              name: "a",
+              connections: [],
+              lootTable: [
+                { itemId: "phantom_drop", min: 1, max: 1, weight: 1 },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    expect(() => validateGame(game)).toThrow(/phantom_drop/);
+  });
+
+  test("character_spawns validate character + encounter_script", () => {
+    const game = baseGame({
+      maps: [
+        {
+          id: "m",
+          name: "M",
+          description: "",
+          difficulty: 1,
+          spawnZoneId: "a",
+          zones: [{ id: "a", name: "a", connections: [] }],
+          characterSpawns: [
+            {
+              characterId: "ghost_char",
+              zones: ["a"],
+              chance: 0.5,
+              encounterScriptId: "missing_script",
+            },
+          ],
+        },
+      ],
+    });
+    expect(() => validateGame(game)).toThrow(/ghost_char/);
+    expect(() => validateGame(game)).toThrow(/missing_script/);
+  });
+
+  test("action.mapId validated against game.maps", () => {
+    const game = baseGame({
+      maps: [
+        {
+          id: "real_map",
+          name: "R",
+          description: "",
+          difficulty: 1,
+          spawnZoneId: "a",
+          zones: [{ id: "a", name: "a", connections: [] }],
+        },
+      ],
+      actions: [
+        {
+          id: "depart_typo",
+          title: "go",
+          cost: 0,
+          mapId: "phantom_map",
+        },
+      ],
+    });
+    expect(() => validateGame(game)).toThrow(/phantom_map/);
+  });
+});

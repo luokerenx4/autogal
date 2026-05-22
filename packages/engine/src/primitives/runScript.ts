@@ -57,6 +57,12 @@ export async function* runScript(
       case "narration": {
         const input = yield { type: "narration", text: beat.text };
         if (input.type === "quit") return false;
+        // Only `next` advances. Other input types (choose / doActivity
+        // / select) sent against a narration are an input-order mistake
+        // by the caller — re-yield same beat so they see what happened
+        // instead of silently swallowing the input. Matches the
+        // `choice` case's protocol below.
+        if (input.type !== "next") continue;
         break;
       }
       case "dialogue": {
@@ -69,6 +75,7 @@ export async function* runScript(
           text: beat.text,
         };
         if (input.type === "quit") return false;
+        if (input.type !== "next") continue;
         break;
       }
       case "choice": {

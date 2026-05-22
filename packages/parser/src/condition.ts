@@ -30,6 +30,27 @@ export function parseCondition(raw: unknown): Condition | undefined {
     }
     return { scriptCompleted: obj.scriptCompleted };
   }
+  if ("selfSwitch" in obj) {
+    const s = obj.selfSwitch as Record<string, unknown> | undefined;
+    if (!s || typeof s !== "object") {
+      throw new ConditionParseError("`selfSwitch` must be an object");
+    }
+    if (typeof s.scriptId !== "string") {
+      throw new ConditionParseError("`selfSwitch.scriptId` must be a string");
+    }
+    if (s.name !== "A" && s.name !== "B" && s.name !== "C" && s.name !== "D") {
+      throw new ConditionParseError(
+        `\`selfSwitch.name\` must be one of "A" | "B" | "C" | "D" (got ${JSON.stringify(s.name)})`,
+      );
+    }
+    return {
+      selfSwitch: {
+        scriptId: s.scriptId,
+        name: s.name,
+        ...(typeof s.eq === "boolean" ? { eq: s.eq } : {}),
+      },
+    };
+  }
   if ("affection" in obj) {
     // Sugar variant: kept verbatim in the AST since the Condition type
     // accepts both `affection: { character, ... }` and `characterStat:

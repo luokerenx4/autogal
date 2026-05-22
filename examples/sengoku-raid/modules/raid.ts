@@ -121,6 +121,10 @@ interface ZoneInstance {
     enemyId: string;
     enemyHp: number;
     enemyHpMax: number;
+    // Set true when HP drops below 30% — unlocks negotiate options in
+    // buildRaidMenu. Cleared automatically when the encounter resolves
+    // (encounter goes null).
+    negotiable?: boolean;
   };
   encounterCleared: boolean; // was there an encounter that's been resolved
   encounterTable: { enemyId: string | null; weight: number }[];
@@ -316,6 +320,27 @@ function buildHubMenu(ctx: Ctx): Output {
     }
   }
 
+  // zone_haunt_<enemy> — one-shot lore scripts that unlock when the
+  // player has *released* (negotiated free) an enemy of that type
+  // at least once. Selfswitch A on the script is the unlock gate;
+  // script `requires:` reads it. Once played, script.completed is
+  // true and it disappears from the hub.
+  for (const script of ctx.game.scripts) {
+    if (!script.id.startsWith("zone_haunt_")) continue;
+    if (ctx.state.baseline.scripts[script.id]?.completed === true) continue;
+    const reqs = script.requires;
+    const eligible = reqs === undefined || evaluateCondition(reqs, ctx.state);
+    if (!eligible) continue;
+    activities.push({
+      id: `script:${script.id}`,
+      kind: "script",
+      title: `回想 — ${script.title}`,
+      category: "social",
+      cost: 0,
+      available: true,
+    });
+  }
+
   // Sell loot
   const lootIds = Object.entries(ctx.state.baseline.inventory).filter(
     ([id, n]) => n > 0 && isLoot(ctx, id),
@@ -448,6 +473,53 @@ function buildRaidMenu(ctx: Ctx): Output {
       cost: 0,
       available: true,
     });
+    // 鬼の交渉 — only when the enemy is at or below 30% HP
+    // (flag set by doAttackRound). Three branches:
+    //   listen — free chat, may yield negotiate_drop based on cunning
+    //   release — set selfSwitch unlocking a zone_haunt lore script;
+    //             spectral -2, encounter cleared, no loot
+    //   yaodao voice — composite gate (spectral ≥ 50); guaranteed
+    //                  finish + spectral cost + pulse_oni +1
+    if (zone.encounter.negotiable) {
+      const cunning = enemyCunning(ctx, zone.encounter.enemyId);
+      activities.push({
+        id: "negotiate_listen",
+        kind: "action",
+        actionKind: "negotiate_listen",
+        title: `聞き出す — ${enemyName(ctx, zone.encounter.enemyId)}`,
+        description: `成功率 ${negotiateDropChance(cunning)}%（cunning ${cunning}）。失敗でも斬り直せる`,
+        category: "combat",
+        cost: 0,
+        available: true,
+      });
+      activities.push({
+        id: "negotiate_release",
+        kind: "action",
+        actionKind: "negotiate_release",
+        title: `逃がす — ${enemyName(ctx, zone.encounter.enemyId)}`,
+        description: "霊体化 -2、戦利品なし、その鬼種の zone_haunt 解錠",
+        category: "combat",
+        cost: 0,
+        available: true,
+      });
+      const spec = playerStat(ctx, "spectral");
+      const voiceAvailable = spec >= 50;
+      activities.push({
+        id: "yaodao_voice",
+        kind: "action",
+        actionKind: "yaodao_voice",
+        title: voiceAvailable
+          ? "妖刀の声に従う — 必殺の一閃（霊体化 +5、脈絡: 鬼 +1）"
+          : "妖刀の声（霊体化が低くて聞こえない）",
+        description: "4 倍の威力で必ず止め。脈絡選択は強制「鬼」",
+        category: "combat",
+        cost: 0,
+        available: voiceAvailable,
+        lockedReason: voiceAvailable
+          ? undefined
+          : `霊体化 ≥ 50 が要る（現在 ${spec}）`,
+      });
+    }
   } else {
     if (!zone.searched && Object.keys(zone.pendingLoot).length > 0) {
       activities.push({
@@ -531,6 +603,27 @@ function enemyAttackPower(ctx: Ctx, enemyId: string): number {
 
 function enemyHp(ctx: Ctx, enemyId: string): number {
   return ctx.game.enemies?.find((e) => e.id === enemyId)?.hp ?? 1;
+}
+
+// 鬼の交渉 — uses enemy.stats.cunning to modulate listen success.
+function enemyCunning(ctx: Ctx, enemyId: string): number {
+  const e = ctx.game.enemies?.find((x) => x.id === enemyId);
+  return e?.stats?.cunning ?? 1;
+}
+
+function enemyNegotiateLore(ctx: Ctx, enemyId: string): string | undefined {
+  const v = ctx.game.enemies?.find((x) => x.id === enemyId)?.custom?.negotiate_lore;
+  return typeof v === "string" ? v : undefined;
+}
+
+function enemyNegotiateDrop(ctx: Ctx, enemyId: string): string | undefined {
+  const v = ctx.game.enemies?.find((x) => x.id === enemyId)?.custom?.negotiate_drop;
+  return typeof v === "string" ? v : undefined;
+}
+
+// Listen success chance: 60 - cunning*10, floored at 10%.
+function negotiateDropChance(cunning: number): number {
+  return Math.max(10, 60 - cunning * 10);
 }
 
 function getEnemyNarration(
@@ -735,6 +828,20 @@ function doAttackRound(ctx: Ctx, kind: "normal" | "sneak"): void {
 
   // Spectral creep from striking
   setPlayerStat(ctx, "spectral", Math.min(100, spec + 1));
+
+  // 鬼の交渉: when an enemy drops below 30% HP, the next raid menu
+  // gains 3 conditional activities (listen / release / yaodao-voice).
+  // This flag lives on the encounter object so it auto-clears when
+  // the encounter resolves (victory / flee / release).
+  if (
+    zone.encounter.enemyHp > 0 &&
+    zone.encounter.enemyHp < zone.encounter.enemyHpMax * 0.3
+  ) {
+    zone.encounter.negotiable = true;
+    ctx.state.runtime.pendingNarrations.push(
+      `${enemyName(ctx, zone.encounter.enemyId)}の構えが崩れた——息は荒く、まだ斬れる。だが、聞き出すことも、放すこともできる。`,
+    );
+  }
 
   if (zone.encounter.enemyHp <= 0) {
     // Victory
@@ -1055,6 +1162,108 @@ const fleeHandler: ActionHandler = (ctx) => {
   return {};
 };
 
+// 鬼の交渉 — three branches, all only valid when the encounter is
+// marked negotiable (HP < 30%). Module guards check this; if the
+// encounter isn't negotiable the handler returns a denial.
+
+const negotiateListenHandler: ActionHandler = (ctx) => {
+  const m = moduleState(ctx);
+  if (!m.raid) return denial("交渉できる相手がいない。");
+  const zone = m.raid.zones[m.raid.currentZoneId];
+  if (!zone?.encounter?.negotiable) {
+    return denial("まだ斬れるうちに聞き出すには弱らせろ。");
+  }
+  const enemyId = zone.encounter.enemyId;
+  const cunning = enemyCunning(ctx, enemyId);
+  const lore = enemyNegotiateLore(ctx, enemyId);
+  const dropId = enemyNegotiateDrop(ctx, enemyId);
+  const chance = negotiateDropChance(cunning);
+  const success = ctx.rng() * 100 < chance;
+
+  const narrations: string[] = [];
+  if (lore) narrations.push(lore);
+
+  const deltas: StateDelta = {};
+  if (success && dropId) {
+    deltas.inventory = { [dropId]: 1 };
+    narrations.push(
+      `${enemyName(ctx, enemyId)}は最後に何かを差し出して、霧に溶けた——${itemName(ctx, dropId)} ×1。`,
+    );
+  } else {
+    narrations.push(
+      `${enemyName(ctx, enemyId)}の声は途切れた。差し出されたものは何もない。`,
+    );
+  }
+
+  // Listening "consumes" the negotiation moment; encounter still alive
+  // but no longer negotiable — player must commit (attack / flee).
+  zone.encounter.negotiable = false;
+  return { deltas, narrations };
+};
+
+const negotiateReleaseHandler: ActionHandler = (ctx) => {
+  const m = moduleState(ctx);
+  if (!m.raid) return denial("放す相手がいない。");
+  const zone = m.raid.zones[m.raid.currentZoneId];
+  if (!zone?.encounter?.negotiable) {
+    return denial("斬れる距離まで弱らせろ。");
+  }
+  const enemyId = zone.encounter.enemyId;
+  const enemyTitle = enemyName(ctx, enemyId);
+
+  zone.encounter = null;
+  zone.encounterCleared = true;
+
+  // selfSwitch A on the zone_haunt_<enemy> script: persists across
+  // raids, unlocks the haunt lore script in hub. This is what makes
+  // selfSwitch meaningful — a one-time, script-scoped permanent flag
+  // that's neither a global switch nor a variable.
+  return {
+    deltas: {
+      characterStats: { player: { spectral: -2 } },
+      selfSwitches: {
+        [`zone_haunt_${enemyId}`]: { A: true },
+      },
+    },
+    narrations: [
+      `お主は刀を引いた。${enemyTitle}は霧に滲んでいく——その目に、礼に似たものが浮かんだ気がした。霊体化 -2。`,
+    ],
+  };
+};
+
+const yaodaoVoiceHandler: ActionHandler = (ctx) => {
+  const m = moduleState(ctx);
+  if (!m.raid) return denial("ここでは聞こえぬ声だ。");
+  const zone = m.raid.zones[m.raid.currentZoneId];
+  if (!zone?.encounter?.negotiable) {
+    return denial("妖刀が応える気配は無い——まだ早い。");
+  }
+  if (playerStat(ctx, "spectral") < 50) {
+    return denial("霊体化が低くて、刀の声が聞こえない。");
+  }
+  const enemyId = zone.encounter.enemyId;
+  const hpMax = zone.encounter.enemyHpMax;
+  const swordGain = Math.max(2, Math.floor(hpMax / 2));
+
+  // Finisher: no need to compute damage, the encounter is forced over.
+  zone.encounter = null;
+  zone.encounterCleared = true;
+
+  const wid = ctx.state.baseline.equippedWeaponId;
+  const deltas: StateDelta = {
+    characterStats: { player: { spectral: 5 } },
+    variables: { pulse_oni: 1 },
+  };
+  if (wid) deltas.weapons = { [wid]: { power: swordGain } };
+
+  return {
+    deltas,
+    narrations: [
+      `刀が鳴いた。胸の奥のものが舌を出した——${enemyName(ctx, enemyId)}は、一閃で四つに別れた。霊体化 +5、妖刀威力 +${swordGain}、脈絡: 鬼 +1。`,
+    ],
+  };
+};
+
 const extractHandler: ActionHandler = (ctx) => {
   const blocker = combatBlock(ctx);
   if (blocker) return denial(blocker);
@@ -1195,6 +1404,9 @@ const raidModule: Module = {
     "sneak_strike",
     "flee",
     "extract",
+    "negotiate_listen",
+    "negotiate_release",
+    "yaodao_voice",
   ],
   actionHandlers: {
     depart: departHandler,
@@ -1209,6 +1421,9 @@ const raidModule: Module = {
     sneak_strike: sneakStrikeHandler,
     flee: fleeHandler,
     extract: extractHandler,
+    negotiate_listen: negotiateListenHandler,
+    negotiate_release: negotiateReleaseHandler,
+    yaodao_voice: yaodaoVoiceHandler,
   },
 
   onSessionStart: (ctx) => {

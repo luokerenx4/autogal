@@ -113,11 +113,18 @@ function Entry({ entry }: { entry: BacklogEntry }) {
       </Box>
     );
   }
+  // Single Text node so ink can wrap CJK content cleanly. Nested
+  // <Box flexDirection="row"> with mixed cyan/dim/normal spans was
+  // garbling speaker names ("narrato" missing the trailing 'r') on
+  // wrap because each span has its own layout box.
   return (
-    <Box flexDirection="row">
-      <Text color="cyan">{entry.speakerName}</Text>
-      <Text dimColor>: </Text>
-      <Text>「{entry.text}」</Text>
+    <Box>
+      <Text>
+        <Text color="cyan">{entry.speakerName}</Text>
+        <Text dimColor>: 「</Text>
+        {entry.text}
+        <Text dimColor>」</Text>
+      </Text>
     </Box>
   );
 }

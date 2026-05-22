@@ -2,12 +2,42 @@ title: 妖刀奇譚 / Sengoku Raid
 preset: ./preset/run.ts
 modules:
   - ./modules/raid.ts
+
 switches:
   learnedChinkonho: false
   learnedHayagake: false
+  # Companion currently in party (one of three exclusive). Flipped by
+  # the invite_<id> hub action; cleared on raid end. Read by raid menu
+  # passives + onActionDispatch veto guard.
+  companion_kagari: false
+  companion_kasumi: false
+  companion_mio: false
+  # Met-mio flag for milestone triggers. Module also tracks via
+  # metCharacters; this switch exists so trigger `when:` conditions
+  # can compose against `switch:` predicates uniformly.
+  mio_met: false
+  # Set when the pulse system has been introduced (after first victory).
+  pulse_intro_seen: false
+
 variables:
-  # Game-level counters. Player stats (hp / mental / spectral / intellect)
-  # live on the `player` character's declared stats — see
-  # characters/player.md.
+  # Raid counters — incremented by endRaidExtract / endRaidFailure.
   raidsCompleted: { type: number, initial: 0 }
   raidsFailed:    { type: number, initial: 0 }
+  # 将軍家からの密書 — chapter is the current main-line progress index
+  # (0 = intro, 1/2/3 = letter milestones). last_directive is the text
+  # the hub UI shows under "御沙汰" when between letters.
+  shogun_chapter:  { type: number, initial: 0 }
+  last_directive:  { type: string, initial: "鬼を斬り、骸を持ち帰れ。" }
+  # 情報屋 — intel_active is the briefing text injected at raid start;
+  # consumed (cleared) once the raid begins.
+  intel_active:    { type: string, initial: "" }
+  intel_count:     { type: number, initial: 0 }
+  # 妖刀の業 — pulse counts per path. Each victory the player picks
+  # which pulse absorbs the demon's remnant. Counters gate endings
+  # and the hidden hell-gate map.
+  pulse_pure:      { type: number, initial: 0 }
+  pulse_oni:       { type: number, initial: 0 }
+  pulse_mundane:   { type: number, initial: 0 }
+  # Companion downed in current raid — resets on raid end. Read by
+  # composite triggers and end-screen narrations.
+  companion_downed: { type: number, initial: 0 }

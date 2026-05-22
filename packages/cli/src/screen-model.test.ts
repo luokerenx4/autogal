@@ -3,6 +3,7 @@ import type { HubSnapshot, Output } from "@autogal/engine";
 import {
   BACKLOG_CAP,
   applyOutput,
+  applyUiAction,
   initialModel,
   makeErrorModel,
   type ScreenModel,
@@ -80,6 +81,7 @@ describe("applyOutput — stage transitions", () => {
     expect(m.stage).toMatchObject({
       kind: "scriptComplete",
       completedId: "001_intro",
+      cursor: 0,
     });
   });
 
@@ -123,6 +125,110 @@ describe("backlog cap", () => {
     expect(m.backlog.length).toBe(BACKLOG_CAP);
     // The very oldest narrations should have been trimmed.
     expect(m.backlog[0]).toEqual({ kind: "narration", text: "line 4" });
+  });
+});
+
+describe("applyOutput — cursor init", () => {
+  test("choice cursor lands on first available option", () => {
+    const m = applyOutput(initialModel, {
+      type: "choice",
+      options: [
+        { text: "locked", available: false, lockedReason: "lvl<5" },
+        { text: "fine", available: true },
+        { text: "also fine", available: true },
+      ],
+    });
+    expect(m.stage).toMatchObject({ kind: "choice", cursor: 1 });
+  });
+
+  test("choice cursor falls back to 0 when nothing is available", () => {
+    const m = applyOutput(initialModel, {
+      type: "choice",
+      options: [
+        { text: "x", available: false },
+        { text: "y", available: false },
+      ],
+    });
+    expect(m.stage).toMatchObject({ kind: "choice", cursor: 0 });
+  });
+
+  test("hubMenu cursor lands on first available activity", () => {
+    const snap: HubSnapshot = {
+      ...emptyHub,
+      activities: [
+        {
+          id: "a",
+          kind: "script",
+          title: "A",
+          cost: 0,
+          available: false,
+          lockedReason: "shut",
+        },
+        { id: "b", kind: "script", title: "B", cost: 0, available: true },
+      ],
+    };
+    const m = applyOutput(initialModel, { type: "hubMenu", snapshot: snap });
+    expect(m.stage).toMatchObject({ kind: "hubMenu", cursor: 1 });
+  });
+
+  test("scriptComplete cursor starts at 0", () => {
+    const m = applyOutput(initialModel, {
+      type: "scriptComplete",
+      completedId: null,
+      nextAvailable: [
+        { id: "a", title: "A" },
+        { id: "b", title: "B" },
+      ],
+    });
+    expect(m.stage).toMatchObject({ kind: "scriptComplete", cursor: 0 });
+  });
+});
+
+describe("applyUiAction — cursor movement", () => {
+  const choiceOf = (available: boolean[]): Output => ({
+    type: "choice",
+    options: available.map((a, i) => ({ text: `opt ${i}`, available: a })),
+  });
+
+  test("cursorNext steps forward, skipping locked rows", () => {
+    let m = applyOutput(initialModel, choiceOf([true, false, true]));
+    expect((m.stage as { cursor: number }).cursor).toBe(0);
+    m = applyUiAction(m, { kind: "cursorNext" });
+    expect((m.stage as { cursor: number }).cursor).toBe(2);
+  });
+
+  test("cursorPrev steps back, skipping locked rows", () => {
+    let m = applyOutput(initialModel, choiceOf([true, false, true]));
+    m = applyUiAction(m, { kind: "cursorNext" }); // → 2
+    m = applyUiAction(m, { kind: "cursorPrev" });
+    expect((m.stage as { cursor: number }).cursor).toBe(0);
+  });
+
+  test("cursorNext at the bottom is a no-op (no wrap)", () => {
+    let m = applyOutput(initialModel, choiceOf([true, true]));
+    m = applyUiAction(m, { kind: "cursorNext" }); // → 1
+    const prev = m;
+    m = applyUiAction(m, { kind: "cursorNext" });
+    expect(m).toBe(prev);
+  });
+
+  test("cursorTo jumps directly when target is available", () => {
+    let m = applyOutput(initialModel, choiceOf([true, true, true]));
+    m = applyUiAction(m, { kind: "cursorTo", index: 2 });
+    expect((m.stage as { cursor: number }).cursor).toBe(2);
+  });
+
+  test("cursorTo on a locked row is rejected", () => {
+    let m = applyOutput(initialModel, choiceOf([true, false, true]));
+    const prev = m;
+    m = applyUiAction(m, { kind: "cursorTo", index: 1 });
+    expect(m).toBe(prev);
+  });
+
+  test("applyUiAction is a no-op on non-selectable stages", () => {
+    const m = applyOutput(initialModel, narr("hi"));
+    const next = applyUiAction(m, { kind: "cursorNext" });
+    expect(next).toBe(m);
   });
 });
 

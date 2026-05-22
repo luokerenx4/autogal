@@ -44,8 +44,11 @@ function parseEffectsObject(
   if (obj.affection !== undefined) {
     delta.affection = obj.affection as Record<string, number>;
   }
-  if (obj.flags !== undefined) {
-    delta.flags = obj.flags as Record<string, number | string | boolean>;
+  if (obj.switches !== undefined) {
+    delta.switches = obj.switches as Record<string, boolean>;
+  }
+  if (obj.variables !== undefined) {
+    delta.variables = obj.variables as Record<string, number | string>;
   }
   if (obj.stats !== undefined) {
     delta.stats = obj.stats as Record<string, number>;

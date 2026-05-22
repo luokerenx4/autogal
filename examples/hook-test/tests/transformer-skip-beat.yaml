@@ -6,7 +6,7 @@ description: |
   choice (no dialogue).
 state:
   baseline:
-    flags:
+    variables:
       skipBeatIdx: 1
 inputs:
   - { type: doActivity, id: "script:intro" }

@@ -207,8 +207,11 @@ function mergeDeltas(a: StateDelta, b: StateDelta): StateDelta {
     ...(a.affection || b.affection
       ? { affection: { ...(a.affection ?? {}), ...(b.affection ?? {}) } }
       : {}),
-    ...(a.flags || b.flags
-      ? { flags: { ...(a.flags ?? {}), ...(b.flags ?? {}) } }
+    ...(a.switches || b.switches
+      ? { switches: { ...(a.switches ?? {}), ...(b.switches ?? {}) } }
+      : {}),
+    ...(a.variables || b.variables
+      ? { variables: { ...(a.variables ?? {}), ...(b.variables ?? {}) } }
       : {}),
   };
 }
@@ -325,11 +328,17 @@ function parseEffectsObject(
     }
     delta.affection = obj.affection as Record<string, number>;
   }
-  if (obj.flags !== undefined) {
-    if (typeof obj.flags !== "object" || obj.flags === null) {
-      throw new ScriptParseError("`flags` must be an object", source);
+  if (obj.switches !== undefined) {
+    if (typeof obj.switches !== "object" || obj.switches === null) {
+      throw new ScriptParseError("`switches` must be an object", source);
     }
-    delta.flags = obj.flags as Record<string, number | string | boolean>;
+    delta.switches = obj.switches as Record<string, boolean>;
+  }
+  if (obj.variables !== undefined) {
+    if (typeof obj.variables !== "object" || obj.variables === null) {
+      throw new ScriptParseError("`variables` must be an object", source);
+    }
+    delta.variables = obj.variables as Record<string, number | string>;
   }
   if (obj.stats !== undefined) {
     if (typeof obj.stats !== "object" || obj.stats === null) {

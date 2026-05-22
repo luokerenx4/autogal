@@ -31,7 +31,7 @@ effects:
     learn: [hayagake]
   affection:
     kasumi: 1
-  flags:
+  switches:
     learnedHayagake: true
 ```
 

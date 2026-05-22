@@ -42,33 +42,35 @@ describe("applyDelta — affection", () => {
   });
 });
 
-describe("applyDelta — flags", () => {
-  test("numeric flags are summed additively", () => {
+describe("applyDelta — variables", () => {
+  test("numeric variables are summed additively", () => {
     const state = makeState();
-    applyDelta(state, { flags: { gold: 10 } });
-    applyDelta(state, { flags: { gold: 5 } });
-    expect(state.baseline.flags.gold).toBe(15);
+    applyDelta(state, { variables: { gold: 10 } });
+    applyDelta(state, { variables: { gold: 5 } });
+    expect(state.baseline.variables.gold).toBe(15);
   });
 
-  test("string flags are last-write-wins", () => {
+  test("string variables are last-write-wins", () => {
     const state = makeState();
-    applyDelta(state, { flags: { route: "alice" } });
-    applyDelta(state, { flags: { route: "bea" } });
-    expect(state.baseline.flags.route).toBe("bea");
+    applyDelta(state, { variables: { route: "alice" } });
+    applyDelta(state, { variables: { route: "bea" } });
+    expect(state.baseline.variables.route).toBe("bea");
   });
 
-  test("boolean flags are last-write-wins", () => {
+  test("setting a numeric variable with a string replaces", () => {
     const state = makeState();
-    applyDelta(state, { flags: { unlocked: false } });
-    applyDelta(state, { flags: { unlocked: true } });
-    expect(state.baseline.flags.unlocked).toBe(true);
+    applyDelta(state, { variables: { x: 5 } });
+    applyDelta(state, { variables: { x: "five" } });
+    expect(state.baseline.variables.x).toBe("five");
   });
+});
 
-  test("setting a numeric flag with non-number replaces", () => {
+describe("applyDelta — switches", () => {
+  test("switches are last-write-wins booleans", () => {
     const state = makeState();
-    applyDelta(state, { flags: { x: 5 } });
-    applyDelta(state, { flags: { x: "five" } });
-    expect(state.baseline.flags.x).toBe("five");
+    applyDelta(state, { switches: { unlocked: false } });
+    applyDelta(state, { switches: { unlocked: true } });
+    expect(state.baseline.switches.unlocked).toBe(true);
   });
 });
 
@@ -264,7 +266,8 @@ describe("createInitialState", () => {
   test("creates fresh runtime + baseline slices", () => {
     const state = makeState();
     expect(state.baseline).toBeDefined();
-    expect(state.baseline.flags).toEqual({});
+    expect(state.baseline.switches).toEqual({});
+    expect(state.baseline.variables).toEqual({});
     expect(state.baseline.completedScripts).toEqual([]);
     expect(state.baseline.inventory).toEqual({});
     expect(state.runtime.pendingNarrations).toEqual([]);

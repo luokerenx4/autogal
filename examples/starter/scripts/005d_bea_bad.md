@@ -4,7 +4,7 @@ title: 操场外
 characters: [bea]
 requires:
   all:
-    - flag: { name: route, eq: bea }
+    - variable: { name: route, eq: bea }
     - scriptCompleted: 004b_bea_route
     - not:
         affection: { character: bea, min: 4 }

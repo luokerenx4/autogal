@@ -3,13 +3,19 @@ import type {
   EndConditionSpec,
   StatDef,
   StatThreshold,
+  SwitchDef,
   TrainingConfig,
+  VariableDef,
 } from "@autogal/engine";
 import { parseCondition } from "./condition";
 
 export interface Manifest {
   title: string;
   training?: TrainingConfig;
+  // Declared boolean switches. Each entry: { initial, description? }.
+  switches?: SwitchDef[];
+  // Declared typed variables. Each entry: { type, initial, description? }.
+  variables?: VariableDef[];
   // Relative paths (from game dir) of ts modules to load at runtime.
   // The loader dynamically imports each path and registers its default
   // export as a Module on the Game object.
@@ -48,6 +54,12 @@ export function parseManifest(content: string): Manifest {
     }
     manifest.modules = obj.modules as string[];
   }
+  if (obj.switches !== undefined) {
+    manifest.switches = parseSwitches(obj.switches);
+  }
+  if (obj.variables !== undefined) {
+    manifest.variables = parseVariables(obj.variables);
+  }
   if (obj.preset !== undefined) {
     if (typeof obj.preset !== "string") {
       throw new ManifestParseError("`preset` must be a string");
@@ -55,6 +67,80 @@ export function parseManifest(content: string): Manifest {
     manifest.preset = obj.preset;
   }
   return manifest;
+}
+
+// Switches block: a map of id → { initial: boolean, description? }.
+// Shorthand `{ id: false }` (bare boolean) also accepted; expands to
+// { initial: <bool> }.
+function parseSwitches(raw: unknown): SwitchDef[] {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new ManifestParseError("`switches` must be an object map");
+  }
+  const out: SwitchDef[] = [];
+  for (const [id, val] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof val === "boolean") {
+      out.push({ id, initial: val });
+      continue;
+    }
+    if (!val || typeof val !== "object") {
+      throw new ManifestParseError(
+        `switches.${id}: expected boolean or { initial, description? }`,
+      );
+    }
+    const obj = val as Record<string, unknown>;
+    if (typeof obj.initial !== "boolean") {
+      throw new ManifestParseError(
+        `switches.${id}.initial must be a boolean`,
+      );
+    }
+    const def: SwitchDef = { id, initial: obj.initial };
+    if (typeof obj.description === "string") def.description = obj.description;
+    out.push(def);
+  }
+  return out;
+}
+
+// Variables block: a map of id → { type, initial, description? }.
+// `type` defaults from `initial` when omitted (number / string).
+function parseVariables(raw: unknown): VariableDef[] {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new ManifestParseError("`variables` must be an object map");
+  }
+  const out: VariableDef[] = [];
+  for (const [id, val] of Object.entries(raw as Record<string, unknown>)) {
+    if (!val || typeof val !== "object") {
+      throw new ManifestParseError(
+        `variables.${id}: expected { type, initial, description? }`,
+      );
+    }
+    const obj = val as Record<string, unknown>;
+    const initial = obj.initial;
+    if (typeof initial !== "number" && typeof initial !== "string") {
+      throw new ManifestParseError(
+        `variables.${id}.initial must be a number or string`,
+      );
+    }
+    const declaredType =
+      typeof obj.type === "string" ? obj.type : typeof initial;
+    if (declaredType !== "number" && declaredType !== "string") {
+      throw new ManifestParseError(
+        `variables.${id}.type must be "number" or "string"`,
+      );
+    }
+    if (typeof initial !== declaredType) {
+      throw new ManifestParseError(
+        `variables.${id}.initial type mismatch: declared ${declaredType}, got ${typeof initial}`,
+      );
+    }
+    const def: VariableDef = {
+      id,
+      type: declaredType,
+      initial,
+    };
+    if (typeof obj.description === "string") def.description = obj.description;
+    out.push(def);
+  }
+  return out;
 }
 
 function parseTraining(raw: unknown): TrainingConfig {

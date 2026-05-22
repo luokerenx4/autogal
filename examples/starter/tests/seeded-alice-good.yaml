@@ -7,7 +7,7 @@ state:
     characters:
       alice: { affection: 5, custom: {} }
       bea: { affection: 1, custom: {} }
-    flags:
+    variables:
       route: alice
     completedScripts:
       - 001_meeting_alice

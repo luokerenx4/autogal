@@ -28,17 +28,17 @@ prompt: 你怎么选？
 options:
   - text: "我答应碧河了。"
     effects:
-      flags:
+      variables:
         route: bea
     goto: pick_bea
   - text: "薄樱先来的（其实是后到的，但你说先来）。"
     effects:
-      flags:
+      variables:
         route: alice
     goto: pick_alice
   - text: "对不起，我周末有别的事。"
     effects:
-      flags:
+      variables:
         route: neither
     goto: pick_neither
 ```

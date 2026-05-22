@@ -97,8 +97,13 @@ function formatEffectsHint(
       parts.push(`${k}${v >= 0 ? "+" : ""}${v}`);
     }
   }
-  if (effects.flags) {
-    for (const [k, v] of Object.entries(effects.flags)) {
+  if (effects.switches) {
+    for (const [k, v] of Object.entries(effects.switches)) {
+      parts.push(`${k}=${v}`);
+    }
+  }
+  if (effects.variables) {
+    for (const [k, v] of Object.entries(effects.variables)) {
       parts.push(`${k}=${v}`);
     }
   }

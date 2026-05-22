@@ -38,5 +38,5 @@ assertions:
     path: baseline.characters.kasumi.affection
     eq: 5
   - kind: state
-    path: baseline.flags.learnedHayagake
+    path: baseline.switches.learnedHayagake
     eq: true

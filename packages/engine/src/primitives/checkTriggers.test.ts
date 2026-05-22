@@ -52,7 +52,7 @@ describe("checkTriggers — edge detection", () => {
       {
         id: "alice_likes_you",
         when: { affection: { character: "alice", min: 5 } },
-        do: () => ({ deltas: { flags: { friended: true } } }),
+        do: () => ({ deltas: { switches: { friended: true } } }),
       },
     ]);
     const ctx = makeCtx(game);
@@ -60,7 +60,7 @@ describe("checkTriggers — edge detection", () => {
     expect(fires.alice_likes_you).toBe(0);
     mutateState(ctx, { affection: { alice: 5 } }, "action");
     expect(fires.alice_likes_you).toBe(1);
-    expect(ctx.state.baseline.flags.friended).toBe(true);
+    expect(ctx.state.baseline.switches.friended).toBe(true);
   });
 
   test("true → true (no edge) does not re-fire", () => {
@@ -153,11 +153,11 @@ describe("checkTriggers — cascade bounding", () => {
       {
         id: "A",
         when: { affection: { character: "alice", min: 3 } },
-        do: () => ({ deltas: { flags: { cascaded: true } } }),
+        do: () => ({ deltas: { switches: { cascaded: true } } }),
       },
       {
         id: "B",
-        when: { flag: { name: "cascaded", eq: true } },
+        when: { switch: { name: "cascaded", eq: true } },
         do: () => ({}),
       },
     ]);

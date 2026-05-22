@@ -82,66 +82,74 @@ describe("evaluateCondition — affection", () => {
   });
 });
 
-describe("evaluateCondition — flag", () => {
-  test("eq match for string flag", () => {
+describe("evaluateCondition — variable", () => {
+  test("eq match for string variable", () => {
     const state = makeState();
-    applyDelta(state, { flags: { route: "alice" } });
+    applyDelta(state, { variables: { route: "alice" } });
     expect(
-      evaluateCondition({ flag: { name: "route", eq: "alice" } }, state),
+      evaluateCondition({ variable: { name: "route", eq: "alice" } }, state),
     ).toBe(true);
   });
 
-  test("eq mismatch for string flag", () => {
+  test("eq mismatch for string variable", () => {
     const state = makeState();
-    applyDelta(state, { flags: { route: "alice" } });
+    applyDelta(state, { variables: { route: "alice" } });
     expect(
-      evaluateCondition({ flag: { name: "route", eq: "bea" } }, state),
+      evaluateCondition({ variable: { name: "route", eq: "bea" } }, state),
     ).toBe(false);
   });
 
-  test("min/max on numeric flag", () => {
+  test("min/max on numeric variable", () => {
     const state = makeState();
-    applyDelta(state, { flags: { gold: 50 } });
+    applyDelta(state, { variables: { gold: 50 } });
     expect(
-      evaluateCondition({ flag: { name: "gold", min: 25 } }, state),
+      evaluateCondition({ variable: { name: "gold", min: 25 } }, state),
     ).toBe(true);
     expect(
-      evaluateCondition({ flag: { name: "gold", max: 25 } }, state),
+      evaluateCondition({ variable: { name: "gold", max: 25 } }, state),
     ).toBe(false);
   });
 
-  test("min/max on non-numeric flag returns false", () => {
+  test("min/max on string variable returns false", () => {
     const state = makeState();
-    applyDelta(state, { flags: { route: "alice" } });
+    applyDelta(state, { variables: { route: "alice" } });
     expect(
-      evaluateCondition({ flag: { name: "route", min: 1 } }, state),
+      evaluateCondition({ variable: { name: "route", min: 1 } }, state),
     ).toBe(false);
   });
 
-  test("missing flag with min/max returns false (silent era-residue)", () => {
+  test("missing variable with min/max returns false (silent era-residue)", () => {
     const state = makeState();
     expect(
-      evaluateCondition({ flag: { name: "absent", min: 1 } }, state),
+      evaluateCondition({ variable: { name: "absent", min: 1 } }, state),
     ).toBe(false);
   });
+});
 
-  test("missing flag with eq compares undefined to value", () => {
+describe("evaluateCondition — switch", () => {
+  test("switch eq true", () => {
     const state = makeState();
+    applyDelta(state, { switches: { unlocked: true } });
     expect(
-      evaluateCondition({ flag: { name: "absent", eq: "x" } }, state),
-    ).toBe(false);
-    // eq: undefined to undefined === undefined — undefined === undefined is
-    // true; this is a documented foot-gun the Phase 5 validator will catch
-  });
-
-  test("boolean flag eq", () => {
-    const state = makeState();
-    applyDelta(state, { flags: { unlocked: true } });
-    expect(
-      evaluateCondition({ flag: { name: "unlocked", eq: true } }, state),
+      evaluateCondition({ switch: { name: "unlocked", eq: true } }, state),
     ).toBe(true);
     expect(
-      evaluateCondition({ flag: { name: "unlocked", eq: false } }, state),
+      evaluateCondition({ switch: { name: "unlocked", eq: false } }, state),
+    ).toBe(false);
+  });
+
+  test("bare switch reference defaults to eq true", () => {
+    const state = makeState();
+    applyDelta(state, { switches: { unlocked: true } });
+    expect(
+      evaluateCondition({ switch: { name: "unlocked" } }, state),
+    ).toBe(true);
+  });
+
+  test("missing switch reads as false", () => {
+    const state = makeState();
+    expect(
+      evaluateCondition({ switch: { name: "absent" } }, state),
     ).toBe(false);
   });
 });
@@ -168,7 +176,7 @@ describe("evaluateCondition — composite (all/any/not)", () => {
     const state = createInitialState(twoCharGame());
     applyDelta(state, {
       affection: { alice: 3 },
-      flags: { route: "alice" },
+      variables: { route: "alice" },
     });
     state.baseline.completedScripts.push("001_intro");
     return state;
@@ -211,7 +219,7 @@ describe("evaluateCondition — composite (all/any/not)", () => {
         {
           any: [
             { affection: { character: "alice", min: 999 } },
-            { flag: { name: "route", eq: "alice" } },
+            { variable: { name: "route", eq: "alice" } },
           ],
         },
         state,
@@ -226,7 +234,7 @@ describe("evaluateCondition — composite (all/any/not)", () => {
         {
           any: [
             { affection: { character: "alice", min: 999 } },
-            { flag: { name: "route", eq: "bea" } },
+            { variable: { name: "route", eq: "bea" } },
           ],
         },
         state,
@@ -248,7 +256,7 @@ describe("evaluateCondition — composite (all/any/not)", () => {
     const state = setup();
     const cond: Condition = {
       all: [
-        { any: [{ flag: { name: "route", eq: "alice" } }, { flag: { name: "route", eq: "bea" } }] },
+        { any: [{ variable: { name: "route", eq: "alice" } }, { variable: { name: "route", eq: "bea" } }] },
         { not: { scriptCompleted: "missing" } },
       ],
     };

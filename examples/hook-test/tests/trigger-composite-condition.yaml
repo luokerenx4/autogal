@@ -45,7 +45,7 @@ assertions:
     path: runtime.firedTriggers
     includes: secret-revealed
   - kind: state
-    path: baseline.flags.secretRevealed
+    path: baseline.switches.secretRevealed
     eq: true
   # dev-first-bond ALSO fires (alice-first-bond's dev variant — at
   # dev=2 we crossed dev>=1 too). firedTriggers should include both.

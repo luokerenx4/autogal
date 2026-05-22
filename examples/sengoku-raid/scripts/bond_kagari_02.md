@@ -31,7 +31,7 @@ effects:
     learn: [chinkonho]
   affection:
     kagari: 1
-  flags:
+  switches:
     learnedChinkonho: true
 ```
 

@@ -3,7 +3,7 @@ id: 004b_bea_route
 title: 河边的傍晚
 characters: [bea]
 requires:
-  flag:
+  variable:
     name: route
     eq: bea
 ---

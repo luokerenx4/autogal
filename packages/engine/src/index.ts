@@ -108,10 +108,13 @@ export type {
   StatThreshold,
   StateDelta,
   StateMutationSource,
+  SwitchDef,
   Trigger,
   TriggerHandler,
   TrainingConfig,
   TrainingState,
+  VariableDef,
+  VariableValue,
   WeaponDef,
   WeaponState,
 } from "./types";

@@ -2,8 +2,8 @@
 // interface, logs each fire to state["hook-tracker"].log so fixtures
 // can assert on ordering / presence. Also acts as a transformer
 // (skip-beat / redirect-script / cancel-action / etc.) driven by
-// state.baseline.flags so different fixtures can opt into different
-// transformer behaviors without needing separate modules.
+// declared variables / switches so different fixtures can opt into
+// different transformer behaviors without needing separate modules.
 
 import type { Module, PresetContext } from "@autogal/engine";
 
@@ -19,8 +19,16 @@ function log(ctx: PresetContext, entry: string): void {
   slot.log.push(entry);
 }
 
-function flag<T>(ctx: PresetContext, key: string): T | undefined {
-  return ctx.state.baseline.flags[key] as T | undefined;
+function getVar<T extends string | number>(
+  ctx: PresetContext,
+  key: string,
+): T | undefined {
+  const v = ctx.state.baseline.variables[key];
+  return v as T | undefined;
+}
+
+function getSwitch(ctx: PresetContext, key: string): boolean {
+  return ctx.state.baseline.switches[key] === true;
 }
 
 const tracker: Module = {
@@ -52,8 +60,10 @@ const tracker: Module = {
   // ============ FIRST-WINS ============
   onScriptSelect: (ctx, scriptId) => {
     log(ctx, `onScriptSelect:${scriptId}`);
-    const redirect = flag<string>(ctx, "redirectScriptTo");
-    return typeof redirect === "string" ? redirect : undefined;
+    const redirect = getVar<string>(ctx, "redirectScriptTo");
+    return typeof redirect === "string" && redirect.length > 0
+      ? redirect
+      : undefined;
   },
   onHubBuild: (ctx) => {
     log(ctx, "onHubBuild");
@@ -61,15 +71,15 @@ const tracker: Module = {
   },
   onActionDispatch: (ctx, action) => {
     log(ctx, `onActionDispatch:${action.id}`);
-    if (flag<boolean>(ctx, "cancelActions") === true) return "cancel";
+    if (getSwitch(ctx, "cancelActions")) return "cancel";
     return undefined;
   },
 
   // ============ REDUCERS ============
   onChoicePresented: (ctx, scriptId, beatIdx, options) => {
     log(ctx, `onChoicePresented:${scriptId}:${beatIdx}:${options.length}`);
-    const filterOut = flag<number>(ctx, "filterChoiceIdx");
-    if (typeof filterOut === "number") {
+    const filterOut = getVar<number>(ctx, "filterChoiceIdx");
+    if (typeof filterOut === "number" && filterOut >= 0) {
       return options.map((o, i) =>
         i === filterOut ? { ...o, available: false, lockedReason: "filtered" } : o,
       );
@@ -78,7 +88,7 @@ const tracker: Module = {
   },
   onBeatBefore: (ctx, scriptId, beatIdx, beat) => {
     log(ctx, `onBeatBefore:${scriptId}:${beatIdx}:${beat.type}`);
-    const skipAt = flag<number>(ctx, "skipBeatIdx");
+    const skipAt = getVar<number>(ctx, "skipBeatIdx");
     if (typeof skipAt === "number" && skipAt === beatIdx) {
       return { skip: true };
     }
@@ -132,7 +142,7 @@ const tracker: Module = {
       do: (ctx) => {
         log(ctx, "TRIGGER:secret-revealed");
         return {
-          deltas: { flags: { secretRevealed: true } },
+          deltas: { switches: { secretRevealed: true } },
           narrations: [
             "[secret] dev 看了你一眼，把笔记本翻到了空白页。",
             "[secret] 那一页上画着的，是 marker 的真正含义。",

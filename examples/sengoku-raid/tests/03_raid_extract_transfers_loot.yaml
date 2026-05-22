@@ -9,7 +9,7 @@ state:
     completedScripts: [000_intro]
     weapons:
       ancestor_yaodao: { power: 6 }
-    flags:
+    variables:
       hp: 25
       hpMax: 30
       mental: 8
@@ -55,7 +55,7 @@ assertions:
     path: sengoku-raid.raid
     eq: null
   - kind: state
-    path: baseline.flags.raidsCompleted
+    path: baseline.variables.raidsCompleted
     eq: 1
   # Loot landed in stash.
   - kind: state
@@ -67,5 +67,5 @@ assertions:
     eq: 125
   # HP not restored (only failure resets HP — success keeps it).
   - kind: state
-    path: baseline.flags.hp
+    path: baseline.variables.hp
     eq: 25

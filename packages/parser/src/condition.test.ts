@@ -53,26 +53,36 @@ describe("parseCondition — leaf shapes", () => {
     );
   });
 
-  test("flag with eq (string)", () => {
+  test("variable with eq (string)", () => {
     expect(
-      parseCondition({ flag: { name: "route", eq: "alice" } }),
-    ).toEqual({ flag: { name: "route", eq: "alice" } });
+      parseCondition({ variable: { name: "route", eq: "alice" } }),
+    ).toEqual({ variable: { name: "route", eq: "alice" } });
   });
 
-  test("flag with eq (boolean)", () => {
+  test("switch with eq (boolean)", () => {
     expect(
-      parseCondition({ flag: { name: "unlocked", eq: true } }),
-    ).toEqual({ flag: { name: "unlocked", eq: true } });
+      parseCondition({ switch: { name: "unlocked", eq: true } }),
+    ).toEqual({ switch: { name: "unlocked", eq: true } });
   });
 
-  test("flag with min/max numbers", () => {
-    expect(parseCondition({ flag: { name: "gold", min: 5 } })).toEqual({
-      flag: { name: "gold", min: 5 },
+  test("switch without eq (bare reference, defaults to true at eval)", () => {
+    expect(parseCondition({ switch: { name: "unlocked" } })).toEqual({
+      switch: { name: "unlocked" },
     });
   });
 
-  test("flag requires name", () => {
-    expect(() => parseCondition({ flag: {} })).toThrow(/flag.name/);
+  test("variable with min/max numbers", () => {
+    expect(
+      parseCondition({ variable: { name: "gold", min: 5 } }),
+    ).toEqual({ variable: { name: "gold", min: 5 } });
+  });
+
+  test("variable requires name", () => {
+    expect(() => parseCondition({ variable: {} })).toThrow(/variable.name/);
+  });
+
+  test("switch requires name", () => {
+    expect(() => parseCondition({ switch: {} })).toThrow(/switch.name/);
   });
 
   test("stat", () => {
@@ -132,9 +142,9 @@ describe("parseCondition — composite", () => {
   test("any", () => {
     expect(
       parseCondition({
-        any: [{ flag: { name: "x", eq: true } }],
+        any: [{ switch: { name: "x", eq: true } }],
       }),
-    ).toEqual({ any: [{ flag: { name: "x", eq: true } }] });
+    ).toEqual({ any: [{ switch: { name: "x", eq: true } }] });
   });
 
   test("any requires array", () => {
@@ -154,8 +164,8 @@ describe("parseCondition — composite", () => {
       all: [
         {
           any: [
-            { flag: { name: "route", eq: "alice" } },
-            { flag: { name: "route", eq: "bea" } },
+            { variable: { name: "route", eq: "alice" } },
+            { variable: { name: "route", eq: "bea" } },
           ],
         },
         { not: { scriptCompleted: "001" } },

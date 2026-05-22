@@ -92,13 +92,21 @@ function parseEffectsObject(
     }
     delta.affection = obj.affection as Record<string, number>;
   }
-  if (obj.flags !== undefined) {
-    if (typeof obj.flags !== "object" || obj.flags === null) {
+  if (obj.switches !== undefined) {
+    if (typeof obj.switches !== "object" || obj.switches === null) {
       throw new ActionParseError(
-        `${source ?? "action"}: effects.flags must be an object`,
+        `${source ?? "action"}: effects.switches must be an object`,
       );
     }
-    delta.flags = obj.flags as Record<string, number | string | boolean>;
+    delta.switches = obj.switches as Record<string, boolean>;
+  }
+  if (obj.variables !== undefined) {
+    if (typeof obj.variables !== "object" || obj.variables === null) {
+      throw new ActionParseError(
+        `${source ?? "action"}: effects.variables must be an object`,
+      );
+    }
+    delta.variables = obj.variables as Record<string, number | string>;
   }
   if (obj.stats !== undefined) {
     if (typeof obj.stats !== "object" || obj.stats === null) {

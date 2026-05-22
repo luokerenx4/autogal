@@ -4,7 +4,7 @@ title: 画展那天
 characters: [alice]
 requires:
   all:
-    - flag: { name: route, eq: alice }
+    - variable: { name: route, eq: alice }
     - scriptCompleted: 004a_alice_route
     - affection: { character: alice, min: 4 }
 ---

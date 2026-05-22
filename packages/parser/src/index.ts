@@ -44,6 +44,12 @@ export function buildGame(
   if (weapons && weapons.length > 0) game.weapons = weapons;
   if (skills && skills.length > 0) game.skills = skills;
   if (manifest.training) game.training = manifest.training;
+  if (manifest.switches && manifest.switches.length > 0) {
+    game.switches = manifest.switches;
+  }
+  if (manifest.variables && manifest.variables.length > 0) {
+    game.variables = manifest.variables;
+  }
   if (modules && modules.length > 0) game.modules = modules;
   if (manifest.preset) game.preset = manifest.preset;
   return game;

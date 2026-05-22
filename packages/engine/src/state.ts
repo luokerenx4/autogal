@@ -56,13 +56,18 @@ export function applyDelta(state: ComposedState, delta: StateDelta): void {
       if (c) c.affection += change;
     }
   }
-  if (delta.flags) {
-    for (const [name, value] of Object.entries(delta.flags)) {
-      const current = state.baseline.flags[name];
+  if (delta.switches) {
+    for (const [name, value] of Object.entries(delta.switches)) {
+      state.baseline.switches[name] = value;
+    }
+  }
+  if (delta.variables) {
+    for (const [name, value] of Object.entries(delta.variables)) {
+      const current = state.baseline.variables[name];
       if (typeof current === "number" && typeof value === "number") {
-        state.baseline.flags[name] = current + value;
+        state.baseline.variables[name] = current + value;
       } else {
-        state.baseline.flags[name] = value;
+        state.baseline.variables[name] = value;
       }
     }
   }

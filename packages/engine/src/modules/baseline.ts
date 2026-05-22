@@ -7,6 +7,9 @@ import type {
   Game,
   Module,
   StateDelta,
+  SwitchDef,
+  VariableDef,
+  VariableValue,
   WeaponDef,
   WeaponState,
 } from "../types";
@@ -38,7 +41,10 @@ const useItemHandler: ActionHandler = ({ state, action, game }) => {
   };
   if (itemDef.effects) {
     if (itemDef.effects.affection) deltas.affection = itemDef.effects.affection;
-    if (itemDef.effects.flags) deltas.flags = itemDef.effects.flags;
+    if (itemDef.effects.switches) deltas.switches = itemDef.effects.switches;
+    if (itemDef.effects.variables) {
+      deltas.variables = itemDef.effects.variables;
+    }
     if (itemDef.effects.stats) deltas.stats = itemDef.effects.stats;
     if (itemDef.effects.statMax) deltas.statMax = itemDef.effects.statMax;
   }
@@ -86,8 +92,19 @@ function mergeDelta(dst: StateDelta, src: StateDelta): void {
       dst.statMax[k] = (dst.statMax[k] ?? 0) + v;
     }
   }
-  if (src.flags) {
-    dst.flags = { ...(dst.flags ?? {}), ...src.flags };
+  if (src.switches) {
+    dst.switches = { ...(dst.switches ?? {}), ...src.switches };
+  }
+  if (src.variables) {
+    dst.variables = dst.variables ?? {};
+    for (const [k, v] of Object.entries(src.variables)) {
+      const cur = dst.variables[k];
+      if (typeof cur === "number" && typeof v === "number") {
+        dst.variables[k] = cur + v;
+      } else {
+        dst.variables[k] = v;
+      }
+    }
   }
   if (src.inventory) {
     dst.inventory = dst.inventory ?? {};
@@ -121,6 +138,8 @@ function mergeDelta(dst: StateDelta, src: StateDelta): void {
 export function createBaselineState(
   characters: CharacterDef[],
   weapons: WeaponDef[] = [],
+  switches: SwitchDef[] = [],
+  variables: VariableDef[] = [],
 ): BaselineState {
   const charMap: Record<string, CharacterState> = {};
   for (const c of characters) {
@@ -133,12 +152,17 @@ export function createBaselineState(
   for (const w of weapons) {
     weaponMap[w.id] = { power: w.basePower };
   }
+  const switchMap: Record<string, boolean> = {};
+  for (const s of switches) switchMap[s.id] = s.initial;
+  const variableMap: Record<string, VariableValue> = {};
+  for (const v of variables) variableMap[v.id] = v.initial;
   // Auto-equip the only declared weapon. Multi-weapon games leave
   // equippedWeaponId null and equip via the equipWeapon primitive.
   const equippedWeaponId = weapons.length === 1 ? weapons[0]!.id : null;
   return {
     characters: charMap,
-    flags: {},
+    switches: switchMap,
+    variables: variableMap,
     completedScripts: [],
     currentScriptId: null,
     beatIndex: 0,
@@ -153,7 +177,12 @@ export const baselineModule: Module = {
   id: BASELINE_NAMESPACE,
   version: "0.1",
   initialize(game: Game): BaselineState {
-    return createBaselineState(game.characters, game.weapons ?? []);
+    return createBaselineState(
+      game.characters,
+      game.weapons ?? [],
+      game.switches ?? [],
+      game.variables ?? [],
+    );
   },
   actionHandlers: {
     useItem: useItemHandler,

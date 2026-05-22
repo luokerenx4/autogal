@@ -21,9 +21,15 @@ export function evaluateCondition(
     if (!c) return false;
     return rangeMatch(c.affection, cond.affection);
   }
-  if ("flag" in cond) {
-    const v = state.baseline.flags[cond.flag.name];
-    const { eq, min, max } = cond.flag;
+  if ("switch" in cond) {
+    const v = state.baseline.switches[cond.switch.name];
+    const { eq } = cond.switch;
+    if (eq !== undefined) return v === eq;
+    return v === true;
+  }
+  if ("variable" in cond) {
+    const v = state.baseline.variables[cond.variable.name];
+    const { eq, min, max } = cond.variable;
     if (eq !== undefined) return v === eq;
     if (typeof v !== "number") return false;
     if (min !== undefined && v < min) return false;

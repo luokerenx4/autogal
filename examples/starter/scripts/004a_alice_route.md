@@ -3,7 +3,7 @@ id: 004a_alice_route
 title: 周六的下午
 characters: [alice]
 requires:
-  flag:
+  variable:
     name: route
     eq: alice
 ---

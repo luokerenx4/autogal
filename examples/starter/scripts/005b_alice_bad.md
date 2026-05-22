@@ -4,7 +4,7 @@ title: 樱花谢了
 characters: [alice]
 requires:
   all:
-    - flag: { name: route, eq: alice }
+    - variable: { name: route, eq: alice }
     - scriptCompleted: 004a_alice_route
     - not:
         affection: { character: alice, min: 4 }

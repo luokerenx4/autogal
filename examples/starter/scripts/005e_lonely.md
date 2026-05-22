@@ -3,7 +3,7 @@ id: 005e_lonely
 title: 一个人的周末
 characters: []
 requires:
-  flag:
+  variable:
     name: route
     eq: neither
 ---

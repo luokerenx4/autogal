@@ -1,4 +1,25 @@
 export type FlagValue = number | string | boolean;
+// Variable storage: declared in game.yaml's `variables:` block. Each
+// variable has a declared type (string | number) and an initial value.
+// Unlike the old anonymous `flags` hash, references in conditions /
+// effects are validated against the declared set at parse time.
+export type VariableValue = number | string;
+// Switch storage: declared in game.yaml's `switches:` block. Always
+// boolean. Effectively a typed subset of the old flag hash for the
+// common "did this happen" / "is this unlocked" case.
+
+export interface SwitchDef {
+  id: string;
+  initial: boolean;
+  description?: string;
+}
+
+export interface VariableDef {
+  id: string;
+  type: "string" | "number";
+  initial: VariableValue;
+  description?: string;
+}
 
 export interface CharacterState {
   affection: number;
@@ -7,7 +28,8 @@ export interface CharacterState {
 
 export interface BaselineState {
   characters: Record<string, CharacterState>;
-  flags: Record<string, FlagValue>;
+  switches: Record<string, boolean>;
+  variables: Record<string, VariableValue>;
   completedScripts: string[];
   currentScriptId: string | null;
   beatIndex: number;
@@ -221,7 +243,15 @@ export type Condition =
   | { not: Condition }
   | { scriptCompleted: string }
   | { affection: { character: string; min?: number; max?: number; eq?: number } }
-  | { flag: { name: string; eq?: FlagValue; min?: number; max?: number } }
+  | { switch: { name: string; eq?: boolean } }
+  | {
+      variable: {
+        name: string;
+        eq?: VariableValue;
+        min?: number;
+        max?: number;
+      };
+    }
   | { stat: { name: string; min?: number; max?: number; eq?: number } }
   | { inventory: { itemId: string; min?: number; max?: number; eq?: number } }
   | {
@@ -238,7 +268,11 @@ export type Condition =
 
 export interface StateDelta {
   affection?: Record<string, number>;
-  flags?: Record<string, FlagValue>;
+  // Boolean switches. Last-write-wins (applyDelta overwrites the bit).
+  switches?: Record<string, boolean>;
+  // Typed variables. Numeric variables are additive (set { variables:
+  // { gold: 5 } } adds 5); string variables are last-write-wins.
+  variables?: Record<string, VariableValue>;
   stats?: Record<string, number>;
   statMax?: Record<string, number>;
   // Signed inventory deltas keyed by item id. applyDelta sums into
@@ -521,6 +555,13 @@ export interface Game {
   title: string;
   characters: CharacterDef[];
   scripts: Script[];
+  // Declared switches (boolean) — engine pre-populates baseline.switches
+  // from `initial`. References in conditions / effects are validated
+  // against this declared set at parse time.
+  switches?: SwitchDef[];
+  // Declared variables (string | number) — engine pre-populates
+  // baseline.variables from `initial`.
+  variables?: VariableDef[];
   actions?: Action[];
   // Engine-level item registry — see ItemDef. Empty / absent for games
   // that declare no items/ directory.

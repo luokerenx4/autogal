@@ -1,4 +1,4 @@
-import type { Condition, FlagValue } from "@autogal/engine";
+import type { Condition, VariableValue } from "@autogal/engine";
 
 export class ConditionParseError extends Error {}
 
@@ -47,18 +47,33 @@ export function parseCondition(raw: unknown): Condition | undefined {
       },
     };
   }
-  if ("flag" in obj) {
-    const f = obj.flag as Record<string, unknown> | undefined;
+  if ("switch" in obj) {
+    const f = obj.switch as Record<string, unknown> | undefined;
     if (!f || typeof f !== "object") {
-      throw new ConditionParseError("`flag` must be an object");
+      throw new ConditionParseError("`switch` must be an object");
     }
     if (typeof f.name !== "string") {
-      throw new ConditionParseError("`flag.name` must be a string");
+      throw new ConditionParseError("`switch.name` must be a string");
     }
     return {
-      flag: {
+      switch: {
         name: f.name,
-        ...(f.eq !== undefined ? { eq: f.eq as FlagValue } : {}),
+        ...(typeof f.eq === "boolean" ? { eq: f.eq } : {}),
+      },
+    };
+  }
+  if ("variable" in obj) {
+    const f = obj.variable as Record<string, unknown> | undefined;
+    if (!f || typeof f !== "object") {
+      throw new ConditionParseError("`variable` must be an object");
+    }
+    if (typeof f.name !== "string") {
+      throw new ConditionParseError("`variable.name` must be a string");
+    }
+    return {
+      variable: {
+        name: f.name,
+        ...(f.eq !== undefined ? { eq: f.eq as VariableValue } : {}),
         ...(typeof f.min === "number" ? { min: f.min } : {}),
         ...(typeof f.max === "number" ? { max: f.max } : {}),
       },

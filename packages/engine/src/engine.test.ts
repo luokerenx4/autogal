@@ -52,7 +52,7 @@ describe("buildPresetContext", () => {
       triggers: [
         {
           id: "t1",
-          when: { flag: { name: "x", eq: true } },
+          when: { switch: { name: "x", eq: true } },
           do: () => ({}),
         },
       ],
@@ -62,7 +62,7 @@ describe("buildPresetContext", () => {
       triggers: [
         {
           id: "t2",
-          when: { flag: { name: "y", eq: true } },
+          when: { switch: { name: "y", eq: true } },
           do: () => ({}),
         },
       ],
@@ -82,7 +82,7 @@ describe("buildPresetContext", () => {
       triggers: [
         {
           id: "dup",
-          when: { flag: { name: "x", eq: true } },
+          when: { switch: { name: "x", eq: true } },
           do: () => ({}),
         },
       ],
@@ -92,7 +92,7 @@ describe("buildPresetContext", () => {
       triggers: [
         {
           id: "dup",
-          when: { flag: { name: "y", eq: true } },
+          when: { switch: { name: "y", eq: true } },
           do: () => ({}),
         },
       ],

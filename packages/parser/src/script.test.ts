@@ -207,13 +207,13 @@ describe("parseScript — fenced YAML choice", () => {
       "options:",
       "  - text: 答应碧河",
       "    effects:",
-      "      flags: { route: bea }",
+      "      variables: { route: bea }",
       "    goto: pick_bea",
       "  - text: 跟薄樱走",
       "    requires:",
       "      affection: { character: alice, min: 2 }",
       "    effects:",
-      "      flags: { route: alice }",
+      "      variables: { route: alice }",
       "    goto: pick_alice",
       "```",
     ].join("\n");
@@ -227,7 +227,7 @@ describe("parseScript — fenced YAML choice", () => {
       affection: { character: "alice", min: 2 },
     });
     expect(beat.options[0]?.effects).toEqual({
-      flags: { route: "bea" },
+      variables: { route: "bea" },
     });
     expect(beat.options[0]?.goto).toBe("pick_bea");
   });
@@ -251,7 +251,7 @@ describe("parseScript — fenced YAML choice", () => {
       "```yaml",
       "type: effects",
       "effects:",
-      "  flags: { unlocked: true }",
+      "  switches: { unlocked: true }",
       "  affection: { alice: 1 }",
       "```",
     ].join("\n");
@@ -259,7 +259,7 @@ describe("parseScript — fenced YAML choice", () => {
     expect(s.beats[0]).toEqual({
       type: "effects",
       effects: {
-        flags: { unlocked: true },
+        switches: { unlocked: true },
         affection: { alice: 1 },
       },
     });

@@ -1,5 +1,6 @@
-import React, { useCallback, useEffect, useReducer, useRef } from "react";
+import React, { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { Box, Text, useInput } from "ink";
+import { useInkInstance } from "../ink-instance";
 import { watch } from "node:fs";
 import { Engine } from "@autogal/engine";
 import type { ComposedState, Game, Input, Output } from "@autogal/engine";
@@ -64,9 +65,15 @@ export function PlayScreen({
   const runnerRef = useRef<AsyncGenerator<Output, void, Input> | null>(null);
   const processingRef = useRef(false);
   const reloadFlashRef = useRef(0);
-  const [reloadFlash, setReloadFlash] = React.useState(0);
-  const [reloadError, setReloadError] = React.useState<string | null>(null);
-  const [showBacklog, setShowBacklog] = React.useState(false);
+  const [reloadFlash, setReloadFlash] = useState(0);
+  const [reloadError, setReloadError] = useState<string | null>(null);
+  const [showBacklog, setShowBacklog] = useState(false);
+  // Bumped after a forced ink.clear() to trigger an immediate re-render
+  // onto the cleared screen. Without this re-tick, the screen would
+  // stay blank between the clear and the next state update.
+  const [repaintTick, setRepaintTick] = useState(0);
+  const inkInstance = useInkInstance();
+  const prevStageKindRef = useRef<string>(model.stage.kind);
 
   // Boot: load saved session (or create initial), build engine, pull the
   // first Output. Errors here become an ErrorStage instead of vanishing
@@ -168,6 +175,24 @@ export function PlayScreen({
     return () => clearTimeout(timer);
   }, [reloadFlash]);
 
+  // Stage-transition repaint. ink's default render pipeline is
+  // incremental: it emits a diff (cursor moves + per-line clears + new
+  // text) instead of a full repaint. macOS Terminal.app under alt-screen
+  // mishandles these mixed sequences — and CJK width miscounts compound
+  // it — so we force a full clean repaint whenever the stage *kind*
+  // changes (e.g. dialogue → hubMenu). `instance.clear()` wipes the
+  // screen and resets ink's internal frame buffer, then bumping
+  // `repaintTick` triggers a synchronous re-render that ink will treat
+  // as a fresh first frame.
+  useEffect(() => {
+    if (prevStageKindRef.current === model.stage.kind) return;
+    prevStageKindRef.current = model.stage.kind;
+    if (inkInstance) {
+      inkInstance.clear();
+      setRepaintTick((t) => t + 1);
+    }
+  }, [model.stage.kind, inkInstance]);
+
   const sendInput = useCallback(
     async (input: Input) => {
       if (processingRef.current) return;
@@ -260,8 +285,13 @@ export function PlayScreen({
     );
   }
 
+  // `key={repaintTick}` forces a full unmount+remount of GameLayout
+  // after the stage-transition useEffect bumps repaintTick. Combined
+  // with the preceding inkInstance.clear(), this guarantees ink emits a
+  // complete fresh frame (no incremental diff against a stale lastFrame
+  // buffer) — the fix for macOS Terminal's partial-refresh artifacts.
   return (
-    <GameLayout header={header} footer={footer}>
+    <GameLayout key={repaintTick} header={header} footer={footer}>
       {renderStage(model)}
     </GameLayout>
   );

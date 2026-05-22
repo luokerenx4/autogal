@@ -1,0 +1,53 @@
+name: 提案A：raidsCompleted=2 で extract → 3 になった瞬間 letter_01 が dispatch される
+description: |
+  Trigger letter_01_dispatch has `once: true, when: variable raidsCompleted >= 3`.
+  Seed state with raidsCompleted=2 and a raid in progress at the extract zone,
+  then extract — raidsCompleted increments to 3, the rising edge fires the
+  trigger, currentScriptId becomes letter_01_suspicion.
+state:
+  baseline:
+    completedScripts: [000_intro]
+    weapons:
+      ancestor_yaodao: { power: 6 }
+    variables:
+      raidsCompleted: 2
+      raidsFailed: 0
+      shogun_chapter: 0
+  sengoku-raid:
+    mode: raid
+    metCharacters: []
+    raid:
+      mapId: kuro_swamp
+      mapName: 黒沼地
+      currentZoneId: shrine
+      turnsTaken: 3
+      pendingLoot: { ryo: 20 }
+      zones:
+        shrine:
+          id: shrine
+          name: 潰れた社
+          visited: true
+          searched: true
+          encounter: null
+          encounterCleared: false
+          encounterTable: []
+          lootTable: []
+          connections: [{ dir: 戻る, target: crossroads }]
+          isExtract: true
+          pendingLoot: {}
+inputs:
+  - { type: doActivity, id: "extract" }
+  - { type: next }
+assertions:
+  - kind: state
+    path: baseline.variables.raidsCompleted
+    eq: 3
+  - kind: state
+    path: baseline.variables.shogun_chapter
+    eq: 1
+  - kind: state
+    path: baseline.currentScriptId
+    eq: letter_01_suspicion
+  - kind: state
+    path: runtime.firedTriggers
+    includes: letter_01_dispatch

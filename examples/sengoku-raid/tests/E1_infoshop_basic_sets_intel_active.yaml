@@ -1,0 +1,36 @@
+name: 提案E：infoshop_basic を買うと intel_active="basic"、ryo-50、intel_count+1
+description: |
+  Cheapest band — no intellect requirement, 50 両. After purchase
+  intel_active becomes "basic" and the hub stops surfacing the
+  infoshop bands (until the briefing is read).
+state:
+  baseline:
+    completedScripts: [000_intro]
+    inventory:
+      ryo: 100
+    characters:
+      player:
+        stats: { hp: 30, mental: 8, spectral: 10, intellect: 0 }
+    variables:
+      intel_active: ""
+      intel_count: 0
+  sengoku-raid:
+    mode: hub
+    metCharacters: []
+    raid: null
+    companion: null
+    companionHp: 0
+    pulsePending: null
+inputs:
+  - { type: doActivity, id: "infoshop_basic" }
+  - { type: next }
+assertions:
+  - kind: state
+    path: baseline.variables.intel_active
+    eq: basic
+  - kind: state
+    path: baseline.variables.intel_count
+    eq: 1
+  - kind: state
+    path: baseline.inventory.ryo
+    eq: 50

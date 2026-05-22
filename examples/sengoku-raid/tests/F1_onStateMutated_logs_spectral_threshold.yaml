@@ -1,0 +1,39 @@
+name: 提案F：onStateMutated observer — spectral 50 を跨ぐと achievementLog に追加される
+description: |
+  Seed spectral=49 + upgrade_oni resources in hub. The oni-upgrade
+  handler applies spectral +5 → 54 (crosses the 50 threshold). The
+  onStateMutated observer fires on the post-delta state, sees
+  spec >= 50, and pushes "鬼に近づく — 霊体化 50" into the
+  module-private achievementLog.
+state:
+  baseline:
+    completedScripts: [000_intro]
+    inventory:
+      ryo: 200
+      oni_horn: 1
+      cursed_blade_fragment: 1
+    weapons:
+      ancestor_yaodao: { power: 6 }
+    characters:
+      player:
+        stats: { hp: 30, mental: 8, spectral: 49, intellect: 5 }
+    variables:
+      pulse_oni: 0
+  sengoku-raid:
+    mode: hub
+    metCharacters: []
+    companion: null
+    companionHp: 0
+    pulsePending: null
+    achievementLog: []
+    raid: null
+inputs:
+  - { type: doActivity, id: "upgrade_oni" }
+  - { type: next }
+assertions:
+  - kind: state
+    path: baseline.characters.player.stats.spectral
+    eq: 54
+  - kind: state
+    path: sengoku-raid.achievementLog
+    includes: "鬼に近づく — 霊体化 50"

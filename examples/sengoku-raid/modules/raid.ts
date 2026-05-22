@@ -121,6 +121,10 @@ interface ZoneInstance {
     enemyId: string;
     enemyHp: number;
     enemyHpMax: number;
+    // Set true when HP drops below 30% — unlocks negotiate options in
+    // buildRaidMenu. Cleared automatically when the encounter resolves
+    // (encounter goes null).
+    negotiable?: boolean;
   };
   encounterCleared: boolean; // was there an encounter that's been resolved
   encounterTable: { enemyId: string | null; weight: number }[];
@@ -143,6 +147,25 @@ interface RaidModuleState {
   mode: "hub" | "raid";
   raid: RaidInstance | null;
   metCharacters: string[];
+  // Currently-invited companion. Cleared on raid end (success or
+  // failure) regardless of HP. The companion's switch
+  // `companion_<id>` is the player-facing source of truth — that
+  // is what onChoicePresented / onBeatBefore key on.
+  companion: string | null;
+  // Companion HP for current raid. 10 cap. When this hits 0 the
+  // companion is downed → affection -3, switch flipped off,
+  // companion_downed variable += 1.
+  companionHp: number;
+  // 妖刀の業 — when set, the next time buildRaidMenu (or buildHubMenu
+  // if mode flipped) runs, the menu shows only the three imbue
+  // activities. Stores the absorb amount the victory queued so the
+  // imbue handler can apply it via the chosen pulse's formula.
+  pulsePending: null | { enemyId: string; absorb: number };
+  // 業の鏡 — log of milestones the player has crossed. Pushed by the
+  // onStateMutated observer when a watched stat crosses a threshold
+  // for the first time, and by onLabelEnter for letter_03 endings.
+  // Duplicates are filtered at append time.
+  achievementLog: string[];
 }
 
 function moduleState(ctx: Ctx): RaidModuleState {
@@ -162,12 +185,28 @@ function getMap(ctx: Ctx, mapId: string): MapDef | undefined {
 }
 
 function discoverableMaps(ctx: Ctx): string[] {
-  // For now all maps are always discoverable. Future: gate harder maps
-  // behind raidsCompleted thresholds or quest flags.
   return (ctx.game.maps ?? [])
     .slice()
     .sort((a, b) => a.difficulty - b.difficulty)
+    .filter((m) => mapUnlocked(ctx, m.id))
     .map((m) => m.id);
+}
+
+// Map availability gates. Hell-gate is the only currently-locked map;
+// composite condition (weapon power AND two skills AND pulse_oni).
+function mapUnlocked(ctx: Ctx, mapId: string): boolean {
+  if (mapId === "hell_gate") {
+    const pulseOni = (ctx.state.baseline.variables.pulse_oni ?? 0) as number;
+    const power = ctx.state.baseline.weapons.ancestor_yaodao?.power ?? 0;
+    const knows = ctx.state.baseline.knownSkills;
+    return (
+      pulseOni >= 8 &&
+      power >= 12 &&
+      knows.includes("chinkonho") &&
+      knows.includes("mizukagami")
+    );
+  }
+  return true;
 }
 
 // ============================================================================
@@ -316,6 +355,46 @@ function buildHubMenu(ctx: Ctx): Output {
     }
   }
 
+  // zone_haunt_<enemy> — one-shot lore scripts that unlock when the
+  // player has *released* (negotiated free) an enemy of that type
+  // at least once. Selfswitch A on the script is the unlock gate;
+  // script `requires:` reads it. Once played, script.completed is
+  // true and it disappears from the hub.
+  for (const script of ctx.game.scripts) {
+    if (!script.id.startsWith("zone_haunt_")) continue;
+    if (ctx.state.baseline.scripts[script.id]?.completed === true) continue;
+    const reqs = script.requires;
+    const eligible = reqs === undefined || evaluateCondition(reqs, ctx.state);
+    if (!eligible) continue;
+    activities.push({
+      id: `script:${script.id}`,
+      kind: "script",
+      title: `回想 — ${script.title}`,
+      category: "social",
+      cost: 0,
+      available: true,
+    });
+  }
+
+  // Ending scripts — gated on chose_court_* + the corresponding pulse
+  // threshold. The same enumeration pattern as bond_* / zone_haunt_*;
+  // the engine's evaluateCondition does all the gating work.
+  for (const script of ctx.game.scripts) {
+    if (!script.id.startsWith("ending_")) continue;
+    if (ctx.state.baseline.scripts[script.id]?.completed === true) continue;
+    const reqs = script.requires;
+    const eligible = reqs === undefined || evaluateCondition(reqs, ctx.state);
+    if (!eligible) continue;
+    activities.push({
+      id: `script:${script.id}`,
+      kind: "script",
+      title: `終局 — ${script.title}`,
+      category: "raid",
+      cost: 0,
+      available: true,
+    });
+  }
+
   // Sell loot
   const lootIds = Object.entries(ctx.state.baseline.inventory).filter(
     ([id, n]) => n > 0 && isLoot(ctx, id),
@@ -334,22 +413,53 @@ function buildHubMenu(ctx: Ctx): Output {
     });
   }
 
-  // Upgrade weapon
+  // Upgrade weapon — three pulse-paths. Player picks which side to feed
+  // based on resources at hand + intended build.
   const shards = ctx.state.baseline.inventory.soul_shard ?? 0;
-  const ryo = ctx.state.baseline.inventory.ryo ?? 0;
-  const canUpgrade = shards >= 3 && ryo >= 100;
+  const horns = ctx.state.baseline.inventory.oni_horn ?? 0;
+  const frags = ctx.state.baseline.inventory.cursed_blade_fragment ?? 0;
+  const ryoNow = ctx.state.baseline.inventory.ryo ?? 0;
+  const canMundane = shards >= 3 && ryoNow >= 100;
   activities.push({
-    id: "upgrade_weapon",
+    id: "upgrade_mundane",
     kind: "action",
-    actionKind: "upgrade_weapon",
-    title: "炼器師に妖刀を鍛え直させる（威力 +2）",
+    actionKind: "upgrade_mundane",
+    title: "炼器師に整え直させる（威力 +2、脈絡: 凡 +1）",
     description: "魂石碎片 ×3 + 100 両",
     category: "shop",
     cost: 0,
-    available: canUpgrade,
-    lockedReason: canUpgrade
+    available: canMundane,
+    lockedReason: canMundane
       ? undefined
-      : `魂石碎片 ≥3（現在 ${shards}）、両 ≥100（現在 ${ryo}）`,
+      : `魂石碎片 ≥3（現在 ${shards}）、両 ≥100（現在 ${ryoNow}）`,
+  });
+  const canPure = horns >= 1 && ryoNow >= 80;
+  activities.push({
+    id: "upgrade_pure",
+    kind: "action",
+    actionKind: "upgrade_pure",
+    title: "神社で鎮魂の儀を頼む（威力 +1、脈絡: 浄 +1）",
+    description: "鬼の角 ×1 + 80 両。霊体化触発を緩める",
+    category: "shop",
+    cost: 0,
+    available: canPure,
+    lockedReason: canPure
+      ? undefined
+      : `鬼の角 ≥1（現在 ${horns}）、両 ≥80（現在 ${ryoNow}）`,
+  });
+  const canOni = horns >= 1 && frags >= 1 && ryoNow >= 120;
+  activities.push({
+    id: "upgrade_oni",
+    kind: "action",
+    actionKind: "upgrade_oni",
+    title: "炉で鬼の脈に鍛える（威力 +4、霊体化 +5、脈絡: 鬼 +1）",
+    description: "鬼の角 ×1 + 呪われし刃の欠片 ×1 + 120 両。後戻りはきかぬ",
+    category: "shop",
+    cost: 0,
+    available: canOni,
+    lockedReason: canOni
+      ? undefined
+      : `鬼の角 ≥1（現在 ${horns}）、欠片 ≥1（現在 ${frags}）、両 ≥120（現在 ${ryoNow}）`,
   });
 
   // Rest (recover HP/mental)
@@ -363,6 +473,93 @@ function buildHubMenu(ctx: Ctx): Output {
       title: "宿で休む（体力・精神を全回復）",
       description: "霊体化は変わらない",
       category: "rest",
+      cost: 0,
+      available: true,
+    });
+  }
+
+  // 両国橋の情報屋 — four-tier infoshop actions, each gated on
+  // intellect + ryo. Selling intel sets `intel_active` (string var)
+  // to a level key, which onScriptSelect later uses to redirect the
+  // generic `intel_briefing` script to one of four variants.
+  const ryo = ctx.state.baseline.inventory.ryo ?? 0;
+  const intellect = playerStat(ctx, "intellect");
+  const intelActive =
+    typeof ctx.state.baseline.variables.intel_active === "string"
+      ? (ctx.state.baseline.variables.intel_active as string)
+      : "";
+  const infoshopBands: Array<{
+    id: string;
+    title: string;
+    desc: string;
+    cost: number;
+    intellectMin: number;
+    requiresFrag: boolean;
+  }> = [
+    {
+      id: "infoshop_basic",
+      title: "情報屋：次回 raid のスポーン覚書（50 両）",
+      desc: "次の出帰り先の鬼の出方を知る",
+      cost: 50,
+      intellectMin: 0,
+      requiresFrag: false,
+    },
+    {
+      id: "infoshop_loot",
+      title: "情報屋：稀少な収穫地（100 両、学識 30+）",
+      desc: "次の出帰り先の最良 loot zone を知る",
+      cost: 100,
+      intellectMin: 30,
+      requiresFrag: false,
+    },
+    {
+      id: "infoshop_yaodao",
+      title: "情報屋：妖刀の声に耐える法（200 両、学識 50+）",
+      desc: "霊体化触発率を永続 -10%",
+      cost: 200,
+      intellectMin: 50,
+      requiresFrag: false,
+    },
+    {
+      id: "infoshop_hidden",
+      title: "情報屋：隠し zone の坐標（300 両、学識 80+、欠片 1）",
+      desc: "宝峰山の隠し zone への足跡を知る",
+      cost: 300,
+      intellectMin: 80,
+      requiresFrag: true,
+    },
+  ];
+  // Only show infoshop band when player can afford the cheapest AND
+  // hasn't already bought intel that's still unread.
+  if (intelActive === "") {
+    for (const band of infoshopBands) {
+      const ok =
+        ryo >= band.cost &&
+        intellect >= band.intellectMin &&
+        (!band.requiresFrag ||
+          (ctx.state.baseline.inventory.cursed_blade_fragment ?? 0) >= 1);
+      activities.push({
+        id: band.id,
+        kind: "action",
+        actionKind: band.id,
+        title: band.title,
+        description: band.desc,
+        category: "shop",
+        cost: 0,
+        available: ok,
+        lockedReason: ok
+          ? undefined
+          : `両 ≥${band.cost}、学識 ≥${band.intellectMin}${band.requiresFrag ? "、呪われし刃の欠片 ≥1" : ""} が要る`,
+      });
+    }
+  } else {
+    // Pending intel — surface a "read it" script entry. The actual
+    // script that runs is decided by onScriptSelect first-wins.
+    activities.push({
+      id: "script:intel_briefing",
+      kind: "script",
+      title: "情報屋の覚書を読む",
+      category: "shop",
       cost: 0,
       available: true,
     });
@@ -383,6 +580,34 @@ function buildHubMenu(ctx: Ctx): Output {
       cost: 0,
       available: spec >= 10,
       lockedReason: spec >= 10 ? undefined : "霊体化が低すぎて鎮める意味がない",
+    });
+  }
+
+  // 同行者システム — invite a met character with affection >= 4.
+  // Only one companion at a time. Flipping a companion_<id> switch
+  // is what onChoicePresented / onBeatBefore key on; m.companion is
+  // the runtime mirror.
+  for (const charId of m.metCharacters) {
+    const char = ctx.game.characters.find((c) => c.id === charId);
+    if (!char) continue;
+    const affection =
+      ctx.state.baseline.characters[charId]?.stats.affection ?? 0;
+    if (affection < 4) continue;
+    const alreadyInvited = m.companion === charId;
+    activities.push({
+      id: `invite:${charId}`,
+      kind: "action",
+      actionKind: "invite",
+      payload: { characterId: charId },
+      title: alreadyInvited
+        ? `${char.name}を同行から外す`
+        : `${char.name}を次の出帰りに誘う`,
+      description: alreadyInvited
+        ? "同行を解く（次の出立では一人）"
+        : "親密度 4 以上で同行可。他者を誘うと自動的に交代",
+      category: "social",
+      cost: 0,
+      available: true,
     });
   }
 
@@ -417,6 +642,43 @@ function buildRaidMenu(ctx: Ctx): Output {
 
   const activities: HubActivity[] = [];
 
+  // 妖刀の業 — pulsePending takes over the menu after a victory.
+  // Three exclusive imbue choices; each clears pulsePending.
+  if (m.pulsePending) {
+    const absorb = m.pulsePending.absorb;
+    activities.push({
+      id: "imbue:pure",
+      kind: "action",
+      actionKind: "imbue_pure",
+      title: `浄の脈に流す（威力 +1、霊体化触発率 −0.2%）`,
+      description: `「鎮魂」の脈絡。次の戦闘で霊体化暴走が起きにくくなる`,
+      category: "spirit",
+      cost: 0,
+      available: true,
+    });
+    activities.push({
+      id: "imbue:oni",
+      kind: "action",
+      actionKind: "imbue_oni",
+      title: `鬼の脈に流す（威力 +${Math.max(3, Math.floor(absorb / 2))}、灵体化 +3）`,
+      description: `「喰らう」の脈絡。刀が跳ね上がる代償に、お主の身体も鬼に近づく`,
+      category: "spirit",
+      cost: 0,
+      available: true,
+    });
+    activities.push({
+      id: "imbue:mundane",
+      kind: "action",
+      actionKind: "imbue_mundane",
+      title: `凡の脈に流す（威力 +2、副作用なし）`,
+      description: `「整える」の脈絡。穏当に育てる道`,
+      category: "spirit",
+      cost: 0,
+      available: true,
+    });
+    return buildSnapshot(activities, ctx);
+  }
+
   if (zone.encounter) {
     activities.push({
       id: "attack",
@@ -448,6 +710,53 @@ function buildRaidMenu(ctx: Ctx): Output {
       cost: 0,
       available: true,
     });
+    // 鬼の交渉 — only when the enemy is at or below 30% HP
+    // (flag set by doAttackRound). Three branches:
+    //   listen — free chat, may yield negotiate_drop based on cunning
+    //   release — set selfSwitch unlocking a zone_haunt lore script;
+    //             spectral -2, encounter cleared, no loot
+    //   yaodao voice — composite gate (spectral ≥ 50); guaranteed
+    //                  finish + spectral cost + pulse_oni +1
+    if (zone.encounter.negotiable) {
+      const cunning = enemyCunning(ctx, zone.encounter.enemyId);
+      activities.push({
+        id: "negotiate_listen",
+        kind: "action",
+        actionKind: "negotiate_listen",
+        title: `聞き出す — ${enemyName(ctx, zone.encounter.enemyId)}`,
+        description: `成功率 ${negotiateDropChance(cunning)}%（cunning ${cunning}）。失敗でも斬り直せる`,
+        category: "combat",
+        cost: 0,
+        available: true,
+      });
+      activities.push({
+        id: "negotiate_release",
+        kind: "action",
+        actionKind: "negotiate_release",
+        title: `逃がす — ${enemyName(ctx, zone.encounter.enemyId)}`,
+        description: "霊体化 -2、戦利品なし、その鬼種の zone_haunt 解錠",
+        category: "combat",
+        cost: 0,
+        available: true,
+      });
+      const spec = playerStat(ctx, "spectral");
+      const voiceAvailable = spec >= 50;
+      activities.push({
+        id: "yaodao_voice",
+        kind: "action",
+        actionKind: "yaodao_voice",
+        title: voiceAvailable
+          ? "妖刀の声に従う — 必殺の一閃（霊体化 +5、脈絡: 鬼 +1）"
+          : "妖刀の声（霊体化が低くて聞こえない）",
+        description: "4 倍の威力で必ず止め。脈絡選択は強制「鬼」",
+        category: "combat",
+        cost: 0,
+        available: voiceAvailable,
+        lockedReason: voiceAvailable
+          ? undefined
+          : `霊体化 ≥ 50 が要る（現在 ${spec}）`,
+      });
+    }
   } else {
     if (!zone.searched && Object.keys(zone.pendingLoot).length > 0) {
       activities.push({
@@ -531,6 +840,27 @@ function enemyAttackPower(ctx: Ctx, enemyId: string): number {
 
 function enemyHp(ctx: Ctx, enemyId: string): number {
   return ctx.game.enemies?.find((e) => e.id === enemyId)?.hp ?? 1;
+}
+
+// 鬼の交渉 — uses enemy.stats.cunning to modulate listen success.
+function enemyCunning(ctx: Ctx, enemyId: string): number {
+  const e = ctx.game.enemies?.find((x) => x.id === enemyId);
+  return e?.stats?.cunning ?? 1;
+}
+
+function enemyNegotiateLore(ctx: Ctx, enemyId: string): string | undefined {
+  const v = ctx.game.enemies?.find((x) => x.id === enemyId)?.custom?.negotiate_lore;
+  return typeof v === "string" ? v : undefined;
+}
+
+function enemyNegotiateDrop(ctx: Ctx, enemyId: string): string | undefined {
+  const v = ctx.game.enemies?.find((x) => x.id === enemyId)?.custom?.negotiate_drop;
+  return typeof v === "string" ? v : undefined;
+}
+
+// Listen success chance: 60 - cunning*10, floored at 10%.
+function negotiateDropChance(cunning: number): number {
+  return Math.max(10, 60 - cunning * 10);
 }
 
 function getEnemyNarration(
@@ -654,6 +984,18 @@ function rollLoot(ctx: Ctx, zone: ZoneInstance): Record<string, number> {
   return { [pick.itemId]: count };
 }
 
+// Clear companion state on raid end. Switches stay set (player kept
+// the bond between raids); only the runtime "in party right now" flag
+// resets so the player has to re-invite each raid (otherwise the
+// system feels less like a deliberate decision).
+function clearCompanionAfterRaid(ctx: Ctx): void {
+  const m = moduleState(ctx);
+  if (!m.companion) return;
+  ctx.state.baseline.switches[`companion_${m.companion}`] = false;
+  m.companion = null;
+  m.companionHp = 0;
+}
+
 function endRaidExtract(ctx: Ctx): void {
   const m = moduleState(ctx);
   if (!m.raid) return;
@@ -666,9 +1008,26 @@ function endRaidExtract(ctx: Ctx): void {
     lootSummary.push(`${itemName(ctx, itemId)} ×${count}`);
   }
   const mapName = m.raid.mapName;
+
+  // If companion survived the raid (HP > 0), mark the persistent
+  // "befriended" switch and grant +1 affection. This is the loop:
+  // invite → survive together → unlock deeper bond scenes.
+  if (m.companion && m.companionHp > 0) {
+    const companionId = m.companion;
+    ctx.state.baseline.switches[`befriended_${companionId}`] = true;
+    const c = ctx.state.baseline.characters[companionId];
+    if (c) c.stats.affection = (c.stats.affection ?? 0) + 1;
+    const charName =
+      ctx.game.characters.find((x) => x.id === companionId)?.name ?? companionId;
+    ctx.state.runtime.pendingNarrations.push(
+      `${charName}は無事に大名府まで歩いた。一度共に出帰った仲——刀を握る手の重さが、少し変わる。親密度 +1。`,
+    );
+  }
+
   m.raid = null;
   m.mode = "hub";
   setVar(ctx, "raidsCompleted", getVar(ctx, "raidsCompleted") + 1);
+  clearCompanionAfterRaid(ctx);
 
   ctx.state.runtime.pendingNarrations.push(
     `${mapName}から撤退に成功。${lootSummary.length > 0 ? "持ち帰った戦利品：" + lootSummary.join("、") + "。" : "今回は手ぶら。"}`,
@@ -682,6 +1041,7 @@ function endRaidFailure(ctx: Ctx, reason: string): void {
   m.raid = null;
   m.mode = "hub";
   setVar(ctx, "raidsFailed", getVar(ctx, "raidsFailed") + 1);
+  clearCompanionAfterRaid(ctx);
   // Reset HP/mental/spectral to defaults (death/overload triggered).
   // hp = 1 so player has to rest; mental partial; spectral cut.
   setPlayerStat(ctx, "hp", 1);
@@ -690,6 +1050,43 @@ function endRaidFailure(ctx: Ctx, reason: string): void {
   ctx.state.runtime.pendingNarrations.push(
     `${mapName}での討伐は失敗——${reason}。戦利品は全て失われた。気がついたら大名府の御殿医の枕元。`,
   );
+}
+
+// Companion damage redirect — called from the enemy counter-attack
+// in doAttackRound. If a companion is in party, the companion absorbs
+// part of the damage (offers tactical value at risk of downing them).
+//
+// Returns the residual damage that should still hit the player.
+function tryCompanionAbsorb(ctx: Ctx, raw: number): number {
+  const m = moduleState(ctx);
+  if (!m.companion || m.companionHp <= 0 || !m.raid) return raw;
+  const absorbed = Math.min(m.companionHp, Math.ceil(raw / 2));
+  m.companionHp -= absorbed;
+  const charName =
+    ctx.game.characters.find((c) => c.id === m.companion!)?.name ?? m.companion!;
+  ctx.state.runtime.pendingNarrations.push(
+    `${charName}が割って入った——${absorbed} のダメージを彼女が引き受けた。残り HP ${m.companionHp}/10。`,
+  );
+
+  // Downed?
+  if (m.companionHp <= 0) {
+    const downedName = charName;
+    const charId = m.companion;
+    m.companion = null;
+    m.companionHp = 0;
+    ctx.state.baseline.switches[`companion_${charId}`] = false;
+    ctx.state.baseline.variables.companion_downed =
+      (typeof ctx.state.baseline.variables.companion_downed === "number"
+        ? ctx.state.baseline.variables.companion_downed
+        : 0) + 1;
+    // -3 affection. Engine clamps to character's min if declared.
+    const c = ctx.state.baseline.characters[charId!];
+    if (c) c.stats.affection = Math.max(0, (c.stats.affection ?? 0) - 3);
+    ctx.state.runtime.pendingNarrations.push(
+      `${downedName}は倒れた。意識はある——だが、もう刀は握れぬ。お主の中で何かが折れた。親密度 -3。`,
+    );
+  }
+  return raw - absorbed;
 }
 
 // ============================================================================
@@ -736,12 +1133,29 @@ function doAttackRound(ctx: Ctx, kind: "normal" | "sneak"): void {
   // Spectral creep from striking
   setPlayerStat(ctx, "spectral", Math.min(100, spec + 1));
 
+  // 鬼の交渉: when an enemy drops below 30% HP, the next raid menu
+  // gains 3 conditional activities (listen / release / yaodao-voice).
+  // This flag lives on the encounter object so it auto-clears when
+  // the encounter resolves (victory / flee / release).
+  if (
+    zone.encounter.enemyHp > 0 &&
+    zone.encounter.enemyHp < zone.encounter.enemyHpMax * 0.3
+  ) {
+    zone.encounter.negotiable = true;
+    ctx.state.runtime.pendingNarrations.push(
+      `${enemyName(ctx, zone.encounter.enemyId)}の構えが崩れた——息は荒く、まだ斬れる。だが、聞き出すことも、放すこともできる。`,
+    );
+  }
+
   if (zone.encounter.enemyHp <= 0) {
-    // Victory
+    // Victory — spectral drops by absorb, but weapon power gain is
+    // DEFERRED. The module queues pulsePending; next buildRaidMenu
+    // shows only three imbue activities (浄/鬼/凡), and the chosen
+    // one applies its specific power formula + counter increment.
+    // This forces a build-path decision on every kill.
     const enemyId = zone.encounter.enemyId;
     const hpMax = zone.encounter.enemyHpMax;
     const absorb = Math.floor(hpMax / 2);
-    const swordGain = Math.max(1, Math.floor(hpMax / 4));
     const tmpl = getEnemyNarration(ctx, enemyId, "victory");
     if (tmpl) {
       ctx.state.runtime.pendingNarrations.push(
@@ -749,19 +1163,20 @@ function doAttackRound(ctx: Ctx, kind: "normal" | "sneak"): void {
           name: enemyName(ctx, enemyId),
           hp: hpMax,
           absorb,
-          swordGain,
+          swordGain: 0, // placeholder; actual gain decided by imbue choice
           damage,
         }),
       );
     }
     setPlayerStat(ctx, "spectral", Math.max(0, playerStat(ctx, "spectral") - absorb));
-    const wid = ctx.state.baseline.equippedWeaponId;
-    if (wid) {
-      const w = ctx.state.baseline.weapons[wid];
-      if (w) w.power = w.power + swordGain;
-    }
     zone.encounter = null;
     zone.encounterCleared = true;
+    // Queue the imbue choice. yaodao_voice already handled this
+    // inline (forced oni path); normal victories go through the menu.
+    moduleState(ctx).pulsePending = { enemyId, absorb };
+    ctx.state.runtime.pendingNarrations.push(
+      `刀が震えている——${enemyName(ctx, enemyId)}の妖力を、どの脈に流すか。`,
+    );
     return;
   }
 
@@ -776,11 +1191,14 @@ function doAttackRound(ctx: Ctx, kind: "normal" | "sneak"): void {
   // High spectral makes the player less coordinated defending.
 
   const finalEnemyDamage = isFumble ? Math.floor(enemyHit * 1.6) : enemyHit;
-  setPlayerStat(ctx, "hp", playerStat(ctx, "hp") - finalEnemyDamage);
+  // 同行者が割って入るかチェック。Companion soaks half (rounded up),
+  // remainder hits player. Companion HP=0 → downed (handled inside).
+  const residual = tryCompanionAbsorb(ctx, finalEnemyDamage);
+  setPlayerStat(ctx, "hp", playerStat(ctx, "hp") - residual);
   ctx.state.runtime.pendingNarrations.push(
     isFumble
-      ? `${enemyName(ctx, zone.encounter.enemyId)}の反撃。霊体化が暴れて体が思うように動かず——${finalEnemyDamage} のダメージ。`
-      : `${enemyName(ctx, zone.encounter.enemyId)}の反撃。${finalEnemyDamage} のダメージ。`,
+      ? `${enemyName(ctx, zone.encounter.enemyId)}の反撃。霊体化が暴れて体が思うように動かず——${residual} のダメージ。`
+      : `${enemyName(ctx, zone.encounter.enemyId)}の反撃。${residual} のダメージ。`,
   );
   setPlayerStat(ctx, "mental", Math.max(0, playerStat(ctx, "mental") - 1));
 }
@@ -792,12 +1210,17 @@ function doFlee(ctx: Ctx): void {
   if (!zone.encounter) return;
   const enemyId = zone.encounter.enemyId;
 
-  // Hayagake (taught by 霞): flee always succeeds, no damage, no mental
-  // cost. The "猟師の足" is the technical reason; narratively this is the
-  // one favor she asked for in return.
-  if (ctx.state.baseline.knownSkills.includes("hayagake")) {
+  const m2 = moduleState(ctx);
+
+  // Hayagake (taught by 霞) OR 霞 currently in party — flee always
+  // succeeds with no damage/no mental cost.
+  if (
+    ctx.state.baseline.knownSkills.includes("hayagake") ||
+    m2.companion === "kasumi"
+  ) {
+    const reason = m2.companion === "kasumi" ? "霞の手が手首を取った" : "霞に教わった足運び";
     ctx.state.runtime.pendingNarrations.push(
-      `霞に教わった足運び——${enemyName(ctx, enemyId)}が振り向く半秒前に、お主はもう間合いの外。`,
+      `${reason}——${enemyName(ctx, enemyId)}が振り向く半秒前に、お主はもう間合いの外。`,
     );
     zone.encounter = null;
     zone.encounterCleared = true;
@@ -900,7 +1323,11 @@ const sellAllLootHandler: ActionHandler = (ctx) => {
   };
 };
 
-const upgradeWeaponHandler: ActionHandler = (ctx) => {
+// 妖刀の業 — three upgrade paths replace the single upgrade_weapon
+// action. Each consumes different resources and feeds a different pulse
+// counter, so the player's hub spending is the second axis of build
+// decisions (the first being which pulse to imbue after each victory).
+const upgradeMundaneHandler: ActionHandler = (ctx) => {
   const shards = ctx.state.baseline.inventory.soul_shard ?? 0;
   const ryo = ctx.state.baseline.inventory.ryo ?? 0;
   if (shards < 3) {
@@ -912,12 +1339,179 @@ const upgradeWeaponHandler: ActionHandler = (ctx) => {
   const wid = ctx.state.baseline.equippedWeaponId;
   const deltas: StateDelta = {
     inventory: { soul_shard: -3, ryo: -100 },
+    variables: { pulse_mundane: 1 },
   };
   if (wid) deltas.weapons = { [wid]: { power: 2 } };
   return {
     deltas,
     narrations: [
-      `炼器師は無言で碎片を炉に投じた。一夜明け、妖刀の刃に新しい紋様が浮いている——威力 +2。`,
+      `炼器師は無言で碎片を炉に投じた。一夜明け、妖刀の刃に新しい紋様が浮いている——威力 +2、脈絡: 凡 +1。`,
+    ],
+  };
+};
+
+const upgradePureHandler: ActionHandler = (ctx) => {
+  const horns = ctx.state.baseline.inventory.oni_horn ?? 0;
+  const ryo = ctx.state.baseline.inventory.ryo ?? 0;
+  if (horns < 1) {
+    return denial(`神主「鬼の角が要る。鎮魂の儀には必須」`);
+  }
+  if (ryo < 80) {
+    return denial(`神主「奉納が ${ryo} 両か。80 両要る」`);
+  }
+  const wid = ctx.state.baseline.equippedWeaponId;
+  const deltas: StateDelta = {
+    inventory: { oni_horn: -1, ryo: -80 },
+    variables: { pulse_pure: 1 },
+  };
+  if (wid) deltas.weapons = { [wid]: { power: 1 } };
+  return {
+    deltas,
+    narrations: [
+      `神社の祭壇で鎮魂の儀が行われる。鬼の角が浄火に灼かれ、刀の鞘が一瞬白く光る——威力 +1、脈絡: 浄 +1。`,
+    ],
+  };
+};
+
+const upgradeOniHandler: ActionHandler = (ctx) => {
+  const horns = ctx.state.baseline.inventory.oni_horn ?? 0;
+  const frags = ctx.state.baseline.inventory.cursed_blade_fragment ?? 0;
+  const ryo = ctx.state.baseline.inventory.ryo ?? 0;
+  if (horns < 1 || frags < 1) {
+    return denial(
+      `炼器師「鬼の角 1 + 呪われし刃の欠片 1 が要る。短期的に強くなる代わり、後戻りはできぬ」`,
+    );
+  }
+  if (ryo < 120) {
+    return denial(`炼器師「持ち合わせが ${ryo} 両か。120 両要る」`);
+  }
+  const wid = ctx.state.baseline.equippedWeaponId;
+  const deltas: StateDelta = {
+    inventory: { oni_horn: -1, cursed_blade_fragment: -1, ryo: -120 },
+    variables: { pulse_oni: 1 },
+    characterStats: { player: { spectral: 5 } },
+  };
+  if (wid) deltas.weapons = { [wid]: { power: 4 } };
+  return {
+    deltas,
+    narrations: [
+      `炼器師は炉に欠片を投じた。炎が黒く立ち上り、刀の刃に鬼の歯のような連紋が浮く——威力 +4、霊体化 +5、脈絡: 鬼 +1。`,
+    ],
+  };
+};
+
+// Pulse imbue handlers — invoked from buildRaidMenu after a victory.
+// Each clears pulsePending, increments its pulse counter, and bumps
+// weapon power on its own curve. The pulse_pure has a side effect of
+// reducing future spectral creep; that's encoded by simply granting
+// spectral -1 immediately as a small "rebate".
+const imbueRequires = (ctx: ActionContext): string | null => {
+  const m = moduleState(ctx);
+  if (!m.pulsePending) return "脈絡選択の機会は今ない。";
+  return null;
+};
+
+const imbuePureHandler: ActionHandler = (ctx) => {
+  const blocker = imbueRequires(ctx);
+  if (blocker) return denial(blocker);
+  const m = moduleState(ctx);
+  m.pulsePending = null;
+  const wid = ctx.state.baseline.equippedWeaponId;
+  const deltas: StateDelta = {
+    variables: { pulse_pure: 1 },
+    characterStats: { player: { spectral: -1 } },
+  };
+  if (wid) deltas.weapons = { [wid]: { power: 1 } };
+  return {
+    deltas,
+    narrations: [
+      `妖力が刀の中で透き通っていく——浄の脈に通った。威力 +1、霊体化 -1、脈絡: 浄 +1。`,
+    ],
+  };
+};
+
+const imbueOniHandler: ActionHandler = (ctx) => {
+  const blocker = imbueRequires(ctx);
+  if (blocker) return denial(blocker);
+  const m = moduleState(ctx);
+  const absorb = m.pulsePending!.absorb;
+  m.pulsePending = null;
+  const gain = Math.max(3, Math.floor(absorb / 2));
+  const wid = ctx.state.baseline.equippedWeaponId;
+  const deltas: StateDelta = {
+    variables: { pulse_oni: 1 },
+    characterStats: { player: { spectral: 3 } },
+  };
+  if (wid) deltas.weapons = { [wid]: { power: gain } };
+  return {
+    deltas,
+    narrations: [
+      `刀が悦んだ。鬼の脈に妖力が押し込められる——威力 +${gain}、霊体化 +3、脈絡: 鬼 +1。`,
+    ],
+  };
+};
+
+// 情報屋 handlers — each sets intel_active to a level key (string var)
+// and increments intel_count. The actual briefing text is delivered
+// via the corresponding intel_briefing_<level> script, which the
+// player picks via the unified `script:intel_briefing` activity that
+// onScriptSelect rewrites.
+function infoshopHandler(
+  level: "basic" | "loot" | "yaodao" | "hidden",
+  cost: number,
+  intellectMin: number,
+  requiresFrag: boolean,
+): ActionHandler {
+  return (ctx) => {
+    const ryo = ctx.state.baseline.inventory.ryo ?? 0;
+    const intellect = playerStat(ctx, "intellect");
+    if (ryo < cost) return denial(`情報屋「${cost} 両足りない」`);
+    if (intellect < intellectMin) {
+      return denial(`情報屋「お主の学識ではこの情報は活かせまい。学識 ${intellectMin} が要る」`);
+    }
+    if (requiresFrag) {
+      const frags = ctx.state.baseline.inventory.cursed_blade_fragment ?? 0;
+      if (frags < 1) {
+        return denial(`情報屋「呪われし刃の欠片を寄越せ。それで奥の話が出来る」`);
+      }
+    }
+    const intelActive =
+      typeof ctx.state.baseline.variables.intel_active === "string"
+        ? (ctx.state.baseline.variables.intel_active as string)
+        : "";
+    if (intelActive !== "") {
+      return denial("先の覚書をまだ読んでいない。先に読め。");
+    }
+    const deltas: StateDelta = {
+      inventory: { ryo: -cost },
+      variables: { intel_active: level, intel_count: 1 },
+    };
+    if (requiresFrag) {
+      deltas.inventory!.cursed_blade_fragment = -1;
+    }
+    return {
+      deltas,
+      narrations: [
+        `情報屋は折り紙を差し出した。「読みなさい——大名府に戻ったら、すぐに」`,
+      ],
+    };
+  };
+}
+
+const imbueMundaneHandler: ActionHandler = (ctx) => {
+  const blocker = imbueRequires(ctx);
+  if (blocker) return denial(blocker);
+  const m = moduleState(ctx);
+  m.pulsePending = null;
+  const wid = ctx.state.baseline.equippedWeaponId;
+  const deltas: StateDelta = {
+    variables: { pulse_mundane: 1 },
+  };
+  if (wid) deltas.weapons = { [wid]: { power: 2 } };
+  return {
+    deltas,
+    narrations: [
+      `妖力は穏やかに刀身に馴染んだ——威力 +2、脈絡: 凡 +1。`,
     ],
   };
 };
@@ -979,6 +1573,19 @@ const moveHandler: ActionHandler = (ctx) => {
   m.raid.currentZoneId = target;
   m.raid.turnsTaken += 1;
   const zone = m.raid.zones[target]!;
+
+  // 篝同行者 passive: each new zone, spectral -1. Kasumi/mio don't
+  // alter movement (kasumi's passive lands in doFlee; mio's in a
+  // future scry action).
+  if (m.companion === "kagari") {
+    const spec = playerStat(ctx, "spectral");
+    if (spec > 0) {
+      setPlayerStat(ctx, "spectral", Math.max(0, spec - 1));
+      ctx.state.runtime.pendingNarrations.push(
+        `篝が刀を握り直す。歩を合わせるたび、胸の奥のものが一寸だけ静かになる——霊体化 -1。`,
+      );
+    }
+  }
 
   if (zone.visited) {
     return { narrations: [`${zone.name}に戻る。一度通った道。`] };
@@ -1055,6 +1662,108 @@ const fleeHandler: ActionHandler = (ctx) => {
   return {};
 };
 
+// 鬼の交渉 — three branches, all only valid when the encounter is
+// marked negotiable (HP < 30%). Module guards check this; if the
+// encounter isn't negotiable the handler returns a denial.
+
+const negotiateListenHandler: ActionHandler = (ctx) => {
+  const m = moduleState(ctx);
+  if (!m.raid) return denial("交渉できる相手がいない。");
+  const zone = m.raid.zones[m.raid.currentZoneId];
+  if (!zone?.encounter?.negotiable) {
+    return denial("まだ斬れるうちに聞き出すには弱らせろ。");
+  }
+  const enemyId = zone.encounter.enemyId;
+  const cunning = enemyCunning(ctx, enemyId);
+  const lore = enemyNegotiateLore(ctx, enemyId);
+  const dropId = enemyNegotiateDrop(ctx, enemyId);
+  const chance = negotiateDropChance(cunning);
+  const success = ctx.rng() * 100 < chance;
+
+  const narrations: string[] = [];
+  if (lore) narrations.push(lore);
+
+  const deltas: StateDelta = {};
+  if (success && dropId) {
+    deltas.inventory = { [dropId]: 1 };
+    narrations.push(
+      `${enemyName(ctx, enemyId)}は最後に何かを差し出して、霧に溶けた——${itemName(ctx, dropId)} ×1。`,
+    );
+  } else {
+    narrations.push(
+      `${enemyName(ctx, enemyId)}の声は途切れた。差し出されたものは何もない。`,
+    );
+  }
+
+  // Listening "consumes" the negotiation moment; encounter still alive
+  // but no longer negotiable — player must commit (attack / flee).
+  zone.encounter.negotiable = false;
+  return { deltas, narrations };
+};
+
+const negotiateReleaseHandler: ActionHandler = (ctx) => {
+  const m = moduleState(ctx);
+  if (!m.raid) return denial("放す相手がいない。");
+  const zone = m.raid.zones[m.raid.currentZoneId];
+  if (!zone?.encounter?.negotiable) {
+    return denial("斬れる距離まで弱らせろ。");
+  }
+  const enemyId = zone.encounter.enemyId;
+  const enemyTitle = enemyName(ctx, enemyId);
+
+  zone.encounter = null;
+  zone.encounterCleared = true;
+
+  // selfSwitch A on the zone_haunt_<enemy> script: persists across
+  // raids, unlocks the haunt lore script in hub. This is what makes
+  // selfSwitch meaningful — a one-time, script-scoped permanent flag
+  // that's neither a global switch nor a variable.
+  return {
+    deltas: {
+      characterStats: { player: { spectral: -2 } },
+      selfSwitches: {
+        [`zone_haunt_${enemyId}`]: { A: true },
+      },
+    },
+    narrations: [
+      `お主は刀を引いた。${enemyTitle}は霧に滲んでいく——その目に、礼に似たものが浮かんだ気がした。霊体化 -2。`,
+    ],
+  };
+};
+
+const yaodaoVoiceHandler: ActionHandler = (ctx) => {
+  const m = moduleState(ctx);
+  if (!m.raid) return denial("ここでは聞こえぬ声だ。");
+  const zone = m.raid.zones[m.raid.currentZoneId];
+  if (!zone?.encounter?.negotiable) {
+    return denial("妖刀が応える気配は無い——まだ早い。");
+  }
+  if (playerStat(ctx, "spectral") < 50) {
+    return denial("霊体化が低くて、刀の声が聞こえない。");
+  }
+  const enemyId = zone.encounter.enemyId;
+  const hpMax = zone.encounter.enemyHpMax;
+  const swordGain = Math.max(2, Math.floor(hpMax / 2));
+
+  // Finisher: no need to compute damage, the encounter is forced over.
+  zone.encounter = null;
+  zone.encounterCleared = true;
+
+  const wid = ctx.state.baseline.equippedWeaponId;
+  const deltas: StateDelta = {
+    characterStats: { player: { spectral: 5 } },
+    variables: { pulse_oni: 1 },
+  };
+  if (wid) deltas.weapons = { [wid]: { power: swordGain } };
+
+  return {
+    deltas,
+    narrations: [
+      `刀が鳴いた。胸の奥のものが舌を出した——${enemyName(ctx, enemyId)}は、一閃で四つに別れた。霊体化 +5、妖刀威力 +${swordGain}、脈絡: 鬼 +1。`,
+    ],
+  };
+};
+
 const extractHandler: ActionHandler = (ctx) => {
   const blocker = combatBlock(ctx);
   if (blocker) return denial(blocker);
@@ -1068,9 +1777,70 @@ const extractHandler: ActionHandler = (ctx) => {
   return {};
 };
 
+// 同行者 invite/uninvite handler. Toggles companion + the public
+// `companion_<id>` switch (hooks key off the switch since switches are
+// in the engine-modeled state, not module-private).
+const inviteHandler: ActionHandler = (ctx) => {
+  const charId = ctx.action.payload?.characterId as string | undefined;
+  if (!charId) return denial("誰を誘うか指定されていない。");
+  const m = moduleState(ctx);
+  if (!m.metCharacters.includes(charId)) {
+    return denial("会ったことのない相手は誘えない。");
+  }
+  if (m.mode === "raid") {
+    return denial("出立後は誘えない。大名府に戻ってから。");
+  }
+  const affection =
+    ctx.state.baseline.characters[charId]?.stats.affection ?? 0;
+  if (affection < 4 && m.companion !== charId) {
+    return denial("まだ同行を頼める仲ではない（親密度 4 が要る）。");
+  }
+  const charName =
+    ctx.game.characters.find((c) => c.id === charId)?.name ?? charId;
+
+  // Toggle off if already invited.
+  if (m.companion === charId) {
+    m.companion = null;
+    m.companionHp = 0;
+    return {
+      deltas: { switches: { [`companion_${charId}`]: false } },
+      narrations: [`${charName}に同行を解いた旨を伝えた。`],
+    };
+  }
+
+  // Replace any prior companion, flip switches accordingly.
+  const switches: Record<string, boolean> = {
+    [`companion_${charId}`]: true,
+  };
+  if (m.companion) {
+    switches[`companion_${m.companion}`] = false;
+  }
+  m.companion = charId;
+  m.companionHp = 10;
+  return {
+    deltas: { switches },
+    narrations: [
+      `${charName}は頷いた。「次の出帰り、隣で歩く。」`,
+    ],
+  };
+};
+
 // ============================================================================
 // Triggers: HP <= 0 or spectral >= 100 during a raid → failure
 // ============================================================================
+
+// Queue a letter script — but only when we're safely in the hub between
+// scripts. If the player is mid-script (very rare; only if a trigger
+// somehow fires during a script's effects block), the chapter advance
+// still happens via the delta below, and onHubBuild can show a "未読の
+// 文" hint until the next hub cycle. The next time `currentScriptId`
+// becomes null in the run loop, the letter will queue.
+function queueLetterIfHub(ctx: PresetContext, scriptId: string): void {
+  if (ctx.state.baseline.currentScriptId === null) {
+    ctx.state.baseline.currentScriptId = scriptId;
+    ctx.state.baseline.beatIndex = 0;
+  }
+}
 
 const triggers: Trigger[] = [
   {
@@ -1095,6 +1865,105 @@ const triggers: Trigger[] = [
       return {};
     },
   },
+  // ============== 主線：将軍家からの密書 milestones ==============
+  // Each letter fires once per session (`once: true`); the engine
+  // tracks fired ids in state.runtime.firedTriggers.
+  //
+  // Composite `when:` shows off how trigger conditions can mix:
+  // - letter_02 requires both a raid count AND a spectral ceiling
+  //   (player must be visibly *not* drowning before the inspector
+  //   shows up — narrative beat, not just a counter).
+  // - letter_03 chains on shogun_chapter, so the trigger order is
+  //   guaranteed even if raidsCompleted accidentally jumps.
+  {
+    id: "letter_01_dispatch",
+    once: true,
+    when: { variable: { name: "raidsCompleted", min: 3 } },
+    do: (ctx) => {
+      queueLetterIfHub(ctx, "letter_01_suspicion");
+      return {
+        deltas: { variables: { shogun_chapter: 1 } },
+      };
+    },
+  },
+  {
+    id: "letter_02_dispatch",
+    once: true,
+    when: {
+      all: [
+        { variable: { name: "shogun_chapter", min: 1 } },
+        { variable: { name: "raidsCompleted", min: 7 } },
+        { characterStat: { character: "player", name: "spectral", max: 49 } },
+      ],
+    },
+    do: (ctx) => {
+      queueLetterIfHub(ctx, "letter_02_rival");
+      return {
+        deltas: { variables: { shogun_chapter: 1 } },
+      };
+    },
+  },
+  {
+    id: "letter_03_dispatch",
+    once: true,
+    when: {
+      all: [
+        { variable: { name: "shogun_chapter", min: 2 } },
+        { variable: { name: "raidsCompleted", min: 12 } },
+      ],
+    },
+    do: (ctx) => {
+      queueLetterIfHub(ctx, "letter_03_choice");
+      return {
+        deltas: { variables: { shogun_chapter: 1 } },
+      };
+    },
+  },
+  // 三花の盟 — once-only trigger when all three companions have
+  // survived at least one raid each. Composite of three switches via
+  // the `all` connector. The reward is a special script that branches
+  // the endings.
+  {
+    id: "three_flowers_alliance",
+    once: true,
+    when: {
+      all: [
+        { switch: { name: "befriended_kagari" } },
+        { switch: { name: "befriended_kasumi" } },
+        { switch: { name: "befriended_mio" } },
+      ],
+    },
+    do: (ctx) => {
+      queueLetterIfHub(ctx, "three_flowers_alliance");
+      return {};
+    },
+  },
+  // 脈絡の話 — first time any pulse counter ticks above 0, queue the
+  // pulse_intro lore. Composite of `all + any` so it fires once at
+  // the first imbue regardless of path. The pulse_intro script itself
+  // flips `pulse_intro_seen` true via its effects block, but `once:
+  // true` on the trigger is what ensures we don't loop if the player
+  // somehow resets the switch later.
+  {
+    id: "pulse_intro_dispatch",
+    once: true,
+    when: {
+      all: [
+        { switch: { name: "pulse_intro_seen", eq: false } },
+        {
+          any: [
+            { variable: { name: "pulse_pure", min: 1 } },
+            { variable: { name: "pulse_oni", min: 1 } },
+            { variable: { name: "pulse_mundane", min: 1 } },
+          ],
+        },
+      ],
+    },
+    do: (ctx) => {
+      queueLetterIfHub(ctx, "pulse_intro");
+      return {};
+    },
+  },
 ];
 
 // ============================================================================
@@ -1109,6 +1978,10 @@ const raidModule: Module = {
     mode: "hub",
     raid: null,
     metCharacters: [],
+    companion: null,
+    companionHp: 0,
+    pulsePending: null,
+    achievementLog: [],
   }),
 
   // Action handler kinds the module supplies. Engine namespaces them as
@@ -1119,7 +1992,9 @@ const raidModule: Module = {
     "depart",
     "bond",
     "sell_all_loot",
-    "upgrade_weapon",
+    "upgrade_mundane",
+    "upgrade_pure",
+    "upgrade_oni",
     "rest",
     "use_chinkonho",
     "move",
@@ -1128,12 +2003,25 @@ const raidModule: Module = {
     "sneak_strike",
     "flee",
     "extract",
+    "negotiate_listen",
+    "negotiate_release",
+    "yaodao_voice",
+    "invite",
+    "imbue_pure",
+    "imbue_oni",
+    "imbue_mundane",
+    "infoshop_basic",
+    "infoshop_loot",
+    "infoshop_yaodao",
+    "infoshop_hidden",
   ],
   actionHandlers: {
     depart: departHandler,
     bond: bondHandler,
     sell_all_loot: sellAllLootHandler,
-    upgrade_weapon: upgradeWeaponHandler,
+    upgrade_mundane: upgradeMundaneHandler,
+    upgrade_pure: upgradePureHandler,
+    upgrade_oni: upgradeOniHandler,
     rest: restHandler,
     use_chinkonho: useChinkonhoHandler,
     move: moveHandler,
@@ -1142,6 +2030,17 @@ const raidModule: Module = {
     sneak_strike: sneakStrikeHandler,
     flee: fleeHandler,
     extract: extractHandler,
+    negotiate_listen: negotiateListenHandler,
+    negotiate_release: negotiateReleaseHandler,
+    yaodao_voice: yaodaoVoiceHandler,
+    invite: inviteHandler,
+    imbue_pure: imbuePureHandler,
+    imbue_oni: imbueOniHandler,
+    imbue_mundane: imbueMundaneHandler,
+    infoshop_basic: infoshopHandler("basic", 50, 0, false),
+    infoshop_loot: infoshopHandler("loot", 100, 30, false),
+    infoshop_yaodao: infoshopHandler("yaodao", 200, 50, false),
+    infoshop_hidden: infoshopHandler("hidden", 300, 80, true),
   },
 
   onSessionStart: (ctx) => {
@@ -1164,7 +2063,184 @@ const raidModule: Module = {
 
   triggers,
 
+  // ============== Letter lifecycle observers ==============
+  // onScriptStart fires before the first beat yields. We push a single
+  // header narration ahead of the letter body so the player gets the
+  // "公儀御沙汰" page-break visually, no matter how the script was queued
+  // (trigger / hub / save-load).
+  onScriptStart: (ctx, scriptId) => {
+    if (scriptId.startsWith("letter_")) {
+      ctx.state.runtime.pendingNarrations.unshift(
+        `——— 公儀御沙汰 ———`,
+      );
+    }
+  },
+
+  // onScriptSelect (first-wins): when the player picks the generic
+  // `intel_briefing` script from the hub, redirect to the level-specific
+  // variant based on the `intel_active` variable. This is the cleanest
+  // legitimate use of the hook — the player-facing menu has one entry
+  // ("情報屋の覚書を読む") but the actual content depends on which
+  // tier of intel they bought.
+  onScriptSelect: (ctx, scriptId) => {
+    if (scriptId !== "intel_briefing") return;
+    const v = ctx.state.baseline.variables.intel_active;
+    if (typeof v !== "string" || v === "") return;
+    return `intel_briefing_${v}`;
+  },
+
+  // ============== Achievement observers ==============
+  //
+  // onStateMutated (observer): watch for rising-edge stat / variable
+  // crossings and push achievement strings into module-state log.
+  // Triggers don't do this naturally because they fire ActionResult
+  // deltas — observers can read fresh values directly and append
+  // strings without going through the delta surface.
+  //
+  // The dedup-on-append guard handles re-loads: the same crossing
+  // doesn't double-log when state.baseline is restored from a save.
+  onStateMutated: (ctx, _delta, source) => {
+    // Ignore replays from the seed loader / hot-reload paths.
+    if (source === "external") return;
+    const m = moduleState(ctx);
+    const log = (label: string) => {
+      if (!m.achievementLog.includes(label)) m.achievementLog.push(label);
+    };
+    const spec = playerStat(ctx, "spectral");
+    if (spec >= 50) log("鬼に近づく — 霊体化 50");
+    if (spec >= 80) log("暴走寸前 — 霊体化 80");
+    const pulsePure = (ctx.state.baseline.variables.pulse_pure ?? 0) as number;
+    const pulseOni = (ctx.state.baseline.variables.pulse_oni ?? 0) as number;
+    if (pulsePure >= 5) log("浄の極み — 浄脈 5");
+    if (pulseOni >= 5) log("鬼の脈、深し — 鬼脈 5");
+    if ((ctx.state.baseline.inventory.cursed_blade_fragment ?? 0) >= 1) {
+      log("呪の片を握る — 鬼神を斬りし証");
+    }
+  },
+
+  // onLabelEnter (observer): letter_03's three branches are implemented
+  // as goto labels (end_loyal / end_defy / end_silent). Logging the
+  // entry into one of those labels gives us a clean "the decision was
+  // made HERE" anchor, separate from the switch flip which happens
+  // earlier in the choice's effects block.
+  onLabelEnter: (ctx, scriptId, labelName) => {
+    if (scriptId !== "letter_03_choice") return;
+    if (!labelName.startsWith("end_")) return;
+    const m = moduleState(ctx);
+    const tag = `御沙汰：${labelName.slice(4)}`;
+    if (!m.achievementLog.includes(tag)) m.achievementLog.push(tag);
+  },
+
+  // onScriptComplete is the natural place to finalize a letter's
+  // module-level side effects that can't go in the script's effects
+  // block: pushing mio into metCharacters (a private module state
+  // slice). The chapter advance already happened in the dispatch
+  // trigger, so we don't touch shogun_chapter here.
+  onScriptComplete: (ctx, scriptId) => {
+    if (scriptId === "letter_02_rival") {
+      const m = moduleState(ctx);
+      if (!m.metCharacters.includes("mio")) {
+        m.metCharacters.push("mio");
+      }
+    }
+    // After any intel briefing variant runs to completion, clear
+    // intel_active so the hub stops surfacing it and the next infoshop
+    // purchase is unblocked.
+    if (scriptId.startsWith("intel_briefing_")) {
+      ctx.state.baseline.variables.intel_active = "";
+    }
+  },
+
+  // ============== Companion-aware reducers ==============
+  //
+  // onActionDispatch (first-wins): when a companion is in party at
+  // critical HP, veto `attack` and `sneak_strike` dispatches. Player
+  // must flee, use chinkonho, or let HP recover before re-engaging.
+  // Returns "cancel" — engine still fires onActionComplete with
+  // result=undefined, but the handler body doesn't run.
+  onActionDispatch: (ctx, action) => {
+    const m = moduleState(ctx);
+    if (
+      m.companion &&
+      m.companionHp > 0 &&
+      m.companionHp <= 3 &&
+      (action.kind === "attack" || action.kind === "sneak_strike")
+    ) {
+      const charName =
+        ctx.game.characters.find((c) => c.id === m.companion!)?.name ??
+        m.companion!;
+      ctx.state.runtime.pendingNarrations.push(
+        `${charName}が刀を抑えた。「下がれ、深い」——その目に、お主が今日見たどの鬼より強い意志。攻撃は取り消された。`,
+      );
+      return "cancel";
+    }
+    return;
+  },
+
+  // onBeatBefore (reducer): in bond scripts, if the player's spectral
+  // is already past the "危険" threshold (≥50), shadow specific dialogue
+  // beats with an alternate text that acknowledges the change. Uses
+  // the `{ replace: <beat> }` return form so the timeline still
+  // advances one beat per drain.
+  onBeatBefore: (ctx, scriptId, _beatIdx, beat) => {
+    if (!scriptId.startsWith("bond_")) return;
+    if (beat.type !== "dialogue") return;
+    if (playerStat(ctx, "spectral") < 50) return;
+    // Replace one specific tag — first dialogue beat where speaker is
+    // the bond target — with a darker variant. We just append a
+    // suffix to make it cheap & uniform.
+    return {
+      replace: {
+        ...beat,
+        text: `${beat.text}（——その目を、見つめ返せなかった。お主の瞳が、いつもと違うらしい。）`,
+      },
+    };
+  },
+
+  // onChoicePresented (reducer): in bond_*_03 scenes, when a *different*
+  // companion is in party, lock the boldest option (the last one, which
+  // is the +2-affection "I commit" choice). Player can still pick the
+  // milder options. The lock represents "I won't say that in front of
+  // her" social pressure.
+  //
+  // NOTE on the reducer surface: the engine's runScript resolves choices
+  // by indexing back into the original `beat.options` (runScript.ts:105).
+  // That means reducers can MARK options unavailable but cannot ADD new
+  // ones meaningfully — extra options shown to the player don't have a
+  // corresponding ChoiceOption to dispatch. So this hook is for
+  // contextual locking only, matching hook-test's coverage.
+  onChoicePresented: (ctx, scriptId, _beatIdx, options) => {
+    if (!scriptId.match(/^bond_\w+_03$/)) return;
+    const m = moduleState(ctx);
+    if (!m.companion) return;
+    const subjectMatch = scriptId.match(/^bond_(\w+)_03$/);
+    if (!subjectMatch) return;
+    const subject = subjectMatch[1];
+    if (m.companion === subject) return; // self in party — no jealousy axis
+    const sideName =
+      ctx.game.characters.find((c) => c.id === m.companion!)?.name ??
+      m.companion!;
+    const lastIdx = options.length - 1;
+    return options.map((opt, idx) =>
+      idx === lastIdx
+        ? {
+            ...opt,
+            available: false,
+            lockedReason: `${sideName}が隣にいる。今ここで口にする言葉ではない。`,
+          }
+        : opt,
+    );
+  },
+
   onHubBuild: (ctx) => {
+    // After any ending script completes, the game ends. Returning
+    // undefined from onHubBuild signals the preset's run loop to
+    // yield gameEnd. This is the engine-canonical way to terminate
+    // from a module — no need for a special action or hook.
+    const endings = ["ending_pure_rite", "ending_oni_self", "ending_mundane_seal"];
+    for (const id of endings) {
+      if (ctx.state.baseline.scripts[id]?.completed === true) return undefined;
+    }
     const m = moduleState(ctx);
     return m.mode === "hub" ? buildHubMenu(ctx) : buildRaidMenu(ctx);
   },

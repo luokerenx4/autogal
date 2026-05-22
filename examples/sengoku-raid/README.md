@@ -1,122 +1,148 @@
 # 妖刀奇譚 / Sengoku Raid
 
-一个用 [autogal](https://github.com/luokerenx4/autogal) 引擎做的**搜打撤 + GalGame**。日本战国时代，主角是 `spectral-demo` 主角的祖先 — 同样背着家伝的妖刀、同样的"灵体化"病。
+一个用 [autogal](https://github.com/luokerenx4/autogal) 引擎做的**搜打撤 + GalGame**。日本战国时代，主角は家伝の妖刀使い、灵体化に追われながら鬼を斬る。
 
-**Headless RPGMaker 形态**：游戏 loop 在 `preset/run.ts`（ejected，按前缀路由 activity ids）；地图数据在 `maps/*.yaml`；战斗 + 状态机 + 角色邂逅 + 邦绊系统都在 `modules/raid.ts`。引擎 0 修改。
+**autogal の旗艦サンプル**：本ゲームは引擎の主要 surface を**8割以上**実際に消費する — `Module` の 15 hook のうち 13 個、Condition AST 14 種のうち 12 種、`once: true` trigger、composite `all/any/not`、`selfSwitch`、`weapon.custom`、string variable、3 composite hook（reducer / first-wins / observer）。AI 作家がこのゲームを読めば、対応する引擎特性の「自然な使い方」が手に入る。
 
-**这一例验证的设计假设**：
-- "raid 不是 script，是 preset 的另一种 mode" — 通过 module 的 `mode: "hub" | "raid"` flag + `onHubBuild` first-wins hook 实现。raids 自然可重玩、`completedScripts` 不被污染。
-- 引擎的 `dispatchActivity` 只认 `script:` / `action:` 前缀；我们的 ejected preset 又加了 `raid:` / `hub:` 走 module dispatcher。
-- 战斗、loot、地图随机性全在 module action handlers 里跑（`ctx.rng()`），不依赖 script DSL 的随机分支（DSL 本身确定性）。
-
-## 世界观
-
-慶長十年。江戸城本丸。将軍家の側用人がお主を呼ぶ — 諸国に鬼が湧いている、家伝の妖刀使である你，要 traversal 江戸近郊讨伐並把妖物の遺骸帯回。
-
-但家书提醒：斬れば斬るほど、自分の中にも鬼が積もる。**這是個取捨的循環。**
+**Headless RPGMaker 形態**：游戏 loop 在 `preset/run.ts`（ejected）；地图 / 角色 / 道具 / 武器 / 技能 / 敌人 是 typed databases；戦闘 + 状態機 + module hook 都在 `modules/raid.ts`。**引擎 0 修改**。
 
 ## 玩
 
 ```bash
-autogal play .                                  # 自己玩
-autogal autoplay . --persona extractor -v       # 看 AI 玩"能撤就撤"路线
-autogal autoplay . --persona delver    -v       # 看 AI 玩"直推 boss"路线
-autogal test .                                  # fixture 回归
+autogal play .                                  # 自分で遊ぶ
+autogal autoplay . --persona extractor -v       # AI が「逃げ撤退」路線で遊ぶ
+autogal autoplay . --persona delver    -v       # AI が「直推 boss」路線で遊ぶ
+autogal test .                                  # fixture 回帰（31 個）
 ```
 
-## 数值
+## 世界観 + 三つの軸
 
-| 资源 | 范围 | 初始 | 作用 |
+慶長十年。江戸城本丸。将軍家側用人がお主を呼ぶ — 諸国に鬼が湧いている、家伝の妖刀使である你，要遊国討伐並把妖物の遺骸帯回。
+
+但家书提醒：斬れば斬るほど、自分の中にも鬼が積もる。そして、刀には**三つの脈**がある——お主はどの脈に流すかを、毎回選ぶ。
+
+**這是個取捨的循環。**
+
+## 五つの体験軸（特性駆動）
+
+| 軸 | 内容 | 引擎特性 |
+|---|---|---|
+| **A — 密書主線** | 将軍からの三通の密書が raidsCompleted を区切り、お主の選択を結審する | `once: true` triggers + composite `all` + variable: string |
+| **B — 同行者** | 篝 / 霞 / 澪 を raid に誘う。各々 passive を提供、半分のダメージを引き受ける | onActionDispatch first-wins + onBeatBefore reducer + onChoicePresented reducer |
+| **C — 鬼の交渉** | 鬼 HP < 30% で「聞く / 逃がす / 妖刀の声に従う」の三択 | selfSwitch + enemy.stats + enemy.custom + composite condition |
+| **D — 妖刀の業** | 勝利毎に「浄 / 鬼 / 凡」の脈絡を選ぶ。三本道で異なる結末 | weapon.custom + weaponPower condition + 3 endings via composite requires |
+| **E — 情報屋** | hub の「両国橋」で 4 段階の情報を買う。intellect が解錠条件 | variable: string + onScriptSelect first-wins |
+
+## 数値
+
+| 資源 | 範囲 | 初期 | 作用 |
 |---|---|---|---|
-| `hp` | 0–30 | 30 | 战斗血量。Raid 内消耗，hub `hub:rest` 全回 |
-| `mental` | 0–10 | 10 | 战斗里少用，预留给将来的 spirit 动作 |
-| `spectral` | 0–100 | 5 | 每攻击 +1，胜斩后吸入刀里 -absorb。crit 概率 = `spec × 0.7%`，fumble 概率 = `spec × 0.5%`。≥100 → BAD END |
-| `intellect` | 0–99 | 0 | 偷袭（`sneak_strike`）DC 公式的一部分 |
-| `ryo`（道具）| 0–∞ | 100 | 通货 — 升刀、送礼、买卖 loot |
+| `hp` | 0–30 | 30 | 戦闘血量。0 で raid 失敗、hub `rest` で全回 |
+| `mental` | 0–10 | 10 | 戦闘で削れる。intel_briefing_yaodao で +2 |
+| `spectral` | 0–100 | 5 | 攻撃で +1 creep、勝斬で吸入 -absorb。crit 率 = `spec × 0.7%`、fumble 率 = `spec × 0.5%`。≥100 → BAD END |
+| `intellect` | 0–99 | 0 | 偷襲 DC + 情報屋の解錠条件 |
+| `ryo` | 0–∞ | 100 | 通貨 |
 
-**妖刀** `ancestor_yaodao` — basePower 4。`hub:upgrade_weapon` 用 3 颗魂石碎片 + 100 两换 +2 power。打鬼胜利 swordGain = `max(1, floor(敌HP/4))`。
+**妖刀**：basePower 4。三本道の鍛え方：
+- 凡: `upgrade_mundane`（魂石碎片 3 + 100 両）→ 威力 +2、脈絡: 凡 +1
+- 浄: `upgrade_pure`（鬼の角 1 + 80 両）→ 威力 +1、脈絡: 浄 +1
+- 鬼: `upgrade_oni`（鬼の角 1 + 欠片 1 + 120 両）→ 威力 +4、霊体化 +5、脈絡: 鬼 +1
 
-战斗公式（同 spectral-demo 公式族）：
-```
-基础伤害 = sword_power × (1 + spectral × 0.04) × random(0.8, 1.2)
-胜利奖励 = absorb = floor(敌HP/2)        # spectral -absorb
-        + swordGain = max(1, floor(敌HP/4))   # 妖刀威力 +N
-临界成功率 = spectral × 0.7%      （×2 伤害）
-临界失败率 = spectral × 0.5%      （敌人反击 ×1.6）
-偷袭判定 = intellect × 5 + spectral × 0.5  > rng×100
-逃跑判定 = rng×100 > 30 + spectral - 10
-```
+**imbue 選択** — 戦闘勝利後、必ず三択を経て妖力を流す脈を決める：
+- 浄: 威力 +1、霊体化 -1（rebate）
+- 鬼: 威力 +max(3, absorb/2)、霊体化 +3
+- 凡: 威力 +2
 
-敌人反击数值不在 `EnemyDef` 的"engine universal"里 — 通过 `enemy.custom.attack_power` 读（PR #12 引入的 frontmatter passthrough）。例如 `enemies/kijin.md` 顶层就一行 `attack_power: 9`。
+## 地図
 
-## 地图
-
-| ID | 名 | 难度 | 撤离点 | 主要敌人 | 邂逅角色 |
+| ID | 名 | 難度 | 撤離点 | 主敵 | 解錠 |
 |---|---|---|---|---|---|
-| `kuro_swamp` | 黒沼地 | 1 | 潰れた社 / 奥の杜 | 下級の鬼（HP 8）| 篝 |
-| `mt_houkyou` | 砲響山 | 3 | 焼け落ちた寺 / 火口 | 戦鬼（HP 18）+ 鬼神 boss（HP 45）| 霞 |
+| `kuro_swamp` | 黒沼地 | 1 | 潰れた社 / 奥の杜 | 下級の鬼 | 開幕から |
+| `sumida_river` | 隅田河 | 2 | 渡し場 / 軒下の闇 | 下級の鬼 + 戦鬼 | 開幕から |
+| `mt_houkyou` | 砲響山 | 3 | 焼け落ちた寺 / 火口 | 戦鬼 + 鬼神 (boss) | 開幕から |
+| `hell_gate` | 地獄門 | 5 | 映し井戸 | 鬼神 × n | pulse_oni≥8 AND power≥12 AND chinkonho AND mizukagami |
 
-每张地图是 `maps/<id>.yaml`：zones 数组（每 zone 有 connections、encounter_table、loot_table、optional `is_extract`）+ `character_spawns` 数组。加新地图 = 加新文件，**0 module 改动**。
+`hell_gate` の解錠 — `mapUnlocked()` の composite gate を読めば、引擎の "composite condition gating" の使い所が分かる。
 
 ## 角色 + 技能
 
-| 角色 | 出现地图 | 邂逅 zone | 邦绊技能（affection ≥ 4）|
+| 角色 | 邂逅 | 邦絆技能 | 同行 passive |
 |---|---|---|---|
-| 篝（kagari） | kuro_swamp | crossroads / ruined_hut | **鎮魂法** — hub-only，`spectral -20` |
-| 霞（kasumi） | mt_houkyou | stone_paths / lava_vent | **早駆け** — raid 中 `raid:flee` 永远成功 0 伤 |
+| 篝 | kuro_swamp の crossroads / ruined_hut | 鎮魂法（hub-only、spectral -20）| zone 移動毎 spectral -1 |
+| 霞 | mt_houkyou の stone_paths / lava_vent | 早駆け（flee 無傷成功）| 同行中は flee 常時成功 |
+| 澪 | 第二の密書で登場（朝廷監察役）| 水鏡（mizukagami、scry）| —— |
 
-邦绊路径：第一次踏入对应 zone 触发 `encounter_<id>_first.md`（spawn chance 1.0 → deterministic 故事节奏）→ 邂逅时选项决定首次 affection（+0/+1/+2）→ 回 hub 后 `hub:bond:<id>` 送礼（每次 +1，50 両）→ affection ≥2 解锁 `bond_<id>_01`，≥4 解锁 `bond_<id>_02`（grant skill）。
+邦絆ループ：邂逅 → 親密度 ≥2 で `bond_<id>_01` → ≥4 で `bond_<id>_02`（grant skill）→ raid に誘う（switch `companion_<id>`）→ 生還で `befriended_<id>` 立つ → ≥6 + befriended で `bond_<id>_03`（companion 同道）→ 三人とも befriended で `three_flowers_alliance` trigger。
 
 ## Loop
 
 ```
-HUB                            RAID
-───                            ────
-hub:depart:<map>     ───→     foothills / edge zone
-↑                              │
-│   sell_all_loot              │ raid:move:<zone>
-│   upgrade_weapon             │     ├── 触发 character_spawn → script
-│   bond / script:bond_*       │     ├── encounter rolled → combat
-│   rest                       │     └── empty → search / move
-│                              │
-│   ←── extract success ←── raid:extract（必须 isExtract zone）
-│                              │
-│   ←── death ←─── HP ≤ 0 / spectral ≥ 100  (loadout lost)
+HUB                                  RAID
+───                                   ────
+depart:<map>             ───→        spawn zone
+↑                                     │
+│   sell_all_loot                     │ move:<zone>
+│   upgrade_pure/oni/mundane          │     ├── encounter rolled → combat
+│   infoshop_basic/loot/yaodao/hidden │     │     ├── HP<30% → 聞く/逃がす/妖刀の声
+│   script:intel_briefing             │     │     └── HP=0  → 脈絡選択（imbue）
+│   bond / script:bond_*              │     ├── empty → search / move
+│   invite:<companion>                │     └── extract zone → extract
+│   rest                              │
+│   use_chinkonho                     │
+│   script:ending_*  (game over)      │
+│                                      │
+│   ←── extract success ←── extract activity
+│   ←── failure ←── HP=0 / spectral=100 / companion HP=0
 ```
 
-死亡 = `state["sengoku-raid"].raid = null`，stash（baseline.inventory）保留，HP 重置为 1，`raidsFailed += 1`。
-撤退成功 = raid.pendingLoot 转入 baseline.inventory，`raidsCompleted += 1`。
+## Hook usage matrix（旗艦覆盖）
 
-## Fixtures
+| Engine surface | 用処 | コード位置 |
+|---|---|---|
+| `onSessionStart` | ryo bootstrap + intro auto-launch | raid.ts onSessionStart |
+| `onScriptSelect` | intel_briefing → intel_briefing_<level> redirect | raid.ts onScriptSelect |
+| `onScriptStart` | letter_ scripts に page-break narration を unshift | raid.ts onScriptStart |
+| `onBeatBefore` (reducer) | spectral≥50 で bond dialogue を replace | raid.ts onBeatBefore |
+| `onChoicePresented` (reducer) | bond_*_03 で他者同行中なら大胆肢を lock | raid.ts onChoicePresented |
+| `onLabelEnter` | letter_03 の end_* label を achievementLog に書く | raid.ts onLabelEnter |
+| `onScriptComplete` | letter_02_rival → metCharacters に mio 追加；intel_briefing_* → intel_active クリア | raid.ts onScriptComplete |
+| `onActionDispatch` (first-wins) | companion HP≤3 で attack を cancel | raid.ts onActionDispatch |
+| `onStateMutated` (observer) | spectral / pulse 閾値跨ぎを achievementLog に記録 | raid.ts onStateMutated |
+| `onHubBuild` (first-wins) | mode-dependent menu、ending 完了で undefined→gameEnd | raid.ts onHubBuild |
+| Trigger `once: true` | 4 milestones（letter_01/02/03、three_flowers、pulse_intro）| triggers 配列 |
+| Trigger composite `when` | letter_02（var+characterStat）、three_flowers（switch×3）、pulse_intro（all+any） | triggers 配列 |
+| `selfSwitch` | 鬼解放 → zone_haunt_<enemy> A flip → lore script unlock | negotiateReleaseHandler |
+| `weapon.custom` (nested) | pulse_paths schema document | weapons/ancestor_yaodao.md |
+| `weaponPower` condition | hell_gate mapUnlocked composite | raid.ts mapUnlocked |
+| `inventory` condition | infoshop_hidden requires frag | infoshopHandler |
+| `knowsSkill` condition | hell_gate mapUnlocked | raid.ts mapUnlocked |
+| Fenced choice with effects | letter_03_choice で chose_court_* 三択 | letter_03_choice.md |
+| Composite script `requires:` | ending_* scripts、bond_*_03 scripts | 各 .md frontmatter |
+| `string` variable | intel_active、last_directive | game.yaml variables |
 
-8 个 fixture 锁定每条骨干路径：
+唯二 **未挂** の hook：`onNarrationDrain`（性価比低）、`onEndConditionFire`（training preset 専用、我々は使わない）。
 
-| # | 检查 |
-|---|---|
-| 01 | 开局 state — flags 默认值 + 自动装刀 + intro 自动启动 |
-| 02 | HP≤0 trigger → 模式回 hub + raidsFailed +1 + loadout 清零 |
-| 03 | raid:extract → loot 进 stash + raidsCompleted +1 + HP 不重置 |
-| 04 | 第一次到 crossroads → 篝 spawn + encounter script 入 completedScripts + metCharacters 更新 |
-| 05 | bond_kagari_02 → `chinkonho` 进 knownSkills |
-| 06 | bond_kasumi_02 → `hayagake` 进 knownSkills |
-| 07 | combat 激活时 dispatcher 拒绝 move / search / extract |
-| 08 | hub:upgrade_weapon 不满足条件时 narrate 拒绝原因 |
+## Fixtures（31 個）
+
+```
+01–08  legacy（基本骨子 — 開幕状態 / 邂逅 / 邦絆 / 戦闘 / 撤退 / 死亡 / dispatcher guard）
+A1–A4  提案A — 密書 milestone triggers、fenced choice branching
+B1–B6  提案B — 同行者 invite、passive、damage absorb、3 reducer hooks、composite trigger
+C1–C4  提案C — 鬼の交渉、selfSwitch、yaodao_voice gate、zone_haunt 解錠
+D1–D3  提案D — pulse imbue、hell_gate gate、upgrade_oni cost
+DE1    提案D+E 結 — ending_pure_rite で gameEnd
+E1–E3  提案E — infoshop tiers、onScriptSelect redirect、intellect gate
+F1–F2  收尾 — onStateMutated achievement log、onLabelEnter
+```
 
 ## Personas
 
-| Persona | 策略 | 用途 |
+| Persona | 策略 | 用処 |
 |---|---|---|
-| `extractor` | 见 extract zone 就撤；遇敌 flee；hub 里 sell+rest+depart 循环 | 验证"零战斗也能玩"（实际跑出 14 raids / 461 ryo / 0 deaths） |
-| `delver` | 见敌必战；优先未踏过的 zone；全图踏完才 extract | 验证 boss 可达 — sword 从 4 长到 84+，kijin 被解决 |
+| `extractor` | extract zone を見たら撤退。遇敵 flee | "戦わなくても遊べる" 検証 |
+| `delver` | 必ず戦う。全 zone 踏破してから撤退 | boss 到達 + pulse 累積 検証 |
 
-定义在 `packages/cli/src/test/personas.ts`，需要读 `state["sengoku-raid"].raid.zones` 做 unvisited-pathfinding。这是目前 personas 需要 game-specific 知识的一处尖锐边 — 见仓库 issue 跟进。
+## 開発で見つけた engine / parser bug（this branch で fix）
 
-## 这一局发现的引擎 bug（已修）
-
-#9 — parser 丢自定义 frontmatter 字段：`attack_power` / `sell_value` 写在 .md 里被 parser 默默吃掉，module 只能维护 fallback 表。**修复**：每个 parser 现在用 `extractCustom()` 把未知 frontmatter key 收进 `def.custom`。
-
-#10 — combat 激活时 dispatcher 仍接受非战斗 action：hub menu 锁了，但脚本玩家 / AI persona 能直接 dispatch `raid:move:*` 走人。**修复**：`combatBlock(ctx)` helper 在 move/search/extract 前 narrate refusal。
-
-#11 — `hub:upgrade_weapon` 资源不足时静默 no-op：UI 无任何提示。**修复**：每个 hub:* 处理器现在 `denyWithNarration(ctx, msg)` 报具体原因（差几颗 / 差多少两 / 角色没见过 / HP 已满）。
-
-3 issue 全在 PR #12 修完，过程详见 issues #9 #10 #11 + commit log。
+- **parser/condition.ts `selfSwitch`**：engine の `evaluateCondition` と validator は selfSwitch を理解していたが、parser がフロントマターから読めなかった（条件 AST の漏れ）。15 行追加で修正。
+- **`onChoicePresented` の意味的制限**：reducer は option を **ADD** できる（visual に追加可）が、`runScript` は ピックを `beat.options[index]` で再解決するため、追加 option は dispatch 不能。よって reducer は **filter / lock** にのみ使うべき。コメントで note 追加（modules/raid.ts onChoicePresented）。

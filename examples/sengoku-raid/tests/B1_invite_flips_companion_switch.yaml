@@ -1,0 +1,29 @@
+name: 提案B：invite_kagari → companion_kagari スイッチが立つ、m.companion セット
+description: |
+  Affection 5 で誘うと拒否（4 が要る）。Affection 4 にして再度 invite —
+  成功、companion_kagari true、m.companion = "kagari"、m.companionHp = 10。
+state:
+  baseline:
+    completedScripts: [000_intro]
+    characters:
+      kagari:
+        stats: { affection: 4 }
+  sengoku-raid:
+    mode: hub
+    metCharacters: [kagari]
+    raid: null
+    companion: null
+    companionHp: 0
+inputs:
+  - { type: doActivity, id: "invite:kagari" }
+  - { type: next }
+assertions:
+  - kind: state
+    path: baseline.switches.companion_kagari
+    eq: true
+  - kind: state
+    path: sengoku-raid.companion
+    eq: kagari
+  - kind: state
+    path: sengoku-raid.companionHp
+    eq: 10

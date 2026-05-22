@@ -1,0 +1,57 @@
+name: 提案C：HP<30% で逃がす → selfSwitch A 立つ
+description: |
+  Seed an encounter already marked negotiable. Dispatch negotiate_release.
+  Verify: encounter cleared, selfSwitch A on zone_haunt_oni_lesser flips
+  true, spectral -2. The deltas-based selfSwitch path is the only place
+  in the flagship that exercises the engine's StateDelta.selfSwitches
+  field from an action handler.
+state:
+  baseline:
+    completedScripts: [000_intro]
+    weapons:
+      ancestor_yaodao: { power: 10 }
+    characters:
+      player:
+        stats: { hp: 30, mental: 8, spectral: 30, intellect: 5 }
+  sengoku-raid:
+    mode: raid
+    metCharacters: [kagari]
+    raid:
+      mapId: kuro_swamp
+      mapName: 黒沼地
+      currentZoneId: ruined_hut
+      turnsTaken: 2
+      pendingLoot: {}
+      zones:
+        ruined_hut:
+          id: ruined_hut
+          name: 廃れた茅屋
+          visited: true
+          searched: false
+          encounter:
+            enemyId: oni_lesser
+            enemyHp: 2
+            enemyHpMax: 8
+            negotiable: true
+          encounterCleared: false
+          encounterTable: []
+          lootTable: []
+          connections: [{ dir: 戻る, target: crossroads }]
+          isExtract: false
+          pendingLoot: {}
+inputs:
+  - { type: doActivity, id: "negotiate_release" }
+  - { type: next }
+assertions:
+  - kind: state
+    path: baseline.scripts.zone_haunt_oni_lesser.selfSwitches.A
+    eq: true
+  - kind: state
+    path: baseline.characters.player.stats.spectral
+    eq: 28
+  - kind: state
+    path: sengoku-raid.raid.zones.ruined_hut.encounter
+    eq: null
+  - kind: state
+    path: sengoku-raid.raid.zones.ruined_hut.encounterCleared
+    eq: true

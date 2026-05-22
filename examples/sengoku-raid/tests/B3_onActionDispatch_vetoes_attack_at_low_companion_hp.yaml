@@ -1,0 +1,57 @@
+name: 提案B：onActionDispatch first-wins — 同行者 HP<=3 で attack を cancel
+description: |
+  Seed a raid encounter with companionHp=2. Dispatch attack — the
+  first-wins onActionDispatch hook returns "cancel", so the attack
+  handler never runs. Encounter HP unchanged; cancellation narration
+  appears in pendingNarrations.
+state:
+  baseline:
+    completedScripts: [000_intro]
+    weapons:
+      ancestor_yaodao: { power: 8 }
+    characters:
+      player:
+        stats: { hp: 30, mental: 8, spectral: 30, intellect: 5 }
+      kagari:
+        stats: { affection: 6 }
+    switches:
+      companion_kagari: true
+  sengoku-raid:
+    mode: raid
+    metCharacters: [kagari]
+    companion: kagari
+    companionHp: 2
+    raid:
+      mapId: kuro_swamp
+      mapName: 黒沼地
+      currentZoneId: ruined_hut
+      turnsTaken: 3
+      pendingLoot: {}
+      zones:
+        ruined_hut:
+          id: ruined_hut
+          name: 廃れた茅屋
+          visited: true
+          searched: false
+          encounter:
+            enemyId: oni_lesser
+            enemyHp: 8
+            enemyHpMax: 8
+          encounterCleared: false
+          encounterTable: []
+          lootTable: []
+          connections: [{ dir: 戻る, target: crossroads }]
+          isExtract: false
+          pendingLoot: {}
+inputs:
+  - { type: doActivity, id: "attack" }
+  - { type: next }
+assertions:
+  # Attack didn't actually run — encounter HP intact
+  - kind: state
+    path: sengoku-raid.raid.zones.ruined_hut.encounter.enemyHp
+    eq: 8
+  # ...and spectral wasn't bumped by the +1 per-strike creep
+  - kind: state
+    path: baseline.characters.player.stats.spectral
+    eq: 30

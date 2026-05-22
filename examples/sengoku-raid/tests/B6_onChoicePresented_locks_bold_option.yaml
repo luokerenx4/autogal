@@ -1,0 +1,53 @@
+name: 提案B：onChoicePresented reducer — 他者同行中は bond_*_03 の最後の選択肢が lock される
+description: |
+  Player is in hub with mio invited. Run bond_kagari_03 (篝 affection 6,
+  befriended). At the choice beat, the reducer locks the boldest option
+  (index 2) — picking it should not advance the script (engine continues
+  the choice yield). Picking index 0 (still available) advances normally.
+  The script completes; assertion verifies completionOrder includes it.
+state:
+  baseline:
+    completedScripts: [000_intro]
+    weapons:
+      ancestor_yaodao: { power: 6 }
+    characters:
+      player:
+        stats: { hp: 30, mental: 8, spectral: 20, intellect: 5 }
+      kagari:
+        stats: { affection: 6 }
+      mio:
+        stats: { affection: 6 }
+    switches:
+      companion_mio: true
+      befriended_kagari: true
+      befriended_mio: true
+  sengoku-raid:
+    mode: hub
+    metCharacters: [kagari, mio]
+    companion: mio
+    companionHp: 10
+    raid: null
+maxSteps: 80
+inputs:
+  - { type: doActivity, id: "script:bond_kagari_03" }
+  # Drain 7 narration/dialogue beats up to the choice (at trace idx 8)
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  # Try the locked option (index 2 = "眠らない" +2) — runScript continues
+  # the choice yield because the reducer marked it available=false.
+  - { type: choose, index: 2 }
+  # Now pick index 0 (always available)
+  - { type: choose, index: 0 }
+  # Drain trailing narrations to script end
+  - { type: next }
+  - { type: next }
+  - { type: next }
+assertions:
+  - kind: state
+    path: baseline.completedScripts
+    includes: bond_kagari_03

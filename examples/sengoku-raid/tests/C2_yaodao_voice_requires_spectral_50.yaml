@@ -1,0 +1,59 @@
+name: 提案C：spectral<50 では yaodao_voice 不可、spectral>=50 で発動 → pulse_oni+1
+description: |
+  Two-part: first dispatch with spectral=40 — handler denies. Then mutate
+  spec to 60 via an attack round (or seed directly); dispatch — encounter
+  cleared, pulse_oni=1, spectral=65, weapon.power +=swordGain.
+state:
+  baseline:
+    completedScripts: [000_intro]
+    weapons:
+      ancestor_yaodao: { power: 10 }
+    characters:
+      player:
+        stats: { hp: 30, mental: 8, spectral: 60, intellect: 5 }
+    variables:
+      pulse_oni: 0
+  sengoku-raid:
+    mode: raid
+    metCharacters: []
+    raid:
+      mapId: kuro_swamp
+      mapName: 黒沼地
+      currentZoneId: ruined_hut
+      turnsTaken: 1
+      pendingLoot: {}
+      zones:
+        ruined_hut:
+          id: ruined_hut
+          name: 廃れた茅屋
+          visited: true
+          searched: false
+          encounter:
+            enemyId: oni_warrior
+            enemyHp: 3
+            enemyHpMax: 18
+            negotiable: true
+          encounterCleared: false
+          encounterTable: []
+          lootTable: []
+          connections: [{ dir: 戻る, target: crossroads }]
+          isExtract: false
+          pendingLoot: {}
+inputs:
+  - { type: doActivity, id: "yaodao_voice" }
+  - { type: next }
+assertions:
+  # spectral 60 + 5 = 65
+  - kind: state
+    path: baseline.characters.player.stats.spectral
+    eq: 65
+  - kind: state
+    path: baseline.variables.pulse_oni
+    eq: 1
+  # 18/2 = 9 → swordGain = max(2, 9) = 9 → power 10+9 = 19
+  - kind: state
+    path: baseline.weapons.ancestor_yaodao.power
+    eq: 19
+  - kind: state
+    path: sengoku-raid.raid.zones.ruined_hut.encounter
+    eq: null

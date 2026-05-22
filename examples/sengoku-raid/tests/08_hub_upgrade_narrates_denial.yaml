@@ -1,8 +1,9 @@
-name: hub:upgrade_weapon 资源不足时给出明确说明 (#11)
+name: hub:upgrade_mundane 資源不足時の denial（D 分割後）
 description: |
-  Pre-seeds the player in hub with 0 soul_shards (default starting
-  ryo=100 from onSessionStart). Dispatch upgrade — should narrate
-  why the upgrade was refused. Asserts weapon power unchanged.
+  Pulse-system update — upgrade_weapon is split into upgrade_mundane/
+  upgrade_pure/upgrade_oni. This test exercises the mundane path
+  (魂石碎片 ×3 + 100 両) with no shards. The denial narration mentions
+  the missing resource.
 
 state:
   baseline:
@@ -14,15 +15,12 @@ state:
     raid: null
     metCharacters: []
 inputs:
-  - { type: doActivity, id: "upgrade_weapon" }
-  # Drain the denial narration into a real Output so we can assert on it
+  - { type: doActivity, id: "upgrade_mundane" }
   - { type: next }
 assertions:
-  # Weapon untouched
   - kind: state
     path: baseline.weapons.ancestor_yaodao.power
     eq: 4
-  # The narration mentions the missing resource
   - kind: output
     type: narration
     present: true

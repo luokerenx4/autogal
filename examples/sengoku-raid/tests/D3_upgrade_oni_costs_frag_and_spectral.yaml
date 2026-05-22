@@ -1,0 +1,46 @@
+name: 提案D：upgrade_oni は鬼の角×1 + 欠片×1 + 120両を消費、霊体化+5、威力+4、脈絡:鬼+1
+description: |
+  Hub action upgrade_oni — the high-cost, high-payoff branch. Test
+  the full delta: inventory consumed, weapon power, spectral hit,
+  pulse_oni counter.
+state:
+  baseline:
+    completedScripts: [000_intro]
+    knownSkills: []
+    weapons:
+      ancestor_yaodao: { power: 6 }
+    characters:
+      player:
+        stats: { hp: 30, mental: 8, spectral: 30, intellect: 5 }
+    variables:
+      pulse_oni: 0
+    inventory:
+      ryo: 200
+      oni_horn: 2
+      cursed_blade_fragment: 1
+  sengoku-raid:
+    mode: hub
+    metCharacters: []
+    companion: null
+    companionHp: 0
+    pulsePending: null
+    raid: null
+inputs:
+  - { type: doActivity, id: "upgrade_oni" }
+  - { type: next }
+assertions:
+  - kind: state
+    path: baseline.weapons.ancestor_yaodao.power
+    eq: 10
+  - kind: state
+    path: baseline.characters.player.stats.spectral
+    eq: 35
+  - kind: state
+    path: baseline.variables.pulse_oni
+    eq: 1
+  - kind: state
+    path: baseline.inventory.oni_horn
+    eq: 1
+  - kind: state
+    path: baseline.inventory.ryo
+    eq: 80

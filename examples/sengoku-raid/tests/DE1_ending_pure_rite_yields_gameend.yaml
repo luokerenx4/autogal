@@ -1,0 +1,60 @@
+name: 提案D+E：chose_court_loyal + pulse_pure>=5 → ending_pure_rite が hub に現れる、完走で gameEnd
+description: |
+  Player chose loyal in letter_03 and reached pulse_pure 5. Hub
+  surfaces ending_pure_rite as a script entry. After running it
+  to completion, onHubBuild returns undefined (any ending completed
+  → game over), the run loop yields gameEnd.
+state:
+  baseline:
+    completedScripts: [000_intro, letter_01_suspicion, letter_02_rival, letter_03_choice]
+    weapons:
+      ancestor_yaodao: { power: 10 }
+    characters:
+      player:
+        stats: { hp: 30, mental: 8, spectral: 15, intellect: 30 }
+      kagari:
+        stats: { affection: 6 }
+      mio:
+        stats: { affection: 6 }
+    switches:
+      chose_court_loyal: true
+      mio_met: true
+      pulse_intro_seen: true
+    variables:
+      raidsCompleted: 14
+      shogun_chapter: 3
+      pulse_pure: 5
+      pulse_oni: 0
+      pulse_mundane: 2
+  runtime:
+    firedTriggers: [letter_01_dispatch, letter_02_dispatch, letter_03_dispatch, pulse_intro_dispatch]
+  sengoku-raid:
+    mode: hub
+    metCharacters: [kagari, mio]
+    raid: null
+    companion: null
+    companionHp: 0
+    pulsePending: null
+maxSteps: 60
+inputs:
+  - { type: doActivity, id: "script:ending_pure_rite" }
+  # The ending script has ~9 dialogue/narration beats
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+assertions:
+  - kind: state
+    path: baseline.completedScripts
+    includes: ending_pure_rite
+  - kind: output
+    type: gameEnd
+    present: true

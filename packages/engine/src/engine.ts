@@ -47,15 +47,59 @@ export function buildPresetContext(
   );
   const modules = resolveModules(game);
 
+  // Action handler registry. Indexed by both bare ("combat") and
+  // qualified ("module-id:combat") keys. Qualified form is always
+  // present; bare form is registered only when exactly one module
+  // provides that kind. Multiple-providers case: bare form is omitted
+  // — actions must reference the qualified form. Action dispatch
+  // looks up `action.kind` verbatim, so authors can pick the form
+  // that fits.
   const actionHandlerRegistry: Record<string, ActionHandler> = {};
+  const providersByKind = new Map<string, string[]>();
   for (const mod of modules) {
-    for (const [kind, handler] of Object.entries(mod.actionHandlers ?? {})) {
-      if (actionHandlerRegistry[kind]) {
+    const handlerEntries = Object.entries(mod.actionHandlers ?? {});
+    if (mod.provides) {
+      const declared = new Set(mod.provides);
+      const actual = new Set(handlerEntries.map(([k]) => k));
+      const missing = mod.provides.filter((k) => !actual.has(k));
+      const extra = handlerEntries
+        .map(([k]) => k)
+        .filter((k) => !declared.has(k));
+      if (missing.length > 0 || extra.length > 0) {
+        const parts: string[] = [];
+        if (missing.length > 0) {
+          parts.push(`declared but no handler: ${missing.join(", ")}`);
+        }
+        if (extra.length > 0) {
+          parts.push(`handler but not declared: ${extra.join(", ")}`);
+        }
         throw new Error(
-          `Engine: duplicate action handler for kind "${kind}" (module ${mod.id})`,
+          `Engine: module "${mod.id}" provides/actionHandlers mismatch — ${parts.join(
+            "; ",
+          )}`,
         );
       }
-      actionHandlerRegistry[kind] = handler;
+    }
+    for (const [kind, handler] of handlerEntries) {
+      const qualified = `${mod.id}:${kind}`;
+      if (actionHandlerRegistry[qualified]) {
+        throw new Error(
+          `Engine: duplicate qualified action handler "${qualified}"`,
+        );
+      }
+      actionHandlerRegistry[qualified] = handler;
+      const existing = providersByKind.get(kind) ?? [];
+      existing.push(mod.id);
+      providersByKind.set(kind, existing);
+    }
+  }
+  // Register bare keys only for kinds with a single provider; record
+  // ambiguous kinds so dispatch can give an informative error.
+  for (const [kind, providers] of providersByKind) {
+    if (providers.length === 1) {
+      const moduleId = providers[0]!;
+      const handler = actionHandlerRegistry[`${moduleId}:${kind}`];
+      if (handler) actionHandlerRegistry[kind] = handler;
     }
   }
 

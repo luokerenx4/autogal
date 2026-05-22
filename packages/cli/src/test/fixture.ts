@@ -144,7 +144,7 @@ function expandSeedSugar(
     next.characters = rewritten;
   }
 
-  return { ...raw, baseline: next } as Partial<ComposedState>;
+  return { ...raw, baseline: next } as unknown as Partial<ComposedState>;
 }
 
 export function mergeState(

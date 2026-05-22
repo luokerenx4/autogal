@@ -59,6 +59,7 @@ export const trainingPreset: Module = {
     if (!game.training) return undefined;
     return createTrainingState(game.training);
   },
+  provides: ["sleep"],
   actionHandlers: {
     sleep: sleepHandler,
   },

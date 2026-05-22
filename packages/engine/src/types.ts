@@ -400,7 +400,12 @@ export interface Action {
   slot?: "any" | "day" | "night";
   requires?: Condition;
   effects?: StateDelta;
-  kind?: "combat" | "sleep" | "plain" | "useItem" | "useSkill";
+  // Dispatch kind. Resolved against the loaded modules' actionHandlers
+  // at engine init. Bare form (`combat`) dispatches when exactly one
+  // module provides that kind; qualified form (`spectral-combat:combat`)
+  // is unambiguous. If absent, the engine applies action.effects
+  // directly (no handler).
+  kind?: string;
   // Required when kind === "useItem": id of the item this action
   // consumes. Resolved against ctx.itemMap by the bundled useItem
   // handler in baseline module.
@@ -468,7 +473,18 @@ export interface Module {
   // Map of action.kind → handler. When the engine dispatches an Action
   // whose `kind` matches one of the keys, this handler is invoked.
   // Handlers MUST resolve atomically (see ActionHandler doc below).
+  // Actions can reference these kinds either bare (`kind: combat`) when
+  // exactly one loaded module provides them, or qualified
+  // (`kind: spectral-combat:combat`) when multiple modules share a kind
+  // name. The engine builds both lookup keys at construction.
   actionHandlers?: Record<string, ActionHandler>;
+
+  // Optional self-documenting list of kinds this module provides. When
+  // present, the engine checks at construction that this set matches
+  // the actionHandlers keys exactly — a redundancy guard against
+  // typos like `actionHandlers: { coombat: ... }` slipping through. If
+  // omitted, the engine infers provides from actionHandlers keys.
+  provides?: string[];
 
   // Reactive triggers. The engine evaluates each Trigger's `when`
   // after every state mutation; fires `do` on rising-edge transitions.

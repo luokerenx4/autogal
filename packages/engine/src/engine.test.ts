@@ -4,7 +4,7 @@ import { makeCharacter, makeGame, makeScript } from "./test-utils";
 import type { Module } from "./types";
 
 describe("buildPresetContext", () => {
-  test("aggregates all modules' actionHandlers into a flat registry", () => {
+  test("aggregates all modules' actionHandlers under bare AND qualified keys", () => {
     const modA: Module = {
       id: "modA",
       actionHandlers: { custom_a: () => ({}) },
@@ -19,15 +19,21 @@ describe("buildPresetContext", () => {
         modules: [modA, modB],
       }),
     );
+    // Each kind appears both bare (single provider) and qualified;
+    // baseline contributes useItem + useSkill.
     expect(Object.keys(ctx.actionHandlerRegistry).sort()).toEqual([
+      "baseline:useItem",
+      "baseline:useSkill",
       "custom_a",
       "custom_b",
+      "modA:custom_a",
+      "modB:custom_b",
       "useItem",
       "useSkill",
     ]);
   });
 
-  test("throws on duplicate handler kind across modules", () => {
+  test("two modules providing same kind: bare key omitted, qualified keys present", () => {
     const modA: Module = {
       id: "modA",
       actionHandlers: { shared: () => ({}) },
@@ -36,14 +42,48 @@ describe("buildPresetContext", () => {
       id: "modB",
       actionHandlers: { shared: () => ({}) },
     };
+    const ctx = buildPresetContext(
+      makeGame({
+        characters: [makeCharacter("alice")],
+        modules: [modA, modB],
+      }),
+    );
+    // Bare `shared` is omitted (ambiguous); only qualified forms exist
+    expect(ctx.actionHandlerRegistry["shared"]).toBeUndefined();
+    expect(ctx.actionHandlerRegistry["modA:shared"]).toBeDefined();
+    expect(ctx.actionHandlerRegistry["modB:shared"]).toBeDefined();
+  });
+
+  test("provides must match actionHandlers keys", () => {
+    const mod: Module = {
+      id: "mod",
+      provides: ["combat", "missing"],
+      actionHandlers: { combat: () => ({}), extra: () => ({}) },
+    };
     expect(() =>
       buildPresetContext(
         makeGame({
           characters: [makeCharacter("alice")],
-          modules: [modA, modB],
+          modules: [mod],
         }),
       ),
-    ).toThrow(/duplicate action handler for kind "shared"/);
+    ).toThrow(/provides\/actionHandlers mismatch/);
+  });
+
+  test("provides matching actionHandlers passes", () => {
+    const mod: Module = {
+      id: "mod",
+      provides: ["combat"],
+      actionHandlers: { combat: () => ({}) },
+    };
+    expect(() =>
+      buildPresetContext(
+        makeGame({
+          characters: [makeCharacter("alice")],
+          modules: [mod],
+        }),
+      ),
+    ).not.toThrow();
   });
 
   test("aggregates triggers in declaration order", () => {

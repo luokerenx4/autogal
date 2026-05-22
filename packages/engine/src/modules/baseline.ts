@@ -198,6 +198,7 @@ export const baselineModule: Module = {
       game.variables ?? [],
     );
   },
+  provides: ["useItem", "useSkill"],
   actionHandlers: {
     useItem: useItemHandler,
     useSkill: useSkillHandler,

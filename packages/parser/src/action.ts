@@ -38,14 +38,13 @@ export function parseAction(content: string, source?: string): Action {
   if (obj.slot === "any" || obj.slot === "day" || obj.slot === "night") {
     action.slot = obj.slot;
   }
-  if (
-    obj.kind === "combat" ||
-    obj.kind === "sleep" ||
-    obj.kind === "plain" ||
-    obj.kind === "useItem" ||
-    obj.kind === "useSkill"
-  ) {
-    action.kind = obj.kind;
+  // Engine resolves kind against the loaded module set at runtime, so
+  // any string is parser-valid. The engine's actionHandlerRegistry
+  // build step throws an informative error if no module provides the
+  // referenced kind. Kinds with a namespace prefix (`module-id:kind`)
+  // are also accepted.
+  if (typeof obj.kind === "string" && obj.kind.length > 0) {
+    action.kind = obj.kind as Action["kind"];
   }
   if (typeof obj.itemId === "string") {
     action.itemId = obj.itemId;

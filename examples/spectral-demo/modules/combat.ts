@@ -189,6 +189,7 @@ const spectralCombatHandler: ActionHandler = ({ state, action, game, rng }) => {
 const combatModule: Module = {
   id: "spectral-combat",
   version: "1.2.0",
+  provides: ["combat"],
   actionHandlers: {
     combat: spectralCombatHandler,
   },

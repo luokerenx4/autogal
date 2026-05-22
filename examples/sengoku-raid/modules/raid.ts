@@ -1072,6 +1072,19 @@ const extractHandler: ActionHandler = (ctx) => {
 // Triggers: HP <= 0 or spectral >= 100 during a raid → failure
 // ============================================================================
 
+// Queue a letter script — but only when we're safely in the hub between
+// scripts. If the player is mid-script (very rare; only if a trigger
+// somehow fires during a script's effects block), the chapter advance
+// still happens via the delta below, and onHubBuild can show a "未読の
+// 文" hint until the next hub cycle. The next time `currentScriptId`
+// becomes null in the run loop, the letter will queue.
+function queueLetterIfHub(ctx: PresetContext, scriptId: string): void {
+  if (ctx.state.baseline.currentScriptId === null) {
+    ctx.state.baseline.currentScriptId = scriptId;
+    ctx.state.baseline.beatIndex = 0;
+  }
+}
+
 const triggers: Trigger[] = [
   {
     id: "raid_death_hp",
@@ -1093,6 +1106,60 @@ const triggers: Trigger[] = [
         endRaidFailure(ctx, "霊体化が振り切れた");
       }
       return {};
+    },
+  },
+  // ============== 主線：将軍家からの密書 milestones ==============
+  // Each letter fires once per session (`once: true`); the engine
+  // tracks fired ids in state.runtime.firedTriggers.
+  //
+  // Composite `when:` shows off how trigger conditions can mix:
+  // - letter_02 requires both a raid count AND a spectral ceiling
+  //   (player must be visibly *not* drowning before the inspector
+  //   shows up — narrative beat, not just a counter).
+  // - letter_03 chains on shogun_chapter, so the trigger order is
+  //   guaranteed even if raidsCompleted accidentally jumps.
+  {
+    id: "letter_01_dispatch",
+    once: true,
+    when: { variable: { name: "raidsCompleted", min: 3 } },
+    do: (ctx) => {
+      queueLetterIfHub(ctx, "letter_01_suspicion");
+      return {
+        deltas: { variables: { shogun_chapter: 1 } },
+      };
+    },
+  },
+  {
+    id: "letter_02_dispatch",
+    once: true,
+    when: {
+      all: [
+        { variable: { name: "shogun_chapter", min: 1 } },
+        { variable: { name: "raidsCompleted", min: 7 } },
+        { characterStat: { character: "player", name: "spectral", max: 49 } },
+      ],
+    },
+    do: (ctx) => {
+      queueLetterIfHub(ctx, "letter_02_rival");
+      return {
+        deltas: { variables: { shogun_chapter: 1 } },
+      };
+    },
+  },
+  {
+    id: "letter_03_dispatch",
+    once: true,
+    when: {
+      all: [
+        { variable: { name: "shogun_chapter", min: 2 } },
+        { variable: { name: "raidsCompleted", min: 12 } },
+      ],
+    },
+    do: (ctx) => {
+      queueLetterIfHub(ctx, "letter_03_choice");
+      return {
+        deltas: { variables: { shogun_chapter: 1 } },
+      };
     },
   },
 ];
@@ -1163,6 +1230,33 @@ const raidModule: Module = {
   },
 
   triggers,
+
+  // ============== Letter lifecycle observers ==============
+  // onScriptStart fires before the first beat yields. We push a single
+  // header narration ahead of the letter body so the player gets the
+  // "公儀御沙汰" page-break visually, no matter how the script was queued
+  // (trigger / hub / save-load).
+  onScriptStart: (ctx, scriptId) => {
+    if (scriptId.startsWith("letter_")) {
+      ctx.state.runtime.pendingNarrations.unshift(
+        `——— 公儀御沙汰 ———`,
+      );
+    }
+  },
+
+  // onScriptComplete is the natural place to finalize a letter's
+  // module-level side effects that can't go in the script's effects
+  // block: pushing mio into metCharacters (a private module state
+  // slice). The chapter advance already happened in the dispatch
+  // trigger, so we don't touch shogun_chapter here.
+  onScriptComplete: (ctx, scriptId) => {
+    if (scriptId === "letter_02_rival") {
+      const m = moduleState(ctx);
+      if (!m.metCharacters.includes("mio")) {
+        m.metCharacters.push("mio");
+      }
+    }
+  },
 
   onHubBuild: (ctx) => {
     const m = moduleState(ctx);

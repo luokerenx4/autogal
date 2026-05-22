@@ -1,0 +1,87 @@
+name: 提案A：letter_03 の三択で「公儀に刀を抜く」を選ぶと chose_court_defy が立つ
+description: |
+  Seed raidsCompleted=11, shogun_chapter=2, in raid at extract zone.
+  Extract → trigger fires, letter_03 launches (fenced choice block).
+  Pick option 1 (公儀に刀を抜く); the option's effects set
+  chose_court_defy=true and goto end_defy. Verify the correct switch
+  is set and the other two stay false.
+state:
+  baseline:
+    completedScripts: [000_intro, letter_01_suspicion, letter_02_rival]
+    weapons:
+      ancestor_yaodao: { power: 12 }
+    characters:
+      player:
+        stats: { hp: 30, mental: 8, spectral: 30, intellect: 8 }
+    variables:
+      raidsCompleted: 11
+      raidsFailed: 0
+      shogun_chapter: 2
+  runtime:
+    firedTriggers: [letter_01_dispatch, letter_02_dispatch]
+  sengoku-raid:
+    mode: raid
+    metCharacters: [kagari, mio]
+    raid:
+      mapId: kuro_swamp
+      mapName: 黒沼地
+      currentZoneId: shrine
+      turnsTaken: 1
+      pendingLoot: {}
+      zones:
+        shrine:
+          id: shrine
+          name: 潰れた社
+          visited: true
+          searched: true
+          encounter: null
+          encounterCleared: false
+          encounterTable: []
+          lootTable: []
+          connections: [{ dir: 戻る, target: crossroads }]
+          isExtract: true
+          pendingLoot: {}
+maxSteps: 200
+inputs:
+  - { type: doActivity, id: "extract" }
+  # extract narration + letter header + body beats up to the fenced choice.
+  # letter_03 has about 14 leading beats then the fenced choice.
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  # Choice — option 1 = 公儀に刀を抜く
+  - { type: choose, index: 1 }
+  # Drain end_defy narrations
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+assertions:
+  - kind: state
+    path: baseline.switches.chose_court_defy
+    eq: true
+  - kind: state
+    path: baseline.switches.chose_court_loyal
+    eq: false
+  - kind: state
+    path: baseline.switches.chose_court_silent
+    eq: false
+  - kind: state
+    path: baseline.completedScripts
+    includes: letter_03_choice
+  - kind: state
+    path: runtime.firedTriggers
+    includes: letter_03_dispatch

@@ -1,0 +1,58 @@
+name: 提案A：letter_02 は spectral < 50 でないと dispatch しない（composite trigger）
+description: |
+  Letter_02 trigger requires `all: [shogun_chapter>=1, raidsCompleted>=7, spectral<=49]`.
+  Seed with raidsCompleted=6 AND spectral=80 — after extracting, raidsCompleted
+  goes to 7 but the composite gate fails because spectral is too high.
+  No letter_02 dispatch. Letter_01_dispatch is already marked fired (firedTriggers).
+state:
+  baseline:
+    completedScripts: [000_intro, letter_01_suspicion]
+    weapons:
+      ancestor_yaodao: { power: 8 }
+    characters:
+      player:
+        stats: { hp: 30, mental: 8, spectral: 80, intellect: 5 }
+    variables:
+      raidsCompleted: 6
+      raidsFailed: 0
+      shogun_chapter: 1
+  runtime:
+    firedTriggers: [letter_01_dispatch]
+  sengoku-raid:
+    mode: raid
+    metCharacters: [kagari]
+    raid:
+      mapId: kuro_swamp
+      mapName: 黒沼地
+      currentZoneId: shrine
+      turnsTaken: 2
+      pendingLoot: {}
+      zones:
+        shrine:
+          id: shrine
+          name: 潰れた社
+          visited: true
+          searched: true
+          encounter: null
+          encounterCleared: false
+          encounterTable: []
+          lootTable: []
+          connections: [{ dir: 戻る, target: crossroads }]
+          isExtract: true
+          pendingLoot: {}
+inputs:
+  - { type: doActivity, id: "extract" }
+  - { type: next }
+assertions:
+  - kind: state
+    path: baseline.variables.raidsCompleted
+    eq: 7
+  - kind: state
+    path: baseline.variables.shogun_chapter
+    eq: 1
+  - kind: state
+    path: baseline.currentScriptId
+    eq: null
+  - kind: state
+    path: runtime.firedTriggers
+    includes: letter_01_dispatch

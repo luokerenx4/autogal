@@ -18,6 +18,11 @@ switches:
   mio_met: false
   # Set when the pulse system has been introduced (after first victory).
   pulse_intro_seen: false
+  # 第三章「最後の御沙汰」での三択。一つだけ true になる。
+  # 三つ揃って false なら letter_03 をまだ受け取っていない。
+  chose_court_loyal:  false   # 公儀に服す
+  chose_court_defy:   false   # 公儀に刀を抜く
+  chose_court_silent: false   # 黙して退く（隠遁）
 
 variables:
   # Raid counters — incremented by endRaidExtract / endRaidFailure.

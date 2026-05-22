@@ -1,0 +1,83 @@
+name: 提案A：letter_02 が drain 完了後に mio が metCharacters に登録される
+description: |
+  Seed raidsCompleted=6, shogun_chapter=1, spectral=20. Extract — trigger
+  fires, letter_02 launches. Drain the letter's beats, pick option 0,
+  drain trailing narrations. onScriptComplete hook adds "mio" to
+  metCharacters.
+state:
+  baseline:
+    completedScripts: [000_intro, letter_01_suspicion]
+    weapons:
+      ancestor_yaodao: { power: 8 }
+    characters:
+      player:
+        stats: { hp: 30, mental: 8, spectral: 20, intellect: 5 }
+    variables:
+      raidsCompleted: 6
+      raidsFailed: 0
+      shogun_chapter: 1
+  runtime:
+    firedTriggers: [letter_01_dispatch]
+  sengoku-raid:
+    mode: raid
+    metCharacters: [kagari]
+    raid:
+      mapId: kuro_swamp
+      mapName: 黒沼地
+      currentZoneId: shrine
+      turnsTaken: 2
+      pendingLoot: {}
+      zones:
+        shrine:
+          id: shrine
+          name: 潰れた社
+          visited: true
+          searched: true
+          encounter: null
+          encounterCleared: false
+          encounterTable: []
+          lootTable: []
+          connections: [{ dir: 戻る, target: crossroads }]
+          isExtract: true
+          pendingLoot: {}
+maxSteps: 200
+inputs:
+  - { type: doActivity, id: "extract" }
+  # Drain extract narration + letter header + 17 beats up to the choice
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  # Choice (it's the inline ? choice block); pick option 0
+  - { type: choose, index: 0 }
+  - { type: next }
+  - { type: next }
+assertions:
+  - kind: state
+    path: baseline.variables.shogun_chapter
+    eq: 2
+  - kind: state
+    path: sengoku-raid.metCharacters
+    includes: mio
+  - kind: state
+    path: baseline.switches.mio_met
+    eq: true
+  - kind: state
+    path: baseline.completedScripts
+    includes: letter_02_rival
+  - kind: state
+    path: runtime.firedTriggers
+    includes: letter_02_dispatch

@@ -8,9 +8,11 @@ import { loadGame } from "../loader";
 import { appendLog, loadSession, saveSession } from "../session";
 import {
   applyOutput,
+  applyUiAction,
   initialModel,
   makeErrorModel,
   type ScreenModel,
+  type UiAction,
 } from "../screen-model";
 import { dispatchStageInput, footerHintFor } from "../stage-input";
 import { BacklogOverlay } from "./BacklogOverlay";
@@ -45,10 +47,12 @@ interface Props {
 // stage — no array of past beats to scroll through.
 type ModelAction =
   | { kind: "reset"; model: ScreenModel }
-  | { kind: "apply"; output: Output };
+  | { kind: "apply"; output: Output }
+  | { kind: "ui"; action: UiAction };
 
 function modelReducer(model: ScreenModel, action: ModelAction): ScreenModel {
   if (action.kind === "reset") return action.model;
+  if (action.kind === "ui") return applyUiAction(model, action.action);
   return applyOutput(model, action.output);
 }
 
@@ -236,8 +240,13 @@ export function PlayScreen({
         setShowBacklog(true);
         return;
       }
-      const engineInput = dispatchStageInput(model.stage, input, key);
-      if (engineInput) void sendInput(engineInput);
+      const result = dispatchStageInput(model.stage, input, key);
+      if (!result) return;
+      if (result.kind === "ui") {
+        dispatch({ kind: "ui", action: result.action });
+        return;
+      }
+      void sendInput(result.input);
     },
     { isActive: !showBacklog },
   );
@@ -315,14 +324,22 @@ function renderStage(model: ScreenModel): React.ReactNode {
     case "dialogue":
       return <DialogueStage speakerName={s.speakerName} text={s.text} />;
     case "choice":
-      return <ChoiceStage {...(s.prompt !== undefined ? { prompt: s.prompt } : {})} options={s.options} />;
+      return (
+        <ChoiceStage
+          {...(s.prompt !== undefined ? { prompt: s.prompt } : {})}
+          options={s.options}
+          cursor={s.cursor}
+          {...(s.view !== undefined ? { view: s.view } : {})}
+        />
+      );
     case "hubMenu":
-      return <HubMenuStage snapshot={s.snapshot} />;
+      return <HubMenuStage snapshot={s.snapshot} cursor={s.cursor} />;
     case "scriptComplete":
       return (
         <ScriptCompleteStage
           completedId={s.completedId}
           nextAvailable={s.nextAvailable}
+          cursor={s.cursor}
         />
       );
     case "ended":

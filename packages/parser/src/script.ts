@@ -143,7 +143,8 @@ function parseDialogueBlock(block: BlockSpan, source?: string): Beat {
 function parseChoiceBlock(block: BlockSpan, source?: string): Beat {
   const lines = block.text.split("\n");
   const first = lines[0] ?? "";
-  const prompt = first.replace(/^\?\s*/, "").trim();
+  const rawPrompt = first.replace(/^\?\s*/, "").trim();
+  const { prompt, view } = parsePromptAnnotations(rawPrompt, source);
   const options: ChoiceOption[] = [];
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i];
@@ -177,8 +178,49 @@ function parseChoiceBlock(block: BlockSpan, source?: string): Beat {
   return {
     type: "choice",
     ...(prompt ? { prompt } : {}),
+    ...(view !== undefined ? { view } : {}),
     options,
   };
+}
+
+// Trailing `{key: value, key2: value2}` annotation on a prompt line.
+// Currently only `view` is recognized; unknown keys throw so typos
+// fail loud instead of silently disabling the presenter. The brace
+// group must sit at the very end of the prompt — anything before it
+// becomes the literal prompt text.
+function parsePromptAnnotations(
+  raw: string,
+  source: string | undefined,
+): { prompt: string; view?: string } {
+  const match = raw.match(/^(.*?)\s*\{([^}]*)\}\s*$/);
+  if (!match) return { prompt: raw };
+  const prompt = (match[1] ?? "").trim();
+  const inner = (match[2] ?? "").trim();
+  if (inner.length === 0) return { prompt };
+  let view: string | undefined;
+  for (const pair of inner.split(",")) {
+    const colon = pair.indexOf(":");
+    if (colon < 0) {
+      throw new ScriptParseError(
+        `Prompt annotation segment "${pair.trim()}" must be \`key: value\``,
+        source,
+      );
+    }
+    const key = pair.slice(0, colon).trim();
+    const value = pair.slice(colon + 1).trim();
+    if (key === "view") {
+      if (value.length === 0) {
+        throw new ScriptParseError(`Prompt annotation \`view\` is empty`, source);
+      }
+      view = value;
+      continue;
+    }
+    throw new ScriptParseError(
+      `Unknown prompt annotation key "${key}"`,
+      source,
+    );
+  }
+  return { prompt, ...(view !== undefined ? { view } : {}) };
 }
 
 function parseChoiceTail(tail: string): {
@@ -289,6 +331,7 @@ function parseFenceChoice(
   source?: string,
 ): Beat {
   const prompt = typeof obj.prompt === "string" ? obj.prompt : undefined;
+  const view = typeof obj.view === "string" && obj.view.length > 0 ? obj.view : undefined;
   const rawOptions = obj.options;
   if (!Array.isArray(rawOptions)) {
     throw new ScriptParseError(
@@ -323,6 +366,7 @@ function parseFenceChoice(
   return {
     type: "choice",
     ...(prompt ? { prompt } : {}),
+    ...(view !== undefined ? { view } : {}),
     options,
   };
 }

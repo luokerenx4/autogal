@@ -99,6 +99,7 @@ export async function* runScript(
           type: "choice",
           prompt: beat.prompt,
           options: rendered,
+          ...(beat.view !== undefined ? { view: beat.view } : {}),
         };
         if (input.type === "quit") return false;
         if (input.type !== "choose") continue;

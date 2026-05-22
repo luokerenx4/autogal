@@ -65,6 +65,61 @@ describe("applyDelta — characterStats", () => {
   });
 });
 
+describe("applyDelta — characterStats clamping (with game ref)", () => {
+  function boundedGame() {
+    return makeGame({
+      characters: [
+        makeCharacter("alice", {
+          stats: {
+            hp: { initial: 30, min: 0, max: 30 },
+            spectral: { initial: 5, min: 0, max: 100 },
+            unbounded: { initial: 0 },
+          },
+        }),
+      ],
+    });
+  }
+
+  test("clamps at declared max", () => {
+    const game = boundedGame();
+    const state = createInitialState(game);
+    applyDelta(state, { characterStats: { alice: { hp: 100 } } }, game);
+    expect(state.baseline.characters.alice!.stats.hp).toBe(30);
+  });
+
+  test("clamps at declared min", () => {
+    const game = boundedGame();
+    const state = createInitialState(game);
+    applyDelta(state, { characterStats: { alice: { hp: -100 } } }, game);
+    expect(state.baseline.characters.alice!.stats.hp).toBe(0);
+  });
+
+  test("unbounded stat (no min/max declared) is not clamped", () => {
+    const game = boundedGame();
+    const state = createInitialState(game);
+    applyDelta(state, { characterStats: { alice: { unbounded: 9999 } } }, game);
+    expect(state.baseline.characters.alice!.stats.unbounded).toBe(9999);
+  });
+
+  test("without game ref, no clamping (back-compat — fixture restore)", () => {
+    const game = boundedGame();
+    const state = createInitialState(game);
+    applyDelta(state, { characterStats: { alice: { hp: 100 } } });
+    expect(state.baseline.characters.alice!.stats.hp).toBe(130);
+  });
+
+  test("mutateState uses game ref so clamping kicks in", () => {
+    const game = boundedGame();
+    const ctx = (require("./engine") as typeof import("./engine"))
+      .buildPresetContext(game);
+    const { mutateState } = require("./primitives/mutateState") as typeof import(
+      "./primitives/mutateState"
+    );
+    mutateState(ctx, { characterStats: { alice: { hp: 100 } } }, "action");
+    expect(ctx.state.baseline.characters.alice!.stats.hp).toBe(30);
+  });
+});
+
 describe("applyDelta — variables", () => {
   test("numeric variables are summed additively", () => {
     const state = makeState();

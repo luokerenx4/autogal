@@ -41,6 +41,8 @@ interface Registries {
   items: Set<string>;
   weapons: Set<string>;
   skills: Set<string>;
+  enemies: Set<string>;
+  maps: Set<string>;
   trainingStats: Set<string>;
 }
 
@@ -62,6 +64,8 @@ export function validateGame(game: Game): void {
     items: new Set((game.items ?? []).map((i) => i.id)),
     weapons: new Set((game.weapons ?? []).map((w) => w.id)),
     skills: new Set((game.skills ?? []).map((s) => s.id)),
+    enemies: new Set((game.enemies ?? []).map((e) => e.id)),
+    maps: new Set((game.maps ?? []).map((m) => m.id)),
     trainingStats: new Set(
       (game.training?.stats ?? []).map((s) => s.id),
     ),
@@ -107,14 +111,17 @@ export function validateGame(game: Game): void {
         });
       }
     }
-    if (a.enemyId !== undefined) {
-      const enemies = new Set((game.enemies ?? []).map((e) => e.id));
-      if (!enemies.has(a.enemyId)) {
-        issues.push({
-          path: `action ${a.id}.enemyId`,
-          message: `undeclared enemy "${a.enemyId}". Declared: ${listOrNone(enemies)}`,
-        });
-      }
+    if (a.enemyId !== undefined && !reg.enemies.has(a.enemyId)) {
+      issues.push({
+        path: `action ${a.id}.enemyId`,
+        message: `undeclared enemy "${a.enemyId}". Declared: ${listOrNone(reg.enemies)}`,
+      });
+    }
+    if (a.mapId !== undefined && !reg.maps.has(a.mapId)) {
+      issues.push({
+        path: `action ${a.id}.mapId`,
+        message: `undeclared map "${a.mapId}". Declared: ${listOrNone(reg.maps)}`,
+      });
     }
   }
 
@@ -134,6 +141,64 @@ export function validateGame(game: Game): void {
         path: `training.endConditions[${ec.reason}].goto`,
         message: `undeclared script "${ec.goto}". Declared: ${listOrNone(reg.scripts)}`,
       });
+    }
+  }
+
+  // Walk every map's zone graph: encounter-table enemy ids, loot-table
+  // item ids, connections targeting valid zones in the same map, spawn
+  // rules referencing declared characters + scripts.
+  for (const m of game.maps ?? []) {
+    const zoneIds = new Set(m.zones.map((z) => z.id));
+    for (const z of m.zones) {
+      const where = `map ${m.id}.zones[${z.id}]`;
+      for (const c of z.connections) {
+        if (!zoneIds.has(c.target)) {
+          issues.push({
+            path: `${where}.connections`,
+            message: `undeclared zone target "${c.target}". Declared in this map: ${listOrNone(zoneIds)}`,
+          });
+        }
+      }
+      for (const e of z.encounterTable ?? []) {
+        if (e.enemyId !== null && !reg.enemies.has(e.enemyId)) {
+          issues.push({
+            path: `${where}.encounter_table`,
+            message: `undeclared enemy "${e.enemyId}". Declared: ${listOrNone(reg.enemies)}`,
+          });
+        }
+      }
+      for (const l of z.lootTable ?? []) {
+        if (l.itemId !== null && !reg.items.has(l.itemId)) {
+          issues.push({
+            path: `${where}.loot_table`,
+            message: `undeclared item "${l.itemId}". Declared: ${listOrNone(reg.items)}`,
+          });
+        }
+      }
+    }
+    for (const spawn of m.characterSpawns ?? []) {
+      const where = `map ${m.id}.character_spawns[${spawn.characterId}]`;
+      if (!reg.characters.has(spawn.characterId)) {
+        issues.push({
+          path: where,
+          message: `undeclared character "${spawn.characterId}". Declared: ${listOrNone(reg.characters)}`,
+        });
+      }
+      if (!reg.scripts.has(spawn.encounterScriptId)) {
+        issues.push({
+          path: `${where}.encounter_script`,
+          message: `undeclared script "${spawn.encounterScriptId}". Declared: ${listOrNone(reg.scripts)}`,
+        });
+      }
+      for (const z of spawn.zones) {
+        const zoneIds = new Set(m.zones.map((zo) => zo.id));
+        if (!zoneIds.has(z)) {
+          issues.push({
+            path: `${where}.zones`,
+            message: `undeclared zone "${z}". Declared in this map: ${listOrNone(zoneIds)}`,
+          });
+        }
+      }
     }
   }
 

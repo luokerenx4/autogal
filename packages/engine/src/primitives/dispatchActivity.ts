@@ -14,14 +14,16 @@ import {
 } from "./hooks";
 import { mutateState } from "./mutateState";
 
-// Dispatch a hub-menu activity by its full id (e.g. "script:001_arrival",
-// "action:hunt"). Handles the two activity prefixes:
-//   - "script:" → fire onScriptSelect (modules may redirect), then set
-//     baseline.currentScriptId so the run loop enters that script
-//   - "action:" → resolve to a registered Action, check requires(),
-//     fire onActionDispatch (modules may substitute or cancel), then
-//     dispatch via the action handler registry, then fire
-//     onActionComplete
+// Dispatch a hub-menu activity by its full id. Three resolution paths:
+//   1. "script:<id>" → fire onScriptSelect, set baseline.currentScriptId
+//   2. "action:<id>" → resolve to a registered Action in ctx.actionMap
+//      (checked requires, fire onActionDispatch, run via handler)
+//   3. fallback: look up the activity id in
+//      state.runtime.lastHubActivities (populated by fireOnHubBuild).
+//      Lets onHubBuild emit fully-dynamic activities with actionKind +
+//      payload — the engine synthesizes an Action and runs it through
+//      the same handler registry as static actions. Modules no longer
+//      need a string-prefix router.
 export async function* dispatchActivity(
   ctx: PresetContext,
   activityId: string,
@@ -44,6 +46,26 @@ export async function* dispatchActivity(
       evaluateCondition(original.requires, ctx.state);
     if (!available) return "ok";
     const dispatched = fireOnActionDispatch(ctx, original);
+    if (dispatched === "cancel") return "ok";
+    return yield* runAction(ctx, dispatched);
+  }
+
+  // Dynamic activity dispatch: resolve via the most recent hubMenu's
+  // snapshot. If the activity declared an actionKind, synthesize an
+  // Action and run it.
+  const dyn = ctx.state.runtime.lastHubActivities.find(
+    (a) => a.id === activityId,
+  );
+  if (dyn && dyn.kind === "action" && dyn.actionKind) {
+    if (!dyn.available) return "ok";
+    const synthetic: Action = {
+      id: dyn.id,
+      title: dyn.title,
+      cost: dyn.cost,
+      kind: dyn.actionKind,
+      ...(dyn.payload ? { payload: dyn.payload } : {}),
+    };
+    const dispatched = fireOnActionDispatch(ctx, synthetic);
     if (dispatched === "cancel") return "ok";
     return yield* runAction(ctx, dispatched);
   }

@@ -186,6 +186,51 @@ describe("parseScript — choice (? prompt)", () => {
     });
   });
 
+  test("trailing {view: grid} annotation is parsed and stripped from prompt", () => {
+    const s = parseScript(
+      source(
+        "id: x\ntitle: t",
+        "? 你怎么做？ {view: grid}\n- 上\n- 下",
+      ),
+    );
+    const beat = s.beats[0];
+    if (!beat || beat.type !== "choice") throw new Error();
+    expect(beat.prompt).toBe("你怎么做？");
+    expect(beat.view).toBe("grid");
+  });
+
+  test("annotation works on a prompt-less ? line", () => {
+    const s = parseScript(
+      source(
+        "id: x\ntitle: t",
+        "? {view: grid}\n- a\n- b",
+      ),
+    );
+    const beat = s.beats[0];
+    if (!beat || beat.type !== "choice") throw new Error();
+    expect(beat.prompt).toBeUndefined();
+    expect(beat.view).toBe("grid");
+  });
+
+  test("unknown annotation key throws", () => {
+    expect(() =>
+      parseScript(
+        source(
+          "id: x\ntitle: t",
+          "? prompt {wat: 1}\n- a",
+        ),
+      ),
+    ).toThrow(/Unknown prompt annotation/);
+  });
+
+  test("empty view value throws", () => {
+    expect(() =>
+      parseScript(
+        source("id: x\ntitle: t", "? prompt {view: }\n- a"),
+      ),
+    ).toThrow(/`view` is empty/);
+  });
+
   test("non-option line in choice block throws", () => {
     expect(() =>
       parseScript(

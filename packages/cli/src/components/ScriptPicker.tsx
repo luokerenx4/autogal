@@ -5,9 +5,10 @@ import type { ScriptInfo } from "@autogal/engine";
 interface ScriptPickerProps {
   completedId: string | null;
   options: ScriptInfo[];
+  cursor: number;
 }
 
-export function ScriptPicker({ completedId, options }: ScriptPickerProps) {
+export function ScriptPicker({ completedId, options, cursor }: ScriptPickerProps) {
   return (
     <Box flexDirection="column">
       {completedId ? (
@@ -16,12 +17,20 @@ export function ScriptPicker({ completedId, options }: ScriptPickerProps) {
       <Box marginTop={completedId ? 1 : 0}>
         <Text color="yellow">下一段：</Text>
       </Box>
-      {options.map((opt, i) => (
-        <Text key={opt.id}>
-          {`  ${i + 1}. ${opt.title}`}{" "}
-          <Text color="gray">[{opt.id}]</Text>
-        </Text>
-      ))}
+      {options.map((opt, i) => {
+        const selected = i === cursor;
+        return (
+          <Text
+            key={opt.id}
+            color={selected ? "cyan" : undefined}
+            bold={selected}
+          >
+            {selected ? "▸ " : "  "}
+            {`${i + 1}. ${opt.title}`}{" "}
+            <Text dimColor>[{opt.id}]</Text>
+          </Text>
+        );
+      })}
     </Box>
   );
 }

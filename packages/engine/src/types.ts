@@ -437,7 +437,16 @@ export interface StateDelta {
 export type Beat =
   | { type: "narration"; text: string }
   | { type: "dialogue"; speaker: string; text: string }
-  | { type: "choice"; prompt?: string; options: ChoiceOption[] }
+  | {
+      type: "choice";
+      prompt?: string;
+      options: ChoiceOption[];
+      // Renderer hint. Identifies a TUI presenter (e.g. "list", "grid").
+      // The engine never interprets it — pure pass-through to the
+      // Output. Authors declare it via `? prompt {view: name}` in
+      // markdown or the `view` field in JSON.
+      view?: string;
+    }
   | { type: "effects"; effects: StateDelta }
   | { type: "clear" }
   | { type: "label"; name: string }
@@ -820,7 +829,13 @@ export interface HubSnapshot {
 export type Output =
   | { type: "narration"; text: string }
   | { type: "dialogue"; speakerId: string; speakerName: string; text: string }
-  | { type: "choice"; prompt?: string; options: RenderedChoice[] }
+  | {
+      type: "choice";
+      prompt?: string;
+      options: RenderedChoice[];
+      // Passthrough of ChoiceBeat.view — see Beat definition above.
+      view?: string;
+    }
   | { type: "scriptComplete"; completedId: string | null; nextAvailable: ScriptInfo[] }
   | { type: "hubMenu"; snapshot: HubSnapshot }
   | { type: "gameEnd"; reason?: string }

@@ -9,11 +9,12 @@ import type {
 
 interface HubMenuProps {
   snapshot: HubSnapshot;
+  cursor: number;
 }
 
 const BAR_WIDTH = 20;
 
-export function HubMenu({ snapshot }: HubMenuProps) {
+export function HubMenu({ snapshot, cursor }: HubMenuProps) {
   return (
     <Box flexDirection="column">
       <Box flexDirection="row" marginBottom={1}>
@@ -49,7 +50,12 @@ export function HubMenu({ snapshot }: HubMenuProps) {
             <Text dimColor>（没有可用活动 — 时间会自动推进）</Text>
           ) : (
             snapshot.activities.map((act, i) => (
-              <ActivityRow key={act.id} index={i + 1} activity={act} />
+              <ActivityRow
+                key={act.id}
+                index={i + 1}
+                activity={act}
+                selected={i === cursor}
+              />
             ))
           )}
         </Box>
@@ -110,16 +116,28 @@ function statusFor(stat: StatSnapshot): string | null {
 function ActivityRow({
   index,
   activity,
+  selected,
 }: {
   index: number;
   activity: HubActivity;
+  selected: boolean;
 }) {
-  const color = activity.available ? undefined : "gray";
-  const marker = activity.available ? " " : "⛔";
+  const color = !activity.available
+    ? "gray"
+    : selected
+      ? "cyan"
+      : undefined;
+  // Locked rows keep the ⛔ marker; available rows show ▸ when selected
+  // so the cursor reads at a glance even alongside locked siblings.
+  const marker = activity.available ? (selected ? "▸" : " ") : "⛔";
   const hint = activity.effectsHint;
   return (
     <Box flexDirection="row">
-      <Text color={color} dimColor={!activity.available}>
+      <Text
+        color={color}
+        bold={selected && activity.available}
+        dimColor={!activity.available}
+      >
         {marker} {index}. {activity.title}
       </Text>
       {hint && activity.available ? (

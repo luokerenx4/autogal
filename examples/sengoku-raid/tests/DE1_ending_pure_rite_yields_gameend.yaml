@@ -27,7 +27,7 @@ state:
       pulse_oni: 0
       pulse_mundane: 2
   runtime:
-    firedTriggers: [letter_01_dispatch, letter_02_dispatch, letter_03_dispatch, pulse_intro_dispatch]
+    firedTriggers: [letter_01_dispatch, letter_02_dispatch, letter_03_dispatch]
   sengoku-raid:
     mode: hub
     metCharacters: [kagari, mio]

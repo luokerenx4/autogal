@@ -1032,6 +1032,23 @@ function endRaidExtract(ctx: Ctx): void {
   ctx.state.runtime.pendingNarrations.push(
     `${mapName}から撤退に成功。${lootSummary.length > 0 ? "持ち帰った戦利品：" + lootSummary.join("、") + "。" : "今回は手ぶら。"}`,
   );
+
+  // 脈絡の話 — defer pulse_intro to the back-in-hub transition rather
+  // than firing it mid-raid via a trigger on pulse_<x> rising edge.
+  // The intro's prose ("屋敷の縁側で…") assumes hub setting; firing
+  // it inside startRaid-zone breaks immersion.
+  if (
+    ctx.state.baseline.switches.pulse_intro_seen !== true &&
+    ((ctx.state.baseline.variables.pulse_pure ?? 0) as number) +
+      ((ctx.state.baseline.variables.pulse_oni ?? 0) as number) +
+      ((ctx.state.baseline.variables.pulse_mundane ?? 0) as number) >
+      0 &&
+    ctx.state.baseline.currentScriptId === null &&
+    ctx.game.scripts.some((s) => s.id === "pulse_intro")
+  ) {
+    ctx.state.baseline.currentScriptId = "pulse_intro";
+    ctx.state.baseline.beatIndex = 0;
+  }
 }
 
 function endRaidFailure(ctx: Ctx, reason: string): void {
@@ -1935,32 +1952,6 @@ const triggers: Trigger[] = [
     },
     do: (ctx) => {
       queueLetterIfHub(ctx, "three_flowers_alliance");
-      return {};
-    },
-  },
-  // 脈絡の話 — first time any pulse counter ticks above 0, queue the
-  // pulse_intro lore. Composite of `all + any` so it fires once at
-  // the first imbue regardless of path. The pulse_intro script itself
-  // flips `pulse_intro_seen` true via its effects block, but `once:
-  // true` on the trigger is what ensures we don't loop if the player
-  // somehow resets the switch later.
-  {
-    id: "pulse_intro_dispatch",
-    once: true,
-    when: {
-      all: [
-        { switch: { name: "pulse_intro_seen", eq: false } },
-        {
-          any: [
-            { variable: { name: "pulse_pure", min: 1 } },
-            { variable: { name: "pulse_oni", min: 1 } },
-            { variable: { name: "pulse_mundane", min: 1 } },
-          ],
-        },
-      ],
-    },
-    do: (ctx) => {
-      queueLetterIfHub(ctx, "pulse_intro");
       return {};
     },
   },

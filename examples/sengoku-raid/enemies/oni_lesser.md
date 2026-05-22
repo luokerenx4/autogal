@@ -8,7 +8,7 @@ stats:
   cunning: 1
 narrations:
   intro: "灯心が一斉に揺れる。藪から這い出してきたのは——HP {hp} の{name}。"
-  victory: "鬼は霧散した。妖力が刀に吸い込まれる——霊体化 -{absorb}, 妖刀威力 +{swordGain}。"
+  victory: "鬼は霧散した。妖力が刀に吸い込まれる——霊体化 -{absorb}。"
   escape: "鬼の爪が掠めた。逃げ場のない傷——体力 -{damage}, 灵体化 +{spectralGain}。"
 # 交渉「聞き出す」で語る一節。下級の鬼はまだ言葉を半分覚えている。
 # Module reads this via enemy.custom.negotiate_lore (the engine's

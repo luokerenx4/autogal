@@ -1,0 +1,58 @@
+name: pulse_intro が hub 帰還で起動する（raid 中ではなく）
+description: |
+  Bug repro guard: previously a `once: true` trigger fired pulse_intro
+  the moment any pulse_<x> ticked above 0 — which is during the imbue
+  handler that runs MID-RAID. The lore script's prose assumes hub
+  setting ("屋敷の縁側で…"), so firing it in a swamp zone broke
+  immersion.
+
+  Fix: dropped the trigger; endRaidExtract now checks the same
+  condition (pulse_intro_seen=false AND any pulse>0) when transitioning
+  back to hub, and queues pulse_intro then.
+
+  This fixture seeds a raid at the extract zone with pulse_mundane=1
+  already set. Dispatch extract; assert currentScriptId becomes
+  pulse_intro AFTER the raid wrap-up (not before).
+state:
+  baseline:
+    completedScripts: [000_intro]
+    characters:
+      player:
+        stats: { hp: 30, mental: 8, spectral: 5, intellect: 0 }
+    variables:
+      pulse_mundane: 1
+  sengoku-raid:
+    mode: raid
+    metCharacters: []
+    companion: null
+    companionHp: 0
+    pulsePending: null
+    raid:
+      mapId: kuro_swamp
+      mapName: 黒沼地
+      currentZoneId: shrine
+      turnsTaken: 2
+      pendingLoot: {}
+      zones:
+        shrine:
+          id: shrine
+          name: 潰れた社
+          visited: true
+          searched: true
+          encounter: null
+          encounterCleared: true
+          encounterTable: []
+          lootTable: []
+          connections: [{ dir: 戻る, target: crossroads }]
+          isExtract: true
+          pendingLoot: {}
+inputs:
+  - { type: doActivity, id: "extract" }
+  - { type: next }
+assertions:
+  - kind: state
+    path: baseline.currentScriptId
+    eq: pulse_intro
+  - kind: state
+    path: sengoku-raid.mode
+    eq: hub

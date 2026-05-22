@@ -146,6 +146,13 @@ export class Engine {
     initialState?: ComposedState,
   ) {
     this.state = initialState ?? createInitialState(game);
+    // Backfill runtime fields that older saved sessions may lack. New
+    // fields added to RuntimeState are append-only; absent on load
+    // means "default empty". Cheaper here than a versioned migration.
+    const rt = this.state.runtime;
+    if (rt) {
+      if (rt.firedScriptStarts === undefined) rt.firedScriptStarts = [];
+    }
     this.ctx = buildPresetContext(game, this.state);
     this.runFn = resolveRunFn(game);
   }

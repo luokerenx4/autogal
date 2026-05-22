@@ -119,23 +119,32 @@ export const personas: Record<string, Persona> = {
       const acts = output.snapshot.activities.filter((a) => a.available);
       const find = (pred: (id: string) => boolean) =>
         acts.find((a) => pred(a.id));
+      // Pulse imbue forces a choice — extractor picks 浄 (rebate / safest).
+      const imbue = find((id) => id.startsWith("imbue:"));
+      if (imbue) return { type: "doActivity", id: imbue.id };
+      // Negotiate options (HP<30%) — extractor releases.
+      const release = find((id) => id === "negotiate_release");
+      if (release) return { type: "doActivity", id: release.id };
       // Raid-side priorities
-      const ext = find((id) => id === "raid:extract");
+      const ext = find((id) => id === "extract");
       if (ext) return { type: "doActivity", id: ext.id };
-      const flee = find((id) => id === "raid:flee");
+      const flee = find((id) => id === "flee");
       if (flee) return { type: "doActivity", id: flee.id };
-      const search = find((id) => id === "raid:search");
+      const search = find((id) => id === "search");
       if (search) return { type: "doActivity", id: search.id };
-      const move = acts.find((a) => a.id.startsWith("raid:move:"));
+      const move = acts.find((a) => a.id.startsWith("move:"));
       if (move) return { type: "doActivity", id: move.id };
-      // Hub-side priorities
-      const sell = find((id) => id === "hub:sell_all_loot");
+      // Hub-side priorities (post-R2 unprefixed ids)
+      const sell = find((id) => id === "sell_all_loot");
       if (sell) return { type: "doActivity", id: sell.id };
-      const upgrade = find((id) => id === "hub:upgrade_weapon");
+      // Read pending intel briefing first
+      const intelRead = find((id) => id === "script:intel_briefing");
+      if (intelRead) return { type: "doActivity", id: intelRead.id };
+      const upgrade = find((id) => id === "upgrade_mundane");
       if (upgrade) return { type: "doActivity", id: upgrade.id };
-      const rest = find((id) => id === "hub:rest");
+      const rest = find((id) => id === "rest");
       if (rest) return { type: "doActivity", id: rest.id };
-      const depart = acts.find((a) => a.id.startsWith("hub:depart:"));
+      const depart = acts.find((a) => a.id.startsWith("depart:"));
       if (depart) return { type: "doActivity", id: depart.id };
       const first = acts[0];
       return first ? { type: "doActivity", id: first.id } : { type: "quit" };
@@ -160,35 +169,41 @@ export const personas: Record<string, Persona> = {
       const acts = output.snapshot.activities.filter((a) => a.available);
       const find = (pred: (id: string) => boolean) =>
         acts.find((a) => pred(a.id));
+      // Pulse imbue forces a choice after each victory. Delver picks 鬼.
+      const imbueOni = find((id) => id === "imbue:oni");
+      if (imbueOni) return { type: "doActivity", id: imbueOni.id };
+      const imbueAny = find((id) => id.startsWith("imbue:"));
+      if (imbueAny) return { type: "doActivity", id: imbueAny.id };
+      // Negotiate options (HP<30%): delver finishes with the voice
+      // when possible, otherwise just keeps attacking.
+      const voice = find((id) => id === "yaodao_voice");
+      if (voice) return { type: "doActivity", id: voice.id };
       // 1. Always fight when there's something to fight
-      const atk = find((id) => id === "raid:attack");
+      const atk = find((id) => id === "attack");
       if (atk) return { type: "doActivity", id: atk.id };
-      const sneak = find((id) => id === "raid:sneak_strike");
+      const sneak = find((id) => id === "sneak_strike");
       if (sneak) return { type: "doActivity", id: sneak.id };
       // 2. Grab loot at current zone
-      const search = find((id) => id === "raid:search");
+      const search = find((id) => id === "search");
       if (search) return { type: "doActivity", id: search.id };
       // 3. Prefer moving to an UNVISITED zone (read module state to know).
       const raid = (state as Record<string, unknown>)["sengoku-raid"] as
         | { raid?: { zones?: Record<string, { visited?: boolean }> } }
         | undefined;
       const zones = raid?.raid?.zones;
-      const moveActs = acts.filter((a) => a.id.startsWith("raid:move:"));
+      const moveActs = acts.filter((a) => a.id.startsWith("move:"));
       if (moveActs.length > 0 && zones) {
         const toUnvisited = moveActs.find((a) => {
-          const target = a.id.slice("raid:move:".length);
+          const target = a.id.slice("move:".length);
           return zones[target] && !zones[target]!.visited;
         });
         if (toUnvisited) return { type: "doActivity", id: toUnvisited.id };
       }
       // 4. Extract ONLY if every zone in the map has been visited.
-      //    Otherwise delver would extract at the first extract zone it
-      //    reaches (e.g. burnt_temple on mt_houkyou) and never see the
-      //    boss zone (caldera) hiding behind another branch.
       const allVisited =
         zones !== undefined &&
         Object.values(zones).every((z) => z?.visited === true);
-      const extract = find((id) => id === "raid:extract");
+      const extract = find((id) => id === "extract");
       if (allVisited && extract) return { type: "doActivity", id: extract.id };
       // 5. Some zones still unvisited but no unvisited neighbor — take
       //    the first move; eventually BFS-like wander finds the path.
@@ -196,9 +211,9 @@ export const personas: Record<string, Persona> = {
       // 6. Cornered: extract (if we can) or quit.
       if (extract) return { type: "doActivity", id: extract.id };
       // 6. Hub-side: rest if hurt, then depart on hardest map
-      const rest = find((id) => id === "hub:rest");
+      const rest = find((id) => id === "rest");
       if (rest) return { type: "doActivity", id: rest.id };
-      const departs = acts.filter((a) => a.id.startsWith("hub:depart:"));
+      const departs = acts.filter((a) => a.id.startsWith("depart:"));
       if (departs.length > 0) {
         return { type: "doActivity", id: departs[departs.length - 1]!.id };
       }

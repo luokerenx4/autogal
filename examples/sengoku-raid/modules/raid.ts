@@ -161,6 +161,11 @@ interface RaidModuleState {
   // activities. Stores the absorb amount the victory queued so the
   // imbue handler can apply it via the chosen pulse's formula.
   pulsePending: null | { enemyId: string; absorb: number };
+  // 業の鏡 — log of milestones the player has crossed. Pushed by the
+  // onStateMutated observer when a watched stat crosses a threshold
+  // for the first time, and by onLabelEnter for letter_03 endings.
+  // Duplicates are filtered at append time.
+  achievementLog: string[];
 }
 
 function moduleState(ctx: Ctx): RaidModuleState {
@@ -1976,6 +1981,7 @@ const raidModule: Module = {
     companion: null,
     companionHp: 0,
     pulsePending: null,
+    achievementLog: [],
   }),
 
   // Action handler kinds the module supplies. Engine namespaces them as
@@ -2081,6 +2087,48 @@ const raidModule: Module = {
     const v = ctx.state.baseline.variables.intel_active;
     if (typeof v !== "string" || v === "") return;
     return `intel_briefing_${v}`;
+  },
+
+  // ============== Achievement observers ==============
+  //
+  // onStateMutated (observer): watch for rising-edge stat / variable
+  // crossings and push achievement strings into module-state log.
+  // Triggers don't do this naturally because they fire ActionResult
+  // deltas — observers can read fresh values directly and append
+  // strings without going through the delta surface.
+  //
+  // The dedup-on-append guard handles re-loads: the same crossing
+  // doesn't double-log when state.baseline is restored from a save.
+  onStateMutated: (ctx, _delta, source) => {
+    // Ignore replays from the seed loader / hot-reload paths.
+    if (source === "external") return;
+    const m = moduleState(ctx);
+    const log = (label: string) => {
+      if (!m.achievementLog.includes(label)) m.achievementLog.push(label);
+    };
+    const spec = playerStat(ctx, "spectral");
+    if (spec >= 50) log("鬼に近づく — 霊体化 50");
+    if (spec >= 80) log("暴走寸前 — 霊体化 80");
+    const pulsePure = (ctx.state.baseline.variables.pulse_pure ?? 0) as number;
+    const pulseOni = (ctx.state.baseline.variables.pulse_oni ?? 0) as number;
+    if (pulsePure >= 5) log("浄の極み — 浄脈 5");
+    if (pulseOni >= 5) log("鬼の脈、深し — 鬼脈 5");
+    if ((ctx.state.baseline.inventory.cursed_blade_fragment ?? 0) >= 1) {
+      log("呪の片を握る — 鬼神を斬りし証");
+    }
+  },
+
+  // onLabelEnter (observer): letter_03's three branches are implemented
+  // as goto labels (end_loyal / end_defy / end_silent). Logging the
+  // entry into one of those labels gives us a clean "the decision was
+  // made HERE" anchor, separate from the switch flip which happens
+  // earlier in the choice's effects block.
+  onLabelEnter: (ctx, scriptId, labelName) => {
+    if (scriptId !== "letter_03_choice") return;
+    if (!labelName.startsWith("end_")) return;
+    const m = moduleState(ctx);
+    const tag = `御沙汰：${labelName.slice(4)}`;
+    if (!m.achievementLog.includes(tag)) m.achievementLog.push(tag);
   },
 
   // onScriptComplete is the natural place to finalize a letter's

@@ -1,7 +1,9 @@
 import type { WeaponDef } from "@autogal/engine";
-import { splitFrontmatter } from "./frontmatter";
+import { extractCustom, splitFrontmatter } from "./frontmatter";
 
 export class WeaponParseError extends Error {}
+
+const KNOWN_KEYS = ["id", "name", "basePower", "kind", "properties"] as const;
 
 export function parseWeapon(content: string, source?: string): WeaponDef {
   const { meta, body } = splitFrontmatter(content);
@@ -26,5 +28,7 @@ export function parseWeapon(content: string, source?: string): WeaponDef {
   if (meta.properties && typeof meta.properties === "object") {
     def.properties = meta.properties as Record<string, number>;
   }
+  const custom = extractCustom(meta, KNOWN_KEYS);
+  if (custom) def.custom = custom;
   return def;
 }

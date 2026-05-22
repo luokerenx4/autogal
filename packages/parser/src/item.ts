@@ -1,9 +1,10 @@
 import type { ItemDef, StateDelta } from "@autogal/engine";
-import { splitFrontmatter } from "./frontmatter";
+import { extractCustom, splitFrontmatter } from "./frontmatter";
 
 export class ItemParseError extends Error {}
 
 const VALID_KINDS = new Set(["consumable", "key", "gift"]);
+const KNOWN_KEYS = ["id", "name", "kind", "stack", "effects"] as const;
 
 export function parseItem(content: string, source?: string): ItemDef {
   const { meta, body } = splitFrontmatter(content);
@@ -28,6 +29,8 @@ export function parseItem(content: string, source?: string): ItemDef {
   if (typeof meta.stack === "boolean") def.stack = meta.stack;
   const effects = parseEffectsObject(meta.effects, source ?? meta.id);
   if (effects) def.effects = effects;
+  const custom = extractCustom(meta, KNOWN_KEYS);
+  if (custom) def.custom = custom;
   return def;
 }
 

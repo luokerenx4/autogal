@@ -1,7 +1,9 @@
 import type { EnemyDef } from "@autogal/engine";
-import { splitFrontmatter } from "./frontmatter";
+import { extractCustom, splitFrontmatter } from "./frontmatter";
 
 export class EnemyParseError extends Error {}
+
+const KNOWN_KEYS = ["id", "name", "hp", "stats", "narrations"] as const;
 
 export function parseEnemy(content: string, source?: string): EnemyDef {
   const { meta, body } = splitFrontmatter(content);
@@ -30,5 +32,7 @@ export function parseEnemy(content: string, source?: string): EnemyDef {
     if (typeof n.victory === "string") def.narrations.victory = n.victory;
     if (typeof n.escape === "string") def.narrations.escape = n.escape;
   }
+  const custom = extractCustom(meta, KNOWN_KEYS);
+  if (custom) def.custom = custom;
   return def;
 }

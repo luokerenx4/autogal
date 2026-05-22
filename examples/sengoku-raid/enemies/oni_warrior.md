@@ -2,8 +2,7 @@
 id: oni_warrior
 name: 戦鬼
 hp: 18
-stats:
-  attack_power: 5
+attack_power: 5
 narrations:
   intro: "土が割れる音。岩陰から立ち上がったのは、二尋を超える戦装束の——HP {hp} の{name}。"
   victory: "戦鬼が崩れ落ちる。鎧の隙間から黒い湯気が抜けていく——霊体化 -{absorb}, 妖刀威力 +{swordGain}。"

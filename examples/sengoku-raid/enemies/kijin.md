@@ -2,8 +2,7 @@
 id: kijin
 name: 鬼神
 hp: 45
-stats:
-  attack_power: 9
+attack_power: 9
 narrations:
   intro: "火口の底——熱風で景色がねじれる。立っているのは、人の形を保てなくなった巨体——HP {hp} の{name}。"
   victory: "鬼神の体が砕け、無数の光になって火口に降る。空が一瞬、白くなった——霊体化 -{absorb}, 妖刀威力 +{swordGain}。"

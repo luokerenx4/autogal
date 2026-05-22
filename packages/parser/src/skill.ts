@@ -1,8 +1,10 @@
 import type { SkillDef, StateDelta } from "@autogal/engine";
-import { splitFrontmatter } from "./frontmatter";
+import { extractCustom, splitFrontmatter } from "./frontmatter";
 import { parseCondition } from "./condition";
 
 export class SkillParseError extends Error {}
+
+const KNOWN_KEYS = ["id", "name", "cost", "effects", "requires"] as const;
 
 export function parseSkill(content: string, source?: string): SkillDef {
   const { meta, body } = splitFrontmatter(content);
@@ -23,6 +25,8 @@ export function parseSkill(content: string, source?: string): SkillDef {
   if (effects) def.effects = effects;
   const requires = parseCondition(meta.requires);
   if (requires) def.requires = requires;
+  const custom = extractCustom(meta, KNOWN_KEYS);
+  if (custom) def.custom = custom;
   return def;
 }
 

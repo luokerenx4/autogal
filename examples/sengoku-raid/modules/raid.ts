@@ -545,25 +545,23 @@ function buildRaidMenu(ctx: PresetContext): Output {
 // Helpers
 // ============================================================================
 
-// NOTE: engine's parseItem only preserves a fixed schema (id/name/
-// description/kind/stack/effects) — unknown frontmatter fields like
-// `sell_value` are dropped at parse time. Until the engine grows a
-// `custom: Record<string,unknown>` passthrough on ItemDef, this table
-// is the module's private item metadata. Adding a new sellable item
-// requires touching this table AND items/<id>.md, which is the kind of
-// double-bookkeeping that "headless RPGMaker" should ideally avoid.
-const SELL_VALUES: Record<string, number> = {
-  soul_shard: 30,
-  oni_horn: 80,
-  cursed_blade_fragment: 300,
-};
-
-function isLoot(_ctx: PresetContext, itemId: string): boolean {
-  return itemId in SELL_VALUES;
+// "Loot" = any item whose .md frontmatter carries a numeric `sell_value`
+// — the炼器師 collects them. Item .md files are loaded by the engine
+// (parseItem) which now preserves unknown fields on item.custom, so
+// adding a new sellable item is purely a content change (drop a new
+// items/<id>.md with a `sell_value:` line).
+function isLoot(ctx: PresetContext, itemId: string): boolean {
+  return typeof sellValueOf(ctx, itemId) === "number";
 }
 
-function sellValue(_ctx: PresetContext, itemId: string): number {
-  return SELL_VALUES[itemId] ?? 0;
+function sellValue(ctx: PresetContext, itemId: string): number {
+  return sellValueOf(ctx, itemId) ?? 0;
+}
+
+function sellValueOf(ctx: PresetContext, itemId: string): number | undefined {
+  const item = ctx.game.items?.find((i) => i.id === itemId);
+  const v = item?.custom?.sell_value;
+  return typeof v === "number" ? v : undefined;
 }
 
 function itemName(ctx: PresetContext, itemId: string): string {
@@ -577,10 +575,7 @@ function enemyName(ctx: PresetContext, enemyId: string): string {
 function enemyAttackPower(ctx: PresetContext, enemyId: string): number {
   const e = ctx.game.enemies?.find((x) => x.id === enemyId);
   if (!e) return 1;
-  // EnemyDef preserves `stats: Record<string, number>` (see parseEnemy)
-  // but drops other custom frontmatter fields. So attack_power lives
-  // inside `stats:` in the enemy .md, not at top level.
-  const raw = e.stats?.attack_power;
+  const raw = e.custom?.attack_power;
   return typeof raw === "number" ? raw : 1;
 }
 

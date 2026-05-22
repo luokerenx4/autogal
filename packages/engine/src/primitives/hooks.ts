@@ -24,10 +24,23 @@ export function fireOnSessionStart(ctx: PresetContext): void {
   for (const mod of ctx.modules) mod.onSessionStart?.(ctx);
 }
 
+// Dedup'd entry: `step`-style callers re-enter runScript on every step
+// (each step is a fresh Engine over the saved state). Without this
+// guard, onScriptStart fires on every step — observable as duplicate
+// narration pushes, re-fired side effects, infinite loops when the
+// hook queues something that gets consumed by drainNarrations.
+//
+// The runtime tracker `firedScriptStarts` mirrors `firedTriggers`'s
+// once-and-done semantics within a single script entry. It's cleared
+// for `scriptId` by fireOnScriptComplete, so a script that finishes
+// and is later re-launched gets a clean re-fire.
 export function fireOnScriptStart(
   ctx: PresetContext,
   scriptId: string,
 ): void {
+  const fired = ctx.state.runtime.firedScriptStarts;
+  if (fired.includes(scriptId)) return;
+  fired.push(scriptId);
   for (const mod of ctx.modules) mod.onScriptStart?.(ctx, scriptId);
 }
 
@@ -35,6 +48,9 @@ export function fireOnScriptComplete(
   ctx: PresetContext,
   scriptId: string,
 ): void {
+  const fired = ctx.state.runtime.firedScriptStarts;
+  const idx = fired.indexOf(scriptId);
+  if (idx >= 0) fired.splice(idx, 1);
   for (const mod of ctx.modules) mod.onScriptComplete?.(ctx, scriptId);
 }
 

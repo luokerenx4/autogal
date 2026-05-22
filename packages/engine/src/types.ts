@@ -109,6 +109,18 @@ export interface RuntimeState {
   // triggers declared with `once: true`). Prevents re-firing even on
   // future rising edges.
   firedTriggers: string[];
+  // Script ids whose `onScriptStart` has already fired for the current
+  // entry. Pushed by fireOnScriptStart, cleared by fireOnScriptComplete.
+  //
+  // Why this exists: `step`-style callers (CLI peek/step,
+  // session-replay) create a fresh Engine + run loop on each invocation
+  // and re-enter the active script's runScript every step. Without
+  // dedup, onScriptStart would fire on every step — surprising for any
+  // module hook that has side effects (queueing narrations, flipping
+  // switches, etc.). The docstring on Module.onScriptStart promises
+  // "fires just before the first beat of a script yields" — singular,
+  // not per-resumption. This field enforces that.
+  firedScriptStarts: string[];
   // Snapshot of the most recent hubMenu Output's activities. The run
   // loop populates this whenever it yields a hubMenu; when the user
   // submits an Input.doActivity, the engine resolves the chosen id by

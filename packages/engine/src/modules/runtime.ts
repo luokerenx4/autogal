@@ -10,6 +10,7 @@ export function createRuntimeState(): RuntimeState {
     pendingNarrations: [],
     activeTriggers: [],
     firedTriggers: [],
+    firedScriptStarts: [],
     lastHubActivities: [],
   };
 }

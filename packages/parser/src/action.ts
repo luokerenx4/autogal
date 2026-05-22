@@ -1,6 +1,7 @@
 import { parse as parseYaml } from "yaml";
 import type { Action, StateDelta } from "@autogal/engine";
 import { parseCondition } from "./condition";
+import { desugarAffectionMap, mergeCharacterStats } from "./script";
 
 export class ActionParseError extends Error {}
 
@@ -37,14 +38,13 @@ export function parseAction(content: string, source?: string): Action {
   if (obj.slot === "any" || obj.slot === "day" || obj.slot === "night") {
     action.slot = obj.slot;
   }
-  if (
-    obj.kind === "combat" ||
-    obj.kind === "sleep" ||
-    obj.kind === "plain" ||
-    obj.kind === "useItem" ||
-    obj.kind === "useSkill"
-  ) {
-    action.kind = obj.kind;
+  // Engine resolves kind against the loaded module set at runtime, so
+  // any string is parser-valid. The engine's actionHandlerRegistry
+  // build step throws an informative error if no module provides the
+  // referenced kind. Kinds with a namespace prefix (`module-id:kind`)
+  // are also accepted.
+  if (typeof obj.kind === "string" && obj.kind.length > 0) {
+    action.kind = obj.kind as Action["kind"];
   }
   if (typeof obj.itemId === "string") {
     action.itemId = obj.itemId;
@@ -90,15 +90,40 @@ function parseEffectsObject(
         `${source ?? "action"}: effects.affection must be an object`,
       );
     }
-    delta.affection = obj.affection as Record<string, number>;
+    delta.characterStats = desugarAffectionMap(
+      obj.affection as Record<string, number>,
+      delta.characterStats,
+    );
   }
-  if (obj.flags !== undefined) {
-    if (typeof obj.flags !== "object" || obj.flags === null) {
+  if (obj.characterStats !== undefined) {
+    if (
+      typeof obj.characterStats !== "object" ||
+      obj.characterStats === null
+    ) {
       throw new ActionParseError(
-        `${source ?? "action"}: effects.flags must be an object`,
+        `${source ?? "action"}: effects.characterStats must be an object`,
       );
     }
-    delta.flags = obj.flags as Record<string, number | string | boolean>;
+    delta.characterStats = mergeCharacterStats(
+      delta.characterStats,
+      obj.characterStats as Record<string, Record<string, number>>,
+    );
+  }
+  if (obj.switches !== undefined) {
+    if (typeof obj.switches !== "object" || obj.switches === null) {
+      throw new ActionParseError(
+        `${source ?? "action"}: effects.switches must be an object`,
+      );
+    }
+    delta.switches = obj.switches as Record<string, boolean>;
+  }
+  if (obj.variables !== undefined) {
+    if (typeof obj.variables !== "object" || obj.variables === null) {
+      throw new ActionParseError(
+        `${source ?? "action"}: effects.variables must be an object`,
+      );
+    }
+    delta.variables = obj.variables as Record<string, number | string>;
   }
   if (obj.stats !== undefined) {
     if (typeof obj.stats !== "object" || obj.stats === null) {

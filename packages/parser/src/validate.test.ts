@@ -1,0 +1,235 @@
+import { describe, expect, test } from "bun:test";
+import type { Game } from "@autogal/engine";
+import { GameValidationError, validateGame } from "./validate";
+
+// Minimal valid Game scaffold for validator tests. Each test layers on
+// the specific shape it wants to validate.
+function baseGame(overrides: Partial<Game> = {}): Game {
+  return {
+    title: "t",
+    characters: [{ id: "alice", name: "Alice" }],
+    scripts: [{ id: "001", title: "1", beats: [] }],
+    ...overrides,
+  };
+}
+
+describe("validateGame — clean games pass", () => {
+  test("minimal game with declared character and one script", () => {
+    expect(() => validateGame(baseGame())).not.toThrow();
+  });
+
+  test("requires referencing declared script + character", () => {
+    expect(() =>
+      validateGame(
+        baseGame({
+          scripts: [
+            { id: "001", title: "1", beats: [] },
+            {
+              id: "002",
+              title: "2",
+              beats: [],
+              requires: {
+                all: [
+                  { scriptCompleted: "001" },
+                  { affection: { character: "alice", min: 2 } },
+                ],
+              },
+            },
+          ],
+        }),
+      ),
+    ).not.toThrow();
+  });
+});
+
+describe("validateGame — undeclared references throw", () => {
+  test("undeclared switch in script requires", () => {
+    const game = baseGame({
+      switches: [{ id: "real_switch", initial: false }],
+      scripts: [
+        {
+          id: "001",
+          title: "1",
+          beats: [],
+          requires: { switch: { name: "typo_swotch" } },
+        },
+      ],
+    });
+    expect(() => validateGame(game)).toThrow(GameValidationError);
+    expect(() => validateGame(game)).toThrow(/typo_swotch/);
+    expect(() => validateGame(game)).toThrow(/real_switch/);
+  });
+
+  test("undeclared variable in choice effects", () => {
+    const game = baseGame({
+      variables: [{ id: "route", type: "string", initial: "" }],
+      scripts: [
+        {
+          id: "001",
+          title: "1",
+          beats: [
+            {
+              type: "choice",
+              options: [
+                {
+                  text: "pick alice",
+                  effects: { variables: { rute: "alice" } },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    expect(() => validateGame(game)).toThrow(/rute/);
+  });
+
+  test("undeclared character in inline effect's characterStats", () => {
+    const game = baseGame({
+      scripts: [
+        {
+          id: "001",
+          title: "1",
+          beats: [
+            {
+              type: "effects",
+              effects: { characterStats: { ghost: { affection: 1 } } },
+            },
+          ],
+        },
+      ],
+    });
+    expect(() => validateGame(game)).toThrow(/ghost/);
+  });
+
+  test("undeclared script in scriptCompleted", () => {
+    const game = baseGame({
+      scripts: [
+        {
+          id: "001",
+          title: "1",
+          beats: [],
+          requires: { scriptCompleted: "999_missing" },
+        },
+      ],
+    });
+    expect(() => validateGame(game)).toThrow(/999_missing/);
+  });
+
+  test("undeclared training stat in end condition", () => {
+    const game = baseGame({
+      training: {
+        slotsPerDay: 1,
+        slotNames: ["only"],
+        startDay: 1,
+        maxDay: 5,
+        decayPerDay: 0,
+        decayStatId: "",
+        sleepActionId: "sleep",
+        huntActionId: "",
+        stats: [{ id: "trust", name: "trust", min: 0, max: 100, start: 0 }],
+        endConditions: [
+          {
+            reason: "trust hit",
+            when: { stat: { name: "trsut", min: 50 } },
+            goto: "001",
+          },
+        ],
+      },
+    });
+    expect(() => validateGame(game)).toThrow(/trsut/);
+  });
+
+  test("undeclared script in end condition goto", () => {
+    const game = baseGame({
+      training: {
+        slotsPerDay: 1,
+        slotNames: ["only"],
+        startDay: 1,
+        maxDay: 5,
+        decayPerDay: 0,
+        decayStatId: "",
+        sleepActionId: "sleep",
+        huntActionId: "",
+        stats: [{ id: "trust", name: "trust", min: 0, max: 100, start: 0 }],
+        endConditions: [
+          {
+            reason: "trust hit",
+            when: { stat: { name: "trust", min: 50 } },
+            goto: "phantom_end",
+          },
+        ],
+      },
+    });
+    expect(() => validateGame(game)).toThrow(/phantom_end/);
+  });
+
+  test("undeclared item in inventory condition", () => {
+    const game = baseGame({
+      items: [
+        { id: "potion", name: "potion", description: "", kind: "consumable" },
+      ],
+      scripts: [
+        {
+          id: "001",
+          title: "1",
+          beats: [],
+          requires: { inventory: { itemId: "elixir", min: 1 } },
+        },
+      ],
+    });
+    expect(() => validateGame(game)).toThrow(/elixir/);
+  });
+
+  test("aggregates multiple issues in one error", () => {
+    const game = baseGame({
+      switches: [{ id: "x", initial: false }],
+      scripts: [
+        {
+          id: "001",
+          title: "1",
+          beats: [
+            {
+              type: "effects",
+              effects: {
+                switches: { typo1: true, typo2: false },
+                characterStats: { ghost: { affection: 1 } },
+              },
+            },
+          ],
+        },
+      ],
+    });
+    try {
+      validateGame(game);
+      throw new Error("should have thrown");
+    } catch (e) {
+      const msg = (e as Error).message;
+      expect(msg).toMatch(/typo1/);
+      expect(msg).toMatch(/typo2/);
+      expect(msg).toMatch(/ghost/);
+      expect(msg).toMatch(/3 issues/);
+    }
+  });
+});
+
+describe("validateGame — module triggers", () => {
+  test("trigger condition validated", () => {
+    const game = baseGame({
+      switches: [{ id: "real", initial: false }],
+      modules: [
+        {
+          id: "mod",
+          triggers: [
+            {
+              id: "t1",
+              when: { switch: { name: "typo_real" } },
+              do: () => ({}),
+            },
+          ],
+        },
+      ],
+    });
+    expect(() => validateGame(game)).toThrow(/typo_real/);
+  });
+});

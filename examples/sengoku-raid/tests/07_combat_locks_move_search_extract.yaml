@@ -67,5 +67,5 @@ assertions:
     eq: false
   # HP unchanged
   - kind: state
-    path: baseline.flags.hp
+    path: baseline.variables.hp
     eq: 30

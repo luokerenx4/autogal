@@ -5,7 +5,7 @@ description: |
   marker +1 effect) never applies. State.marker stays at 0.
 state:
   baseline:
-    flags:
+    switches:
       cancelActions: true
 inputs:
   - { type: doActivity, id: "action:noop" }

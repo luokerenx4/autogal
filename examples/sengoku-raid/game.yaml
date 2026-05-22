@@ -2,3 +2,15 @@ title: 妖刀奇譚 / Sengoku Raid
 preset: ./preset/run.ts
 modules:
   - ./modules/raid.ts
+switches:
+  learnedChinkonho: false
+  learnedHayagake: false
+variables:
+  hp: { type: number, initial: 30 }
+  hpMax: { type: number, initial: 30 }
+  mental: { type: number, initial: 10 }
+  mentalMax: { type: number, initial: 10 }
+  spectral: { type: number, initial: 5 }
+  intellect: { type: number, initial: 0 }
+  raidsCompleted: { type: number, initial: 0 }
+  raidsFailed: { type: number, initial: 0 }

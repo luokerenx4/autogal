@@ -1,0 +1,120 @@
+import { describe, expect, test } from "bun:test";
+import { ManifestParseError, parseManifest } from "./manifest";
+
+describe("parseManifest — switches", () => {
+  test("shorthand: { id: <bool> }", () => {
+    const m = parseManifest(
+      "title: t\nswitches:\n  unlocked: false\n  met_alice: true\n",
+    );
+    expect(m.switches).toEqual([
+      { id: "unlocked", initial: false },
+      { id: "met_alice", initial: true },
+    ]);
+  });
+
+  test("verbose: { id: { initial, description } }", () => {
+    const m = parseManifest(
+      [
+        "title: t",
+        "switches:",
+        "  met_alice:",
+        "    initial: false",
+        "    description: '已经见过樱'",
+      ].join("\n"),
+    );
+    expect(m.switches).toEqual([
+      {
+        id: "met_alice",
+        initial: false,
+        description: "已经见过樱",
+      },
+    ]);
+  });
+
+  test("non-boolean initial throws", () => {
+    expect(() =>
+      parseManifest("title: t\nswitches:\n  foo: { initial: 5 }\n"),
+    ).toThrow(/switches.foo.initial must be a boolean/);
+  });
+
+  test("array form rejected", () => {
+    expect(() =>
+      parseManifest("title: t\nswitches: [a, b]\n"),
+    ).toThrow(ManifestParseError);
+  });
+});
+
+describe("parseManifest — variables", () => {
+  test("explicit type + initial", () => {
+    const m = parseManifest(
+      [
+        "title: t",
+        "variables:",
+        "  route: { type: string, initial: '' }",
+        "  gold:  { type: number, initial: 0 }",
+      ].join("\n"),
+    );
+    expect(m.variables).toEqual([
+      { id: "route", type: "string", initial: "" },
+      { id: "gold", type: "number", initial: 0 },
+    ]);
+  });
+
+  test("type defaults from initial when omitted", () => {
+    const m = parseManifest(
+      [
+        "title: t",
+        "variables:",
+        "  count: { initial: 5 }",
+        "  name: { initial: alice }",
+      ].join("\n"),
+    );
+    expect(m.variables).toEqual([
+      { id: "count", type: "number", initial: 5 },
+      { id: "name", type: "string", initial: "alice" },
+    ]);
+  });
+
+  test("type/initial mismatch throws", () => {
+    expect(() =>
+      parseManifest(
+        "title: t\nvariables:\n  x: { type: number, initial: hello }\n",
+      ),
+    ).toThrow(/type mismatch/);
+  });
+
+  test("non-string/number initial throws", () => {
+    expect(() =>
+      parseManifest(
+        "title: t\nvariables:\n  x: { initial: true }\n",
+      ),
+    ).toThrow(/initial must be a number or string/);
+  });
+
+  test("description is preserved", () => {
+    const m = parseManifest(
+      [
+        "title: t",
+        "variables:",
+        "  route:",
+        "    type: string",
+        "    initial: ''",
+        "    description: '剧情分支'",
+      ].join("\n"),
+    );
+    expect(m.variables?.[0]?.description).toBe("剧情分支");
+  });
+});
+
+describe("parseManifest — basic", () => {
+  test("missing title throws", () => {
+    expect(() => parseManifest("modules: []\n")).toThrow(/missing `title`/);
+  });
+
+  test("title-only minimal manifest is valid", () => {
+    const m = parseManifest("title: x\n");
+    expect(m.title).toBe("x");
+    expect(m.switches).toBeUndefined();
+    expect(m.variables).toBeUndefined();
+  });
+});

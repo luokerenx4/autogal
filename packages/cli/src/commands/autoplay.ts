@@ -50,7 +50,9 @@ export async function autoplayCommand(args: Args): Promise<void> {
   );
   if (result.error) process.stderr.write(`error: ${result.error}\n`);
 
-  const ending = findEnding(result.finalState as { baseline: { completedScripts: string[] } });
+  const ending = findEnding(
+    result.finalState as { baseline: { completionOrder: string[] } },
+  );
   if (ending) process.stderr.write(`ending: ${ending}\n`);
 
   process.stdout.write(
@@ -63,8 +65,10 @@ export async function autoplayCommand(args: Args): Promise<void> {
   );
 }
 
-function findEnding(state: { baseline: { completedScripts: string[] } }): string | null {
-  const completed = state.baseline.completedScripts;
+function findEnding(state: {
+  baseline: { completionOrder: string[] };
+}): string | null {
+  const completed = state.baseline.completionOrder;
   for (let i = completed.length - 1; i >= 0; i--) {
     const id = completed[i];
     if (id && /^00[5-9]/.test(id)) return id;

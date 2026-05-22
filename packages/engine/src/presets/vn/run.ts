@@ -12,6 +12,7 @@
 // this file works unchanged outside the engine source tree.
 
 import { evaluateCondition } from "../../condition";
+import { markScriptCompleted } from "../../state";
 import {
   checkTriggers,
   drainNarrations,
@@ -56,7 +57,7 @@ export async function* vnRun(
       const finished = yield* runScript(ctx, script);
       if (finished) {
         const completedId = script.id;
-        ctx.state.baseline.completedScripts.push(completedId);
+        markScriptCompleted(ctx.state, completedId);
         ctx.state.baseline.currentScriptId = null;
         ctx.state.baseline.beatIndex = 0;
         fireOnScriptComplete(ctx, completedId);
@@ -72,10 +73,8 @@ export async function* vnRun(
       yield { type: "gameEnd" };
       return;
     }
-    const completedId =
-      ctx.state.baseline.completedScripts[
-        ctx.state.baseline.completedScripts.length - 1
-      ] ?? null;
+    const order = ctx.state.baseline.completionOrder;
+    const completedId = order[order.length - 1] ?? null;
     const input = yield {
       type: "scriptComplete",
       completedId,
@@ -94,7 +93,7 @@ function listAvailableScripts(ctx: PresetContext): ScriptInfo[] {
   return ctx.game.scripts
     .filter(
       (s) =>
-        !ctx.state.baseline.completedScripts.includes(s.id) &&
+        ctx.state.baseline.scripts[s.id]?.completed !== true &&
         (s.requires === undefined ||
           evaluateCondition(s.requires, ctx.state)),
     )

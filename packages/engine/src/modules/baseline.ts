@@ -7,6 +7,9 @@ import type {
   Game,
   Module,
   StateDelta,
+  SwitchDef,
+  VariableDef,
+  VariableValue,
   WeaponDef,
   WeaponState,
 } from "../types";
@@ -37,8 +40,13 @@ const useItemHandler: ActionHandler = ({ state, action, game }) => {
     inventory: { [action.itemId]: -1 },
   };
   if (itemDef.effects) {
-    if (itemDef.effects.affection) deltas.affection = itemDef.effects.affection;
-    if (itemDef.effects.flags) deltas.flags = itemDef.effects.flags;
+    if (itemDef.effects.characterStats) {
+      deltas.characterStats = itemDef.effects.characterStats;
+    }
+    if (itemDef.effects.switches) deltas.switches = itemDef.effects.switches;
+    if (itemDef.effects.variables) {
+      deltas.variables = itemDef.effects.variables;
+    }
     if (itemDef.effects.stats) deltas.stats = itemDef.effects.stats;
     if (itemDef.effects.statMax) deltas.statMax = itemDef.effects.statMax;
   }
@@ -68,10 +76,13 @@ const useSkillHandler: ActionHandler = ({ state, action, game }) => {
 // last-write-wins on flag values. Used by useSkill to combine the
 // skill's cost + effects into one atomic delta.
 function mergeDelta(dst: StateDelta, src: StateDelta): void {
-  if (src.affection) {
-    dst.affection = dst.affection ?? {};
-    for (const [k, v] of Object.entries(src.affection)) {
-      dst.affection[k] = (dst.affection[k] ?? 0) + v;
+  if (src.characterStats) {
+    dst.characterStats = dst.characterStats ?? {};
+    for (const [charId, statDeltas] of Object.entries(src.characterStats)) {
+      const into = (dst.characterStats[charId] = dst.characterStats[charId] ?? {});
+      for (const [name, v] of Object.entries(statDeltas)) {
+        into[name] = (into[name] ?? 0) + v;
+      }
     }
   }
   if (src.stats) {
@@ -86,8 +97,19 @@ function mergeDelta(dst: StateDelta, src: StateDelta): void {
       dst.statMax[k] = (dst.statMax[k] ?? 0) + v;
     }
   }
-  if (src.flags) {
-    dst.flags = { ...(dst.flags ?? {}), ...src.flags };
+  if (src.switches) {
+    dst.switches = { ...(dst.switches ?? {}), ...src.switches };
+  }
+  if (src.variables) {
+    dst.variables = dst.variables ?? {};
+    for (const [k, v] of Object.entries(src.variables)) {
+      const cur = dst.variables[k];
+      if (typeof cur === "number" && typeof v === "number") {
+        dst.variables[k] = cur + v;
+      } else {
+        dst.variables[k] = v;
+      }
+    }
   }
   if (src.inventory) {
     dst.inventory = dst.inventory ?? {};
@@ -121,11 +143,21 @@ function mergeDelta(dst: StateDelta, src: StateDelta): void {
 export function createBaselineState(
   characters: CharacterDef[],
   weapons: WeaponDef[] = [],
+  switches: SwitchDef[] = [],
+  variables: VariableDef[] = [],
 ): BaselineState {
   const charMap: Record<string, CharacterState> = {};
   for (const c of characters) {
+    const stats: Record<string, number> = {};
+    for (const [name, def] of Object.entries(c.stats ?? {})) {
+      stats[name] = def.initial;
+    }
+    // Affection is the engine-canonical character stat. Declare a
+    // default of 0 if the character didn't register one, so inline
+    // effects `+alice` always have a slot to read from.
+    if (!("affection" in stats)) stats.affection = 0;
     charMap[c.id] = {
-      affection: c.defaultAffection ?? 0,
+      stats,
       custom: {},
     };
   }
@@ -133,13 +165,19 @@ export function createBaselineState(
   for (const w of weapons) {
     weaponMap[w.id] = { power: w.basePower };
   }
+  const switchMap: Record<string, boolean> = {};
+  for (const s of switches) switchMap[s.id] = s.initial;
+  const variableMap: Record<string, VariableValue> = {};
+  for (const v of variables) variableMap[v.id] = v.initial;
   // Auto-equip the only declared weapon. Multi-weapon games leave
   // equippedWeaponId null and equip via the equipWeapon primitive.
   const equippedWeaponId = weapons.length === 1 ? weapons[0]!.id : null;
   return {
     characters: charMap,
-    flags: {},
-    completedScripts: [],
+    switches: switchMap,
+    variables: variableMap,
+    scripts: {},
+    completionOrder: [],
     currentScriptId: null,
     beatIndex: 0,
     inventory: {},
@@ -153,8 +191,14 @@ export const baselineModule: Module = {
   id: BASELINE_NAMESPACE,
   version: "0.1",
   initialize(game: Game): BaselineState {
-    return createBaselineState(game.characters, game.weapons ?? []);
+    return createBaselineState(
+      game.characters,
+      game.weapons ?? [],
+      game.switches ?? [],
+      game.variables ?? [],
+    );
   },
+  provides: ["useItem", "useSkill"],
   actionHandlers: {
     useItem: useItemHandler,
     useSkill: useSkillHandler,

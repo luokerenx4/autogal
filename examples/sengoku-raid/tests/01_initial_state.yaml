@@ -17,10 +17,10 @@ assertions:
     path: baseline.weapons.ancestor_yaodao.power
     eq: 4
   - kind: state
-    path: baseline.flags.hp
+    path: baseline.variables.hp
     eq: 30
   - kind: state
-    path: baseline.flags.spectral
+    path: baseline.variables.spectral
     eq: 5
   - kind: state
     path: baseline.inventory.ryo

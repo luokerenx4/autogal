@@ -25,6 +25,115 @@ import type {
   Trigger,
 } from "./types";
 
+// Build a PresetContext from a Game + (optional pre-built) state.
+// Same logic the Engine constructor uses; exported so tests can drive
+// primitives (dispatchActivity, checkTriggers, applyActionResult, ...)
+// without instantiating an Engine. Pass `rng` to override Math.random
+// for deterministic combat / choice tests.
+export function buildPresetContext(
+  game: Game,
+  state?: ComposedState,
+  rng: () => number = Math.random,
+): PresetContext {
+  const composed = state ?? createInitialState(game);
+  const scriptMap = new Map(game.scripts.map((s) => [s.id, s]));
+  const actionMap = new Map((game.actions ?? []).map((a) => [a.id, a]));
+  const itemMap = new Map((game.items ?? []).map((i) => [i.id, i]));
+  const enemyMap = new Map((game.enemies ?? []).map((e) => [e.id, e]));
+  const weaponMap = new Map((game.weapons ?? []).map((w) => [w.id, w]));
+  const skillMap = new Map((game.skills ?? []).map((s) => [s.id, s]));
+  const characterNameMap = new Map(
+    game.characters.map((c) => [c.id, c.name]),
+  );
+  const modules = resolveModules(game);
+
+  // Action handler registry. Indexed by both bare ("combat") and
+  // qualified ("module-id:combat") keys. Qualified form is always
+  // present; bare form is registered only when exactly one module
+  // provides that kind. Multiple-providers case: bare form is omitted
+  // — actions must reference the qualified form. Action dispatch
+  // looks up `action.kind` verbatim, so authors can pick the form
+  // that fits.
+  const actionHandlerRegistry: Record<string, ActionHandler> = {};
+  const providersByKind = new Map<string, string[]>();
+  for (const mod of modules) {
+    const handlerEntries = Object.entries(mod.actionHandlers ?? {});
+    if (mod.provides) {
+      const declared = new Set(mod.provides);
+      const actual = new Set(handlerEntries.map(([k]) => k));
+      const missing = mod.provides.filter((k) => !actual.has(k));
+      const extra = handlerEntries
+        .map(([k]) => k)
+        .filter((k) => !declared.has(k));
+      if (missing.length > 0 || extra.length > 0) {
+        const parts: string[] = [];
+        if (missing.length > 0) {
+          parts.push(`declared but no handler: ${missing.join(", ")}`);
+        }
+        if (extra.length > 0) {
+          parts.push(`handler but not declared: ${extra.join(", ")}`);
+        }
+        throw new Error(
+          `Engine: module "${mod.id}" provides/actionHandlers mismatch — ${parts.join(
+            "; ",
+          )}`,
+        );
+      }
+    }
+    for (const [kind, handler] of handlerEntries) {
+      const qualified = `${mod.id}:${kind}`;
+      if (actionHandlerRegistry[qualified]) {
+        throw new Error(
+          `Engine: duplicate qualified action handler "${qualified}"`,
+        );
+      }
+      actionHandlerRegistry[qualified] = handler;
+      const existing = providersByKind.get(kind) ?? [];
+      existing.push(mod.id);
+      providersByKind.set(kind, existing);
+    }
+  }
+  // Register bare keys only for kinds with a single provider; record
+  // ambiguous kinds so dispatch can give an informative error.
+  for (const [kind, providers] of providersByKind) {
+    if (providers.length === 1) {
+      const moduleId = providers[0]!;
+      const handler = actionHandlerRegistry[`${moduleId}:${kind}`];
+      if (handler) actionHandlerRegistry[kind] = handler;
+    }
+  }
+
+  const triggerRegistry: Trigger[] = [];
+  const seenTriggerIds = new Set<string>();
+  for (const mod of modules) {
+    for (const trig of mod.triggers ?? []) {
+      if (seenTriggerIds.has(trig.id)) {
+        throw new Error(
+          `Engine: duplicate trigger id "${trig.id}" (module ${mod.id})`,
+        );
+      }
+      seenTriggerIds.add(trig.id);
+      triggerRegistry.push(trig);
+    }
+  }
+
+  return {
+    state: composed,
+    game,
+    modules,
+    actionHandlerRegistry,
+    triggerRegistry,
+    scriptMap,
+    actionMap,
+    itemMap,
+    enemyMap,
+    weaponMap,
+    skillMap,
+    characterNameMap,
+    rng,
+  };
+}
+
 export class Engine {
   private state: ComposedState;
   private readonly ctx: PresetContext;
@@ -35,59 +144,7 @@ export class Engine {
     initialState?: ComposedState,
   ) {
     this.state = initialState ?? createInitialState(game);
-    const scriptMap = new Map(game.scripts.map((s) => [s.id, s]));
-    const actionMap = new Map((game.actions ?? []).map((a) => [a.id, a]));
-    const itemMap = new Map((game.items ?? []).map((i) => [i.id, i]));
-    const enemyMap = new Map((game.enemies ?? []).map((e) => [e.id, e]));
-    const weaponMap = new Map((game.weapons ?? []).map((w) => [w.id, w]));
-    const skillMap = new Map((game.skills ?? []).map((s) => [s.id, s]));
-    const characterNameMap = new Map(
-      game.characters.map((c) => [c.id, c.name]),
-    );
-    const modules = resolveModules(game);
-
-    const actionHandlerRegistry: Record<string, ActionHandler> = {};
-    for (const mod of modules) {
-      for (const [kind, handler] of Object.entries(mod.actionHandlers ?? {})) {
-        if (actionHandlerRegistry[kind]) {
-          throw new Error(
-            `Engine: duplicate action handler for kind "${kind}" (module ${mod.id})`,
-          );
-        }
-        actionHandlerRegistry[kind] = handler;
-      }
-    }
-
-    const triggerRegistry: Trigger[] = [];
-    const seenTriggerIds = new Set<string>();
-    for (const mod of modules) {
-      for (const trig of mod.triggers ?? []) {
-        if (seenTriggerIds.has(trig.id)) {
-          throw new Error(
-            `Engine: duplicate trigger id "${trig.id}" (module ${mod.id})`,
-          );
-        }
-        seenTriggerIds.add(trig.id);
-        triggerRegistry.push(trig);
-      }
-    }
-
-    this.ctx = {
-      state: this.state,
-      game,
-      modules,
-      actionHandlerRegistry,
-      triggerRegistry,
-      scriptMap,
-      actionMap,
-      itemMap,
-      enemyMap,
-      weaponMap,
-      skillMap,
-      characterNameMap,
-      rng: Math.random,
-    };
-
+    this.ctx = buildPresetContext(game, this.state);
     this.runFn = resolveRunFn(game);
   }
 
@@ -103,7 +160,7 @@ export class Engine {
     return this.game.scripts
       .filter(
         (s) =>
-          !this.state.baseline.completedScripts.includes(s.id) &&
+          this.state.baseline.scripts[s.id]?.completed !== true &&
           (s.requires === undefined || evaluateCondition(s.requires, this.state)),
       )
       .map((s) => ({ id: s.id, title: s.title }));

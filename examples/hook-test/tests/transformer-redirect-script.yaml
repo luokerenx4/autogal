@@ -5,7 +5,7 @@ description: |
   enters the alt script.
 state:
   baseline:
-    flags:
+    variables:
       redirectScriptTo: alt
 inputs:
   - { type: doActivity, id: "script:intro" }

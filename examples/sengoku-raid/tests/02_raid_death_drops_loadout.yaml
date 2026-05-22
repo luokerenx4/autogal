@@ -21,7 +21,7 @@ state:
     completedScripts: [000_intro]
     weapons:
       ancestor_yaodao: { power: 1 }
-    flags:
+    variables:
       hp: 1
       hpMax: 30
       mental: 10
@@ -73,7 +73,7 @@ assertions:
     path: sengoku-raid.raid
     eq: null
   - kind: state
-    path: baseline.flags.raidsFailed
+    path: baseline.variables.raidsFailed
     eq: 1
   # raid.pendingLoot is implicitly gone because raid itself is null (asserted above).
   # The loot was never copied into baseline.inventory — death prevented the
@@ -83,5 +83,5 @@ assertions:
 
   # Player HP reset to 1 by endRaidFailure (so they have to rest).
   - kind: state
-    path: baseline.flags.hp
+    path: baseline.variables.hp
     eq: 1

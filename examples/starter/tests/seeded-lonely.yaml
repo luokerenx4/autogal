@@ -4,7 +4,7 @@ description: |
   验证 lonely ending 是唯一能玩的下一段。
 state:
   baseline:
-    flags:
+    variables:
       route: neither
     completedScripts:
       - 001_meeting_alice

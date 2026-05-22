@@ -20,7 +20,7 @@ export function buildHubSnapshot(state: ComposedState, game: Game): Output {
   const activities: HubActivity[] = [];
 
   for (const s of game.scripts) {
-    if (state.baseline.completedScripts.includes(s.id)) continue;
+    if (state.baseline.scripts[s.id]?.completed === true) continue;
     const available =
       s.requires === undefined || evaluateCondition(s.requires, state);
     if (!available) continue;
@@ -69,7 +69,7 @@ export function buildHubSnapshot(state: ComposedState, game: Game): Output {
     affections: game.characters.map((c) => ({
       id: c.id,
       name: c.name,
-      value: state.baseline.characters[c.id]?.affection ?? 0,
+      value: state.baseline.characters[c.id]?.stats.affection ?? 0,
     })),
     activities,
   };
@@ -87,9 +87,12 @@ function formatEffectsHint(
 ): string | undefined {
   if (!effects) return undefined;
   const parts: string[] = [];
-  if (effects.affection) {
-    for (const [k, v] of Object.entries(effects.affection)) {
-      parts.push(`${k}${v >= 0 ? "+" : ""}${v}`);
+  if (effects.characterStats) {
+    for (const [charId, stats] of Object.entries(effects.characterStats)) {
+      for (const [name, v] of Object.entries(stats)) {
+        const suffix = name === "affection" ? "" : `.${name}`;
+        parts.push(`${charId}${suffix}${v >= 0 ? "+" : ""}${v}`);
+      }
     }
   }
   if (effects.stats) {
@@ -97,8 +100,13 @@ function formatEffectsHint(
       parts.push(`${k}${v >= 0 ? "+" : ""}${v}`);
     }
   }
-  if (effects.flags) {
-    for (const [k, v] of Object.entries(effects.flags)) {
+  if (effects.switches) {
+    for (const [k, v] of Object.entries(effects.switches)) {
+      parts.push(`${k}=${v}`);
+    }
+  }
+  if (effects.variables) {
+    for (const [k, v] of Object.entries(effects.variables)) {
       parts.push(`${k}=${v}`);
     }
   }

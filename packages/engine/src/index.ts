@@ -1,4 +1,4 @@
-export { Engine } from "./engine";
+export { Engine, buildPresetContext } from "./engine";
 export { evaluateCondition } from "./condition";
 export {
   createInitialState,
@@ -6,9 +6,12 @@ export {
   cloneState,
   hydrateState,
   defaultModules,
+  isScriptCompleted,
+  markScriptCompleted,
   resolveModules,
   resolveRunFn,
 } from "./state";
+export { makeScriptState } from "./types";
 export {
   trainingPreset,
   TRAINING_NAMESPACE,
@@ -82,6 +85,7 @@ export type {
   Beat,
   BaselineState,
   CharacterDef,
+  CharacterStatDef,
   CharacterState,
   ChoiceOption,
   ComposedState,
@@ -102,16 +106,20 @@ export type {
   RuntimeState,
   Script,
   ScriptInfo,
+  ScriptState,
   SkillDef,
   StatDef,
   StatSnapshot,
   StatThreshold,
   StateDelta,
   StateMutationSource,
+  SwitchDef,
   Trigger,
   TriggerHandler,
   TrainingConfig,
   TrainingState,
+  VariableDef,
+  VariableValue,
   WeaponDef,
   WeaponState,
 } from "./types";

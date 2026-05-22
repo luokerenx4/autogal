@@ -2,7 +2,7 @@
 id: chinkonho
 name: 鎮魂法
 effects:
-  flags:
+  variables:
     spectral: -20
 ---
 

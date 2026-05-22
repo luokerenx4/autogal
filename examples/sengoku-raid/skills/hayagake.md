@@ -2,7 +2,7 @@
 id: hayagake
 name: 早駆け
 effects:
-  flags:
+  variables:
     spectral: 0
 ---
 

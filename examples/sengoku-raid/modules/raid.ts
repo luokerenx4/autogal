@@ -44,8 +44,8 @@ const MODULE_DIR = dirname(fileURLToPath(import.meta.url));
 const MAPS_DIR = join(MODULE_DIR, "..", "maps");
 
 // ============================================================================
-// Persistent player stats (baseline.flags). Engine's flag delta is
-// additive for numbers, so { flags: { hp: -5 } } subtracts.
+// Persistent player stats (baseline.variables). Engine's variable delta
+// is additive for numbers, so { variables: { hp: -5 } } subtracts.
 // ============================================================================
 
 const STAT_DEFAULTS = {
@@ -62,12 +62,12 @@ const STAT_DEFAULTS = {
 type Stat = keyof typeof STAT_DEFAULTS;
 
 function getFlag(ctx: PresetContext, name: Stat): number {
-  const v = ctx.state.baseline.flags[name];
+  const v = ctx.state.baseline.variables[name];
   return typeof v === "number" ? v : STAT_DEFAULTS[name];
 }
 
 function setFlag(ctx: PresetContext, name: Stat, value: number): void {
-  ctx.state.baseline.flags[name] = value;
+  ctx.state.baseline.variables[name] = value;
 }
 
 function clamp(n: number, min: number, max: number): number {
@@ -341,7 +341,7 @@ function buildHubMenu(ctx: PresetContext): Output {
   // affection-gated `requires:` clauses. They're surfaced here as
   // "script:" activities, dispatched through the engine's standard
   // dispatch (NOT the raid module's prefix), so script completion
-  // hooks fire normally and the script gets logged to completedScripts.
+  // hooks fire normally and the script gets logged to completionOrder.
   for (const charId of m.metCharacters) {
     const char = ctx.game.characters.find((c) => c.id === charId);
     if (!char) continue;
@@ -362,7 +362,7 @@ function buildHubMenu(ctx: PresetContext): Output {
     // forward the unfilled ones for this character.
     for (const script of ctx.game.scripts) {
       if (!script.id.startsWith(`bond_${charId}_`)) continue;
-      if (ctx.state.baseline.completedScripts.includes(script.id)) continue;
+      if (ctx.state.baseline.scripts[script.id]?.completed === true) continue;
       // Check the script's requires manually since we're not going
       // through the engine's hub builder (which would do this for us).
       const reqs = script.requires;
@@ -890,7 +890,7 @@ export async function* dispatchRaidActivity(
   activityId: string,
 ): AsyncGenerator<Output, "ok" | "quit", Input> {
   const result = yield* doDispatchRaidActivity(ctx, activityId);
-  // Module mutates baseline.flags directly via setFlag (bypassing
+  // Module mutates baseline.variables directly via setFlag (bypassing
   // mutateState), so triggers wouldn't otherwise fire. Force a check
   // after every handler completes.
   checkTriggers(ctx);
@@ -1142,7 +1142,7 @@ async function* doDispatchRaidActivity(
 const triggers: Trigger[] = [
   {
     id: "raid_death_hp",
-    when: { flag: { name: "hp", max: 0 } },
+    when: { variable: { name: "hp", max: 0 } },
     do: (ctx) => {
       const m = moduleState(ctx);
       if (m.mode === "raid") {
@@ -1153,7 +1153,7 @@ const triggers: Trigger[] = [
   },
   {
     id: "raid_death_spectral",
-    when: { flag: { name: "spectral", min: 100 } },
+    when: { variable: { name: "spectral", min: 100 } },
     do: (ctx) => {
       const m = moduleState(ctx);
       if (m.mode === "raid") {
@@ -1180,15 +1180,15 @@ const raidModule: Module = {
 
   onSessionStart: (ctx) => {
     for (const [key, value] of Object.entries(STAT_DEFAULTS)) {
-      if (ctx.state.baseline.flags[key] === undefined) {
-        ctx.state.baseline.flags[key] = value;
+      if (ctx.state.baseline.variables[key] === undefined) {
+        ctx.state.baseline.variables[key] = value;
       }
     }
     if (ctx.state.baseline.inventory.ryo === undefined) {
       ctx.state.baseline.inventory.ryo = 100;
     }
     if (
-      !ctx.state.baseline.completedScripts.includes("000_intro") &&
+      ctx.state.baseline.scripts["000_intro"]?.completed !== true &&
       ctx.scriptMap.has("000_intro") &&
       ctx.state.baseline.currentScriptId === null
     ) {

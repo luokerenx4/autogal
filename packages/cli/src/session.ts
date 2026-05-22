@@ -88,15 +88,15 @@ export async function listSessionsWithMeta(
       const state = JSON.parse(raw) as ComposedState;
       const baseline = state.baseline ?? {
         currentScriptId: null,
-        completedScripts: [],
+        completionOrder: [],
       };
-      const completedScripts = (baseline.completedScripts ?? []) as string[];
+      const completionOrder = (baseline.completionOrder ?? []) as string[];
       const stat = await import("node:fs/promises").then((m) => m.stat(file));
       metas.push({
         name,
         currentScriptId: (baseline.currentScriptId ?? null) as string | null,
-        completedScriptCount: completedScripts.length,
-        lastCompletedId: completedScripts[completedScripts.length - 1] ?? null,
+        completedScriptCount: completionOrder.length,
+        lastCompletedId: completionOrder[completionOrder.length - 1] ?? null,
         modifiedAt: stat.mtimeMs,
       });
     } catch {

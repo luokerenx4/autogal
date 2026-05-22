@@ -30,7 +30,7 @@ export async function* dispatchActivity(
     const requested = activityId.slice("script:".length);
     const scriptId = fireOnScriptSelect(ctx, requested);
     if (!ctx.scriptMap.has(scriptId)) return "ok";
-    if (ctx.state.baseline.completedScripts.includes(scriptId)) return "ok";
+    if (ctx.state.baseline.scripts[scriptId]?.completed === true) return "ok";
     ctx.state.baseline.currentScriptId = scriptId;
     ctx.state.baseline.beatIndex = 0;
     return "ok";

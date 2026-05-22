@@ -75,10 +75,76 @@ export function parseFixture(content: string, source?: string): Fixture {
   };
   if (typeof obj.description === "string") fixture.description = obj.description;
   if (obj.state && typeof obj.state === "object") {
-    fixture.state = obj.state as Partial<ComposedState>;
+    fixture.state = expandSeedSugar(obj.state as Partial<ComposedState>);
   }
   if (typeof obj.maxSteps === "number") fixture.maxSteps = obj.maxSteps;
   return fixture;
+}
+
+// Fixture-loader sugar. The engine state shape doesn't have a flat
+// `completedScripts: string[]` field anymore (Phase 2: it's
+// `scripts: Record<id, ScriptState>` + `completionOrder: string[]`).
+// To keep test fixtures readable, the loader accepts the legacy
+// shorthand `baseline.completedScripts: [a, b, c]` and expands it
+// into the new shape before merging into the engine's initial state.
+// Authors writing new fixtures can use either form.
+function expandSeedSugar(
+  raw: Partial<ComposedState>,
+): Partial<ComposedState> {
+  const baseline = (raw as { baseline?: Record<string, unknown> }).baseline;
+  if (!baseline) return raw;
+  const next: Record<string, unknown> = { ...baseline };
+
+  // Phase 2 legacy: `completedScripts: [a, b]` → scripts + completionOrder
+  const legacyList = baseline.completedScripts;
+  if (Array.isArray(legacyList)) {
+    const scriptsRecord: Record<string, unknown> = {
+      ...((baseline.scripts as Record<string, unknown>) ?? {}),
+    };
+    for (const id of legacyList) {
+      if (typeof id === "string" && !scriptsRecord[id]) {
+        scriptsRecord[id] = {
+          completed: true,
+          selfSwitches: { A: false, B: false, C: false, D: false },
+        };
+      }
+    }
+    const order = Array.isArray(baseline.completionOrder)
+      ? [...(baseline.completionOrder as unknown[])]
+      : [];
+    for (const id of legacyList) {
+      if (typeof id === "string" && !order.includes(id)) order.push(id);
+    }
+    next.scripts = scriptsRecord;
+    next.completionOrder = order;
+    delete next.completedScripts;
+  }
+
+  // Phase 3 legacy: `characters.<id>.affection: N` →
+  // `characters.<id>.stats.affection: N`
+  const chars = baseline.characters as
+    | Record<string, Record<string, unknown>>
+    | undefined;
+  if (chars) {
+    const rewritten: Record<string, Record<string, unknown>> = {};
+    for (const [id, cs] of Object.entries(chars)) {
+      if (cs && typeof cs === "object" && "affection" in cs) {
+        const { affection, stats, ...rest } = cs as {
+          affection?: unknown;
+          stats?: Record<string, unknown>;
+        };
+        rewritten[id] = {
+          ...rest,
+          stats: { ...(stats ?? {}), affection },
+        };
+      } else {
+        rewritten[id] = cs;
+      }
+    }
+    next.characters = rewritten;
+  }
+
+  return { ...raw, baseline: next } as unknown as Partial<ComposedState>;
 }
 
 export function mergeState(

@@ -1,14 +1,72 @@
 export type FlagValue = number | string | boolean;
+// Variable storage: declared in game.yaml's `variables:` block. Each
+// variable has a declared type (string | number) and an initial value.
+// Unlike the old anonymous `flags` hash, references in conditions /
+// effects are validated against the declared set at parse time.
+export type VariableValue = number | string;
+// Switch storage: declared in game.yaml's `switches:` block. Always
+// boolean. Effectively a typed subset of the old flag hash for the
+// common "did this happen" / "is this unlocked" case.
+
+export interface SwitchDef {
+  id: string;
+  initial: boolean;
+  description?: string;
+}
+
+export interface VariableDef {
+  id: string;
+  type: "string" | "number";
+  initial: VariableValue;
+  description?: string;
+}
 
 export interface CharacterState {
-  affection: number;
+  // Per-character numeric stats. Author declares these in the character
+  // markdown frontmatter (`stats: { affection: { initial: 0 } }`); the
+  // engine pre-populates from those initials. `affection` is the
+  // dominant case — inline-effect syntax `+alice` desugars to
+  // `characterStats: { alice: { affection: 1 } }` — but games can
+  // declare any number of stats (trust, friendship, anger, ...).
+  stats: Record<string, number>;
+  // Free-form custom slot. Engine doesn't interpret. Reserved for
+  // game-specific per-character state that doesn't fit the stats
+  // schema.
   custom: Record<string, FlagValue>;
+}
+
+// Per-script state. Mirrors RPGMaker's "event self-switches + completed
+// flag". `completed` flips to true when the engine finishes running the
+// script (any of [end] beat / endScript / fall-off-last-beat). The
+// four self-switches A/B/C/D are author-controllable: they let a script
+// remember per-instance state ("did I show this beat once" / "branch X
+// already taken") without polluting the global variables namespace.
+export interface ScriptState {
+  completed: boolean;
+  selfSwitches: { A: boolean; B: boolean; C: boolean; D: boolean };
+}
+
+export function makeScriptState(): ScriptState {
+  return {
+    completed: false,
+    selfSwitches: { A: false, B: false, C: false, D: false },
+  };
 }
 
 export interface BaselineState {
   characters: Record<string, CharacterState>;
-  flags: Record<string, FlagValue>;
-  completedScripts: string[];
+  switches: Record<string, boolean>;
+  variables: Record<string, VariableValue>;
+  // Per-script completed flag + A/B/C/D self-switches. Lazy: missing
+  // ids read as default ScriptState (completed=false, all switches
+  // false). Engine creates/updates entries via mutateState; the
+  // run-loop sets completed=true automatically when a script ends.
+  scripts: Record<string, ScriptState>;
+  // Ordered audit log of script ids in the order they completed. Used
+  // for telemetry (last-script-run / "what ending was reached" in
+  // autoplay output / session selector) — game logic should consult
+  // baseline.scripts[id].completed instead.
+  completionOrder: string[];
   currentScriptId: string | null;
   beatIndex: number;
   // Engine-owned standard inventory schema. Counts keyed by item id.
@@ -63,12 +121,22 @@ export interface ComposedState {
 export interface CharacterDef {
   id: string;
   name: string;
-  defaultAffection?: number;
+  // Declared per-character stats. Each entry's `initial` seeds the
+  // engine's CharacterState.stats at game start. `affection` is the
+  // canonical example but games can register any name.
+  stats?: Record<string, CharacterStatDef>;
   // Game-specific frontmatter the engine doesn't interpret. Anything
   // the parser found in <character>.md that isn't a known field lands
   // here verbatim, so game modules can read e.g. character.custom.gift_preference
   // without each parser growing a per-game vocabulary.
   custom?: Record<string, unknown>;
+}
+
+export interface CharacterStatDef {
+  initial: number;
+  min?: number;
+  max?: number;
+  description?: string;
 }
 
 // Engine-level standard item resource. Defined here (not in any
@@ -220,8 +288,29 @@ export type Condition =
   | { any: Condition[] }
   | { not: Condition }
   | { scriptCompleted: string }
+  // affection is the canonical character stat — `{ affection: { character,
+  // min/max/eq } }` is sugar for `{ characterStat: { character, name:
+  // "affection", ... } }`. Both shapes evaluate identically; kept here so
+  // hand-written TS / hand-written YAML can use the short form.
   | { affection: { character: string; min?: number; max?: number; eq?: number } }
-  | { flag: { name: string; eq?: FlagValue; min?: number; max?: number } }
+  | {
+      characterStat: {
+        character: string;
+        name: string;
+        min?: number;
+        max?: number;
+        eq?: number;
+      };
+    }
+  | { switch: { name: string; eq?: boolean } }
+  | {
+      variable: {
+        name: string;
+        eq?: VariableValue;
+        min?: number;
+        max?: number;
+      };
+    }
   | { stat: { name: string; min?: number; max?: number; eq?: number } }
   | { inventory: { itemId: string; min?: number; max?: number; eq?: number } }
   | {
@@ -234,11 +323,25 @@ export type Condition =
     }
   | { knowsSkill: string }
   | { day: { min?: number; max?: number; eq?: number } }
-  | { slot: { min?: number; max?: number; eq?: number } };
+  | { slot: { min?: number; max?: number; eq?: number } }
+  | {
+      selfSwitch: {
+        scriptId: string;
+        name: "A" | "B" | "C" | "D";
+        eq?: boolean;
+      };
+    };
 
 export interface StateDelta {
-  affection?: Record<string, number>;
-  flags?: Record<string, FlagValue>;
+  // Per-character numeric stat deltas. Keyed by characterId → statName →
+  // signed delta. Additive (applyDelta sums). Inline-effect syntax like
+  // `+alice` desugars to `characterStats: { alice: { affection: 1 } }`.
+  characterStats?: Record<string, Record<string, number>>;
+  // Boolean switches. Last-write-wins (applyDelta overwrites the bit).
+  switches?: Record<string, boolean>;
+  // Typed variables. Numeric variables are additive (set { variables:
+  // { gold: 5 } } adds 5); string variables are last-write-wins.
+  variables?: Record<string, VariableValue>;
   stats?: Record<string, number>;
   statMax?: Record<string, number>;
   // Signed inventory deltas keyed by item id. applyDelta sums into
@@ -257,6 +360,11 @@ export interface StateDelta {
   // already present; `forget: ["x"]` removes. Order is learn-then-forget
   // within one applyDelta call.
   skills?: { learn?: string[]; forget?: string[] };
+  // Per-script self-switch flips. Keyed by scriptId. The engine
+  // auto-creates the ScriptState if missing. Authors typically use
+  // these for "did this branch run before" without registering a
+  // global switch. Example: `selfSwitches: { my_quest: { A: true } }`.
+  selfSwitches?: Record<string, Partial<ScriptState["selfSwitches"]>>;
 }
 
 export type Beat =
@@ -292,7 +400,12 @@ export interface Action {
   slot?: "any" | "day" | "night";
   requires?: Condition;
   effects?: StateDelta;
-  kind?: "combat" | "sleep" | "plain" | "useItem" | "useSkill";
+  // Dispatch kind. Resolved against the loaded modules' actionHandlers
+  // at engine init. Bare form (`combat`) dispatches when exactly one
+  // module provides that kind; qualified form (`spectral-combat:combat`)
+  // is unambiguous. If absent, the engine applies action.effects
+  // directly (no handler).
+  kind?: string;
   // Required when kind === "useItem": id of the item this action
   // consumes. Resolved against ctx.itemMap by the bundled useItem
   // handler in baseline module.
@@ -360,7 +473,18 @@ export interface Module {
   // Map of action.kind → handler. When the engine dispatches an Action
   // whose `kind` matches one of the keys, this handler is invoked.
   // Handlers MUST resolve atomically (see ActionHandler doc below).
+  // Actions can reference these kinds either bare (`kind: combat`) when
+  // exactly one loaded module provides them, or qualified
+  // (`kind: spectral-combat:combat`) when multiple modules share a kind
+  // name. The engine builds both lookup keys at construction.
   actionHandlers?: Record<string, ActionHandler>;
+
+  // Optional self-documenting list of kinds this module provides. When
+  // present, the engine checks at construction that this set matches
+  // the actionHandlers keys exactly — a redundancy guard against
+  // typos like `actionHandlers: { coombat: ... }` slipping through. If
+  // omitted, the engine infers provides from actionHandlers keys.
+  provides?: string[];
 
   // Reactive triggers. The engine evaluates each Trigger's `when`
   // after every state mutation; fires `do` on rising-edge transitions.
@@ -521,6 +645,13 @@ export interface Game {
   title: string;
   characters: CharacterDef[];
   scripts: Script[];
+  // Declared switches (boolean) — engine pre-populates baseline.switches
+  // from `initial`. References in conditions / effects are validated
+  // against this declared set at parse time.
+  switches?: SwitchDef[];
+  // Declared variables (string | number) — engine pre-populates
+  // baseline.variables from `initial`.
+  variables?: VariableDef[];
   actions?: Action[];
   // Engine-level item registry — see ItemDef. Empty / absent for games
   // that declare no items/ directory.

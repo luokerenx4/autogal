@@ -40,5 +40,5 @@ assertions:
     path: baseline.characters.kagari.affection
     eq: 5
   - kind: state
-    path: baseline.flags.learnedChinkonho
+    path: baseline.switches.learnedChinkonho
     eq: true

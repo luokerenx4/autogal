@@ -1,4 +1,4 @@
-import type { Condition, FlagValue } from "@autogal/engine";
+import type { Condition, VariableValue } from "@autogal/engine";
 
 export class ConditionParseError extends Error {}
 
@@ -31,6 +31,9 @@ export function parseCondition(raw: unknown): Condition | undefined {
     return { scriptCompleted: obj.scriptCompleted };
   }
   if ("affection" in obj) {
+    // Sugar variant: kept verbatim in the AST since the Condition type
+    // accepts both `affection: { character, ... }` and `characterStat:
+    // { character, name, ... }`. The evaluator treats them identically.
     const a = obj.affection as Record<string, unknown> | undefined;
     if (!a || typeof a !== "object") {
       throw new ConditionParseError("`affection` must be an object");
@@ -47,18 +50,56 @@ export function parseCondition(raw: unknown): Condition | undefined {
       },
     };
   }
-  if ("flag" in obj) {
-    const f = obj.flag as Record<string, unknown> | undefined;
-    if (!f || typeof f !== "object") {
-      throw new ConditionParseError("`flag` must be an object");
+  if ("characterStat" in obj) {
+    const a = obj.characterStat as Record<string, unknown> | undefined;
+    if (!a || typeof a !== "object") {
+      throw new ConditionParseError("`characterStat` must be an object");
     }
-    if (typeof f.name !== "string") {
-      throw new ConditionParseError("`flag.name` must be a string");
+    if (typeof a.character !== "string") {
+      throw new ConditionParseError(
+        "`characterStat.character` must be a string",
+      );
+    }
+    if (typeof a.name !== "string") {
+      throw new ConditionParseError("`characterStat.name` must be a string");
     }
     return {
-      flag: {
+      characterStat: {
+        character: a.character,
+        name: a.name,
+        ...(typeof a.min === "number" ? { min: a.min } : {}),
+        ...(typeof a.max === "number" ? { max: a.max } : {}),
+        ...(typeof a.eq === "number" ? { eq: a.eq } : {}),
+      },
+    };
+  }
+  if ("switch" in obj) {
+    const f = obj.switch as Record<string, unknown> | undefined;
+    if (!f || typeof f !== "object") {
+      throw new ConditionParseError("`switch` must be an object");
+    }
+    if (typeof f.name !== "string") {
+      throw new ConditionParseError("`switch.name` must be a string");
+    }
+    return {
+      switch: {
         name: f.name,
-        ...(f.eq !== undefined ? { eq: f.eq as FlagValue } : {}),
+        ...(typeof f.eq === "boolean" ? { eq: f.eq } : {}),
+      },
+    };
+  }
+  if ("variable" in obj) {
+    const f = obj.variable as Record<string, unknown> | undefined;
+    if (!f || typeof f !== "object") {
+      throw new ConditionParseError("`variable` must be an object");
+    }
+    if (typeof f.name !== "string") {
+      throw new ConditionParseError("`variable.name` must be a string");
+    }
+    return {
+      variable: {
+        name: f.name,
+        ...(f.eq !== undefined ? { eq: f.eq as VariableValue } : {}),
         ...(typeof f.min === "number" ? { min: f.min } : {}),
         ...(typeof f.max === "number" ? { max: f.max } : {}),
       },

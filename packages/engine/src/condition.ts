@@ -14,16 +14,37 @@ export function evaluateCondition(
     return !evaluateCondition(cond.not, state);
   }
   if ("scriptCompleted" in cond) {
-    return state.baseline.completedScripts.includes(cond.scriptCompleted);
+    return (
+      state.baseline.scripts[cond.scriptCompleted]?.completed === true
+    );
+  }
+  if ("selfSwitch" in cond) {
+    const entry = state.baseline.scripts[cond.selfSwitch.scriptId];
+    const value = entry?.selfSwitches[cond.selfSwitch.name] ?? false;
+    const eq = cond.selfSwitch.eq ?? true;
+    return value === eq;
   }
   if ("affection" in cond) {
+    // Sugar: equivalent to characterStat with name="affection".
     const c = state.baseline.characters[cond.affection.character];
     if (!c) return false;
-    return rangeMatch(c.affection, cond.affection);
+    return rangeMatch(c.stats.affection ?? 0, cond.affection);
   }
-  if ("flag" in cond) {
-    const v = state.baseline.flags[cond.flag.name];
-    const { eq, min, max } = cond.flag;
+  if ("characterStat" in cond) {
+    const c = state.baseline.characters[cond.characterStat.character];
+    if (!c) return false;
+    const value = c.stats[cond.characterStat.name] ?? 0;
+    return rangeMatch(value, cond.characterStat);
+  }
+  if ("switch" in cond) {
+    const v = state.baseline.switches[cond.switch.name];
+    const { eq } = cond.switch;
+    if (eq !== undefined) return v === eq;
+    return v === true;
+  }
+  if ("variable" in cond) {
+    const v = state.baseline.variables[cond.variable.name];
+    const { eq, min, max } = cond.variable;
     if (eq !== undefined) return v === eq;
     if (typeof v !== "number") return false;
     if (min !== undefined && v < min) return false;

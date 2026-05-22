@@ -1,6 +1,13 @@
 title: hook-test
 modules:
   - ./modules/tracker.ts
+switches:
+  cancelActions: false
+  secretRevealed: false
+variables:
+  redirectScriptTo: { type: string, initial: "" }
+  filterChoiceIdx: { type: number, initial: -1 }
+  skipBeatIdx: { type: number, initial: -1 }
 training:
   slotsPerDay: 2
   slotNames: [morning, night]

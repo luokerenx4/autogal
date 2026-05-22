@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Box, Text, useInput } from "ink";
 import type { Game } from "@autogal/engine";
 import { listSessionsWithMeta, type SessionMeta } from "../session";
+import { GameLayout } from "./GameLayout";
 
 export type HubAction =
   | { type: "play"; sessionName: string; isNew: boolean }
@@ -58,21 +59,25 @@ export function HubScreen({ game, gameDir, onAction }: HubScreenProps) {
     if (input === "q") onAction({ type: "quit" });
   });
 
-  return (
+  const header = (
     <Box flexDirection="column" paddingX={2} paddingY={1}>
-      <Box flexDirection="column" marginBottom={1}>
-        <Text bold>{game.title}</Text>
-        <Text dimColor>autogal · shell-native GalGame</Text>
-      </Box>
-      <Box flexDirection="column" marginTop={1}>
+      <Text bold>{game.title}</Text>
+      <Text dimColor>autogal · shell-native GalGame</Text>
+    </Box>
+  );
+  const footer = (
+    <Box paddingX={2}>
+      <Text dimColor>↑↓/jk 选择 · Enter 确认 · q 退出</Text>
+    </Box>
+  );
+  return (
+    <GameLayout header={header} footer={footer}>
+      <Box flexGrow={1} flexDirection="column" paddingX={2} paddingY={1}>
         {items.map((item, i) => (
           <ItemRow key={i} item={item} selected={selected === i} />
         ))}
       </Box>
-      <Box marginTop={2}>
-        <Text dimColor>↑↓/jk 选择 · Enter 确认 · q 退出</Text>
-      </Box>
-    </Box>
+    </GameLayout>
   );
 }
 

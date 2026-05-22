@@ -57,14 +57,16 @@ autogal/
 │   └── cli/       The `autogal` binary: init / play / step / peek / autoplay / test / sessions.
 ├── examples/
 │   ├── starter/        "樱花季" — pure VN, 10 scripts, 2 chars, 5 endings (5–10 min)
-│   └── spectral-demo/  "妖刀さくら抄" — training-mode demo with day/time/stats/combat
-│                       (10 scripts, 2 chars, 9 actions, 5 endings, ~14 in-game days)
+│   ├── spectral-demo/  "妖刀さくら抄" — training-mode demo with day/time/stats/combat
+│   │                   (10 scripts, 2 chars, 9 actions, 5 endings, ~14 in-game days)
+│   └── sengoku-raid/   "妖刀奇譚" — extraction-shooter raid loop, 2 maps × 10 zones,
+│                       2 美少女 妖刀使, boss + unlockable skills
 └── .claude/skills/
     ├── autogal-player/SKILL.md   for AIs that play
     └── autogal-author/SKILL.md   for AIs that write content
 ```
 
-## Two game modes
+## Three game modes
 
 **Pure VN** (like `starter`): scripts only. Between scripts, the engine yields a
 `scriptComplete` picker. Affection + flags + branching. Classic visual novel.
@@ -75,7 +77,17 @@ folder of daily activities, optional combat mini-loop with crit/fumble mechanics
 tied to a `spectral` stat, end conditions that trigger ending scripts. Story
 scripts coexist with daily actions as activities in the hub.
 
-See `examples/spectral-demo/README.md` for the full design + numbers.
+**Extraction-shooter** (like `sengoku-raid`): no `training:` block — instead, a
+game module owns a `mode: "hub" | "raid"` flag and provides mode-appropriate hub
+menus via `onHubBuild`. An ejected `preset/run.ts` routes activity prefixes
+(`script:` / `action:` to the engine's dispatcher, `raid:` / `hub:` to the
+module's). Raids are preset modes, not scripts — so they're naturally repeatable
+and the engine's `completedScripts` never gets polluted. Set-piece scenes still
+use scripts (intros, character first-meets, bonding beats); the random raid
+content lives in module action handlers with `ctx.rng()`.
+
+See `examples/spectral-demo/README.md` and `examples/sengoku-raid/README.md` for
+the full designs.
 
 ## How a play session is structured
 
@@ -233,10 +245,13 @@ here to gameplay regression.
 ## Built-in personas (no API key)
 
 ```bash
-autogal autoplay ./examples/starter --persona greedy   -v    # always pick first option
-autogal autoplay ./examples/starter --persona charmer  -v    # always pick last
-autogal autoplay ./examples/starter --persona rude     -v    # always pick index 1
-autogal autoplay ./examples/starter --persona random   -v    # uniform random
+autogal autoplay ./examples/starter      --persona greedy    -v   # always pick first option
+autogal autoplay ./examples/starter      --persona charmer   -v   # always pick last
+autogal autoplay ./examples/starter      --persona rude      -v   # always pick index 1
+autogal autoplay ./examples/starter      --persona random    -v   # uniform random
+autogal autoplay ./examples/spectral-demo --persona hunter   -v   # training-mode-aware
+autogal autoplay ./examples/sengoku-raid --persona extractor -v   # always extract / flee / sell
+autogal autoplay ./examples/sengoku-raid --persona delver    -v   # always attack / push deepest
 ```
 
 Each persona produces a deterministic-ish playthrough that lands on a specific

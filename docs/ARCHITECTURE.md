@@ -92,6 +92,8 @@ Invariants enforced by `applyDelta`:
 
 Resources are append-only at load time: the engine never mutates `ItemDef`/`EnemyDef`/`WeaponDef`/`SkillDef` objects. State mutations only ever touch `state.baseline.<slot>`.
 
+Every Def also carries an optional `custom?: Record<string, unknown>` populated at parse time from any frontmatter key the parser doesn't recognize (via `extractCustom()` in `packages/parser/src/frontmatter.ts`). Game modules read game-specific metadata via `item.custom.sell_value` or `enemy.custom.attack_power`; the engine doesn't interpret it. This keeps the engine's `Def` shape minimal (only fields every game needs) while letting individual games attach arbitrary numbers, strings, and tags directly in the .md source-of-truth file instead of mirroring them in module-side lookup tables.
+
 ## Engine primitives
 
 `packages/engine/src/primitives/` exposes the building blocks the preset loop and modules call. Each takes `PresetContext` and is side-effect-free except where named otherwise.

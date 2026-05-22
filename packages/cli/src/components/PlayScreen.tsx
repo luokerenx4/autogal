@@ -1,17 +1,30 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { Box, Text, useInput } from "ink";
+import { useInkInstance } from "../ink-instance";
 import { watch } from "node:fs";
 import { Engine } from "@autogal/engine";
 import type { ComposedState, Game, Input, Output } from "@autogal/engine";
 import { loadGame } from "../loader";
 import { appendLog, loadSession, saveSession } from "../session";
-import { Choices } from "./Choices";
-import { ScriptPicker } from "./ScriptPicker";
+import {
+  applyOutput,
+  initialModel,
+  makeErrorModel,
+  type ScreenModel,
+} from "../screen-model";
+import { dispatchStageInput, footerHintFor } from "../stage-input";
+import { BacklogOverlay } from "./BacklogOverlay";
+import { GameLayout } from "./GameLayout";
 import { StatusBar } from "./StatusBar";
-import { HubMenu } from "./HubMenu";
-import { Hint } from "./Hint";
+import { NarrationStage } from "./stages/NarrationStage";
+import { DialogueStage } from "./stages/DialogueStage";
+import { ChoiceStage } from "./stages/ChoiceStage";
+import { HubMenuStage } from "./stages/HubMenuStage";
+import { ScriptCompleteStage } from "./stages/ScriptCompleteStage";
+import { EndedStage } from "./stages/EndedStage";
+import { ErrorStage } from "./stages/ErrorStage";
+import { LoadingStage } from "./stages/LoadingStage";
 
-const SCROLLBACK_LIMIT = 12;
 const RELOAD_DEBOUNCE_MS = 200;
 const RELOAD_INDICATOR_MS = 1500;
 
@@ -22,23 +35,50 @@ interface Props {
   onOpenMenu: () => void;
 }
 
+// PlayScreen owns the engine runner and projects its `Output` stream
+// into a stable ScreenModel (see screen-model.ts). The model holds
+// exactly one current stage; transient narration/dialogue beats
+// accumulate in a backlog instead of stacking up on screen.
+//
+// Reducer pattern: model is reduced over Outputs as they arrive. Stage
+// rendering and key dispatch are both pure functions of the current
+// stage — no array of past beats to scroll through.
+type ModelAction =
+  | { kind: "reset"; model: ScreenModel }
+  | { kind: "apply"; output: Output };
+
+function modelReducer(model: ScreenModel, action: ModelAction): ScreenModel {
+  if (action.kind === "reset") return action.model;
+  return applyOutput(model, action.output);
+}
+
 export function PlayScreen({
   game: initialGame,
   gameDir,
   sessionName,
   onOpenMenu,
 }: Props) {
-  const [timeline, setTimeline] = useState<Output[]>([]);
-  const [state, setState] = useState<ComposedState | null>(null);
-  const [done, setDone] = useState(false);
-  const [reloadFlash, setReloadFlash] = useState(0);
-  const [reloadError, setReloadError] = useState<string | null>(null);
-  const [bootError, setBootError] = useState<string | null>(null);
+  const [model, dispatch] = useReducer(modelReducer, initialModel);
+  const stateRef = useRef<ComposedState | null>(null);
   const gameRef = useRef<Game>(initialGame);
   const engineRef = useRef<Engine | null>(null);
   const runnerRef = useRef<AsyncGenerator<Output, void, Input> | null>(null);
   const processingRef = useRef(false);
+  const reloadFlashRef = useRef(0);
+  const [reloadFlash, setReloadFlash] = useState(0);
+  const [reloadError, setReloadError] = useState<string | null>(null);
+  const [showBacklog, setShowBacklog] = useState(false);
+  // Bumped after a forced ink.clear() to trigger an immediate re-render
+  // onto the cleared screen. Without this re-tick, the screen would
+  // stay blank between the clear and the next state update.
+  const [repaintTick, setRepaintTick] = useState(0);
+  const inkInstance = useInkInstance();
+  const prevStageKindRef = useRef<string>(model.stage.kind);
 
+  // Boot: load saved session (or create initial), build engine, pull the
+  // first Output. Errors here become an ErrorStage instead of vanishing
+  // into an unhandled promise rejection — that was the silent
+  // "loading…" stuck-forever bug.
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -52,16 +92,15 @@ export function PlayScreen({
         const { value, done: isDone } = await runner.next();
         if (cancelled) return;
         if (isDone) {
-          setDone(true);
+          dispatch({ kind: "apply", output: { type: "gameEnd" } });
         } else {
-          setTimeline([value]);
-          setState(engine.getState());
+          dispatch({ kind: "apply", output: value });
+          stateRef.current = engine.getState();
           await saveSession(gameDir, sessionName, engine.getState());
         }
       } catch (err) {
         if (cancelled) return;
-        const e = err as Error;
-        setBootError(`${e.message}\n${e.stack ?? ""}`);
+        dispatch({ kind: "reset", model: makeErrorModel(err as Error) });
       }
     })();
     return () => {
@@ -92,14 +131,13 @@ export function PlayScreen({
       try {
         const { value, done: isDone } = await newRunner.next();
         if (isDone) {
-          setDone(true);
+          dispatch({ kind: "apply", output: { type: "gameEnd" } });
         } else {
-          setTimeline((prev) =>
-            prev.length === 0 ? [value] : [...prev.slice(0, -1), value],
-          );
-          setState(newEngine.getState());
+          dispatch({ kind: "apply", output: value });
+          stateRef.current = newEngine.getState();
         }
-        setReloadFlash(Date.now());
+        reloadFlashRef.current = Date.now();
+        setReloadFlash(reloadFlashRef.current);
         setReloadError(null);
       } catch (err) {
         setReloadError(`engine: ${(err as Error).message}`);
@@ -110,6 +148,9 @@ export function PlayScreen({
     }
   }, [gameDir]);
 
+  // File watcher: rebuild engine on .md/.yaml changes so authors can
+  // hot-edit. Filters out the .autogal session directory (else our own
+  // saveSession would trigger an immediate reload loop).
   useEffect(() => {
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
     const watcher = watch(gameDir, { recursive: true }, (_evt, filename) => {
@@ -134,6 +175,24 @@ export function PlayScreen({
     return () => clearTimeout(timer);
   }, [reloadFlash]);
 
+  // Stage-transition repaint. ink's default render pipeline is
+  // incremental: it emits a diff (cursor moves + per-line clears + new
+  // text) instead of a full repaint. macOS Terminal.app under alt-screen
+  // mishandles these mixed sequences — and CJK width miscounts compound
+  // it — so we force a full clean repaint whenever the stage *kind*
+  // changes (e.g. dialogue → hubMenu). `instance.clear()` wipes the
+  // screen and resets ink's internal frame buffer, then bumping
+  // `repaintTick` triggers a synchronous re-render that ink will treat
+  // as a fresh first frame.
+  useEffect(() => {
+    if (prevStageKindRef.current === model.stage.kind) return;
+    prevStageKindRef.current = model.stage.kind;
+    if (inkInstance) {
+      inkInstance.clear();
+      setRepaintTick((t) => t + 1);
+    }
+  }, [model.stage.kind, inkInstance]);
+
   const sendInput = useCallback(
     async (input: Input) => {
       if (processingRef.current) return;
@@ -144,6 +203,7 @@ export function PlayScreen({
       try {
         const { value, done: isDone } = await runner.next(input);
         const finalState = engine.getState();
+        stateRef.current = finalState;
         await saveSession(gameDir, sessionName, finalState);
         await appendLog(gameDir, sessionName, {
           t: Date.now(),
@@ -151,23 +211,12 @@ export function PlayScreen({
           output: isDone ? null : value,
         });
         if (isDone) {
-          setDone(true);
+          dispatch({ kind: "apply", output: { type: "gameEnd" } });
         } else {
-          setTimeline((prev) => {
-            // hubMenu / scriptComplete / clear are page-transitions: wipe
-            // scrollback so the new "screen" starts fresh instead of being
-            // pushed past the terminal viewport by accumulated narrations.
-            if (
-              value.type === "clear" ||
-              value.type === "hubMenu" ||
-              value.type === "scriptComplete"
-            ) {
-              return [value];
-            }
-            return [...prev, value].slice(-SCROLLBACK_LIMIT);
-          });
-          setState(finalState);
+          dispatch({ kind: "apply", output: value });
         }
+      } catch (err) {
+        dispatch({ kind: "reset", model: makeErrorModel(err as Error) });
       } finally {
         processingRef.current = false;
       }
@@ -175,186 +224,108 @@ export function PlayScreen({
     [gameDir, sessionName],
   );
 
-  const current = timeline[timeline.length - 1] ?? null;
-
-  useInput((input, key) => {
-    if (key.escape) {
-      onOpenMenu();
-      return;
-    }
-    if (!current) return;
-
-    switch (current.type) {
-      case "narration":
-      case "dialogue":
-      case "clear":
-        if (key.return || input === " ") void sendInput({ type: "next" });
-        break;
-      case "choice": {
-        const n = Number(input);
-        if (Number.isInteger(n) && n >= 1 && n <= current.options.length) {
-          const idx = n - 1;
-          const opt = current.options[idx];
-          if (opt && opt.available) {
-            void sendInput({ type: "choose", index: idx });
-          }
-        }
-        break;
+  // When the backlog overlay is open it owns input via its own useInput;
+  // we mount its hook then and skip our own dispatch via `isActive: false`.
+  useInput(
+    (input, key) => {
+      if (key.escape) {
+        onOpenMenu();
+        return;
       }
-      case "scriptComplete": {
-        const m = Number(input);
-        if (
-          Number.isInteger(m) &&
-          m >= 1 &&
-          m <= current.nextAvailable.length
-        ) {
-          const choice = current.nextAvailable[m - 1];
-          if (choice) {
-            void sendInput({ type: "select", scriptId: choice.id });
-          }
-        }
-        break;
+      if (input === "b" && hasBacklog(model)) {
+        setShowBacklog(true);
+        return;
       }
-      case "hubMenu": {
-        const k = Number(input);
-        if (
-          Number.isInteger(k) &&
-          k >= 1 &&
-          k <= current.snapshot.activities.length
-        ) {
-          const act = current.snapshot.activities[k - 1];
-          if (act && act.available) {
-            void sendInput({ type: "doActivity", id: act.id });
-          }
-        }
-        break;
-      }
-    }
-  });
+      const engineInput = dispatchStageInput(model.stage, input, key);
+      if (engineInput) void sendInput(engineInput);
+    },
+    { isActive: !showBacklog },
+  );
 
-  if (done) {
-    return (
-      <Box flexDirection="column" paddingY={1} paddingX={2}>
-        <Text color="gray">— 完 —</Text>
-        <Text color="gray">感谢游玩。按 Esc 回主菜单。</Text>
-      </Box>
-    );
-  }
-
-  if (bootError) {
-    return (
-      <Box flexDirection="column" paddingY={1} paddingX={2}>
-        <Text color="red" bold>启动失败:</Text>
-        <Text color="red">{bootError}</Text>
-        <Box marginTop={1}>
-          <Text dimColor>按 Esc 回主菜单</Text>
-        </Box>
-      </Box>
-    );
-  }
-
-  if (!current || !state) {
-    return <Text color="gray">loading…</Text>;
-  }
-
-  const scrollback = timeline.slice(0, -1);
   const game = gameRef.current;
+  const state = stateRef.current;
 
-  return (
-    <Box flexDirection="column">
-      <StatusBar game={game} state={state} sessionName={sessionName} />
-      {reloadError ? (
-        <Box paddingX={1}>
-          <Text color="red">⚠ 重载失败: {reloadError}</Text>
-        </Box>
-      ) : reloadFlash > 0 ? (
-        <Box paddingX={1}>
-          <Text color="green">↻ 已重载</Text>
-        </Box>
-      ) : null}
-      <Box flexDirection="column" paddingX={2} paddingY={1}>
-        {scrollback.map((o, i) => (
-          <ScrollbackBeat key={i} output={o} />
-        ))}
-        <CurrentBeat output={current} />
+  const header =
+    state && model.stage.kind !== "loading" && model.stage.kind !== "error" ? (
+      <Box flexDirection="column">
+        <StatusBar game={game} state={state} sessionName={sessionName} />
+        {reloadError ? (
+          <Box paddingX={1}>
+            <Text color="red">⚠ 重载失败: {reloadError}</Text>
+          </Box>
+        ) : reloadFlash > 0 ? (
+          <Box paddingX={1}>
+            <Text color="green">↻ 已重载</Text>
+          </Box>
+        ) : null}
       </Box>
-      <Hint output={current} suffix="Esc 主菜单 · 改 .md 自动重载" />
+    ) : null;
+
+  const footer = (
+    <Box paddingX={1}>
+      <Text dimColor>
+        {[
+          footerHintFor(model.stage),
+          hasBacklog(model) ? "b 回看" : "",
+          "Esc 主菜单",
+          "改 .md 自动重载",
+        ]
+          .filter(Boolean)
+          .join(" · ")}
+      </Text>
     </Box>
+  );
+
+  if (showBacklog) {
+    return (
+      <BacklogOverlay
+        entries={model.backlog}
+        onClose={() => setShowBacklog(false)}
+      />
+    );
+  }
+
+  // `key={repaintTick}` forces a full unmount+remount of GameLayout
+  // after the stage-transition useEffect bumps repaintTick. Combined
+  // with the preceding inkInstance.clear(), this guarantees ink emits a
+  // complete fresh frame (no incremental diff against a stale lastFrame
+  // buffer) — the fix for macOS Terminal's partial-refresh artifacts.
+  return (
+    <GameLayout key={repaintTick} header={header} footer={footer}>
+      {renderStage(model)}
+    </GameLayout>
   );
 }
 
-function ScrollbackBeat({ output }: { output: Output }) {
-  switch (output.type) {
-    case "narration":
-      return (
-        <Box marginBottom={1}>
-          <Text dimColor>{output.text}</Text>
-        </Box>
-      );
-    case "dialogue":
-      return (
-        <Box marginBottom={1} flexDirection="column">
-          <Text dimColor color="cyan">
-            {output.speakerName}
-          </Text>
-          <Text dimColor>「{output.text}」</Text>
-        </Box>
-      );
-    case "clear":
-      return (
-        <Box marginBottom={1}>
-          <Text dimColor>─── 场景切换 ───</Text>
-        </Box>
-      );
-    case "hubMenu":
-    case "scriptComplete":
-    case "choice":
-    case "gameEnd":
-      return null;
-  }
+// "b" is meaningful only when there's something to look at, so the
+// hotkey + footer hint both gate on this.
+function hasBacklog(model: ScreenModel): boolean {
+  return model.backlog.length > 0;
 }
 
-function CurrentBeat({ output }: { output: Output }) {
-  switch (output.type) {
+function renderStage(model: ScreenModel): React.ReactNode {
+  const s = model.stage;
+  switch (s.kind) {
+    case "loading":
+      return <LoadingStage />;
+    case "error":
+      return <ErrorStage message={s.message} {...(s.stack ? { stack: s.stack } : {})} />;
     case "narration":
-      return (
-        <Box marginTop={1}>
-          <Text>{output.text}</Text>
-        </Box>
-      );
+      return <NarrationStage text={s.text} />;
     case "dialogue":
-      return (
-        <Box marginTop={1} flexDirection="column">
-          <Text bold color="cyan">
-            {output.speakerName}
-          </Text>
-          <Text>「{output.text}」</Text>
-        </Box>
-      );
+      return <DialogueStage speakerName={s.speakerName} text={s.text} />;
     case "choice":
-      return (
-        <Box marginTop={1}>
-          <Choices prompt={output.prompt} options={output.options} />
-        </Box>
-      );
+      return <ChoiceStage {...(s.prompt !== undefined ? { prompt: s.prompt } : {})} options={s.options} />;
+    case "hubMenu":
+      return <HubMenuStage snapshot={s.snapshot} />;
     case "scriptComplete":
       return (
-        <Box marginTop={1}>
-          <ScriptPicker
-            completedId={output.completedId}
-            options={output.nextAvailable}
-          />
-        </Box>
+        <ScriptCompleteStage
+          completedId={s.completedId}
+          nextAvailable={s.nextAvailable}
+        />
       );
-    case "hubMenu":
-      return (
-        <Box marginTop={1}>
-          <HubMenu snapshot={output.snapshot} />
-        </Box>
-      );
-    case "clear":
-      return <Text color="gray">─── 场景切换 ───</Text>;
-    case "gameEnd":
-      return <Text color="gray">─── 完 ───</Text>;
+    case "ended":
+      return <EndedStage {...(s.reason !== undefined ? { reason: s.reason } : {})} />;
   }
 }

@@ -7,6 +7,7 @@ import { playCommand } from "./commands/play";
 import { testCommand } from "./commands/test";
 import { autoplayCommand } from "./commands/autoplay";
 import { initCommand } from "./commands/init";
+import { screenshotCommand } from "./commands/screenshot";
 
 const HELP = `autogal — shell-native GalGame engine
 
@@ -47,6 +48,17 @@ COMMANDS
       copies the preset's main-loop source into <dir>/preset/ with
       imports rewritten so the author can edit run.ts directly.
 
+  screenshot <game-dir> [--keys "K1,K2,..."] [--cols N] [--rows N]
+             [--wait-ms N] [--out FILE]
+      Spawn the TUI inside a PTY, replay a key sequence, and dump the
+      rendered terminal as plain text. Used to capture what the user
+      actually sees in their terminal — closes the test loop for ink
+      rendering the same way Playwright does for web. Keys are
+      comma-separated: named (Enter, Esc, Space, Up, Down, Tab,
+      Backspace, Left, Right) or literal chars; ":NNN" inserts a delay.
+      Example: --keys "Enter,Enter,Enter,2" navigates the hub picker
+      into a new game, advances two beats, then picks activity 2.
+
 FLAGS
   --session NAME   Session id (folder under .autogal/sessions/). Default: "default"
   --input JSON     Engine Input as JSON string (for "step")
@@ -79,6 +91,8 @@ async function main(): Promise<void> {
       return runAutoplay(rest);
     case "init":
       return runInit(rest);
+    case "screenshot":
+      return runScreenshot(rest);
     default:
       process.stderr.write(`Unknown command: ${subcommand}\n\n${HELP}`);
       process.exit(1);
@@ -204,6 +218,34 @@ async function runAutoplay(args: string[]): Promise<void> {
     verbose: Boolean(values.verbose),
     maxSteps: Number(values["max-steps"] ?? "1000"),
     ...(values.seed !== undefined ? { seed: Number(values.seed) } : {}),
+  });
+}
+
+async function runScreenshot(args: string[]): Promise<void> {
+  const { values, positionals } = parseArgs({
+    args,
+    options: {
+      keys: { type: "string", default: "" },
+      cols: { type: "string", default: "100" },
+      rows: { type: "string", default: "30" },
+      "wait-ms": { type: "string", default: "400" },
+      session: { type: "string" },
+      out: { type: "string" },
+    },
+    allowPositionals: true,
+  });
+  const gameDir = requirePositional(
+    positionals,
+    "autogal screenshot <game-dir> [--keys ...] [--cols N] [--rows N] [--wait-ms N] [--out FILE]",
+  );
+  await screenshotCommand({
+    gameDir,
+    keys: values.keys ?? "",
+    cols: Number(values.cols ?? "100"),
+    rows: Number(values.rows ?? "30"),
+    waitMs: Number(values["wait-ms"] ?? "400"),
+    ...(values.session !== undefined ? { session: values.session } : {}),
+    ...(values.out !== undefined ? { out: values.out } : {}),
   });
 }
 

@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Box, Text, useApp, useInput } from "ink";
 import type { GameCandidate } from "../games";
+import { GameLayout } from "./GameLayout";
 
 interface GamePickerProps {
   candidates: GameCandidate[];
@@ -30,13 +31,20 @@ export function GamePicker({ candidates, onSelect }: GamePickerProps) {
     }
   });
 
-  return (
+  const header = (
     <Box flexDirection="column" paddingX={2} paddingY={1}>
-      <Box flexDirection="column" marginBottom={1}>
-        <Text bold>autogal · 选一个游戏</Text>
-        <Text dimColor>shell-native GalGame</Text>
-      </Box>
-      <Box flexDirection="column" marginTop={1}>
+      <Text bold>autogal · 选一个游戏</Text>
+      <Text dimColor>shell-native GalGame</Text>
+    </Box>
+  );
+  const footer = (
+    <Box paddingX={2}>
+      <Text dimColor>↑↓/jk 选择 · Enter 确认 · q 退出</Text>
+    </Box>
+  );
+  return (
+    <GameLayout header={header} footer={footer}>
+      <Box flexGrow={1} flexDirection="column" paddingX={2}>
         {candidates.map((c, i) => {
           const isSel = selected === i;
           return (
@@ -56,9 +64,6 @@ export function GamePicker({ candidates, onSelect }: GamePickerProps) {
           {selected === candidates.length ? "▸ " : "  "}退出
         </Text>
       </Box>
-      <Box marginTop={2}>
-        <Text dimColor>↑↓/jk 选择 · Enter 确认 · q 退出</Text>
-      </Box>
-    </Box>
+    </GameLayout>
   );
 }

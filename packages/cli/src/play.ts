@@ -1,7 +1,9 @@
 import { render } from "ink";
+import type { Instance } from "ink";
 import React from "react";
 import type { Game } from "@autogal/engine";
 import { App } from "./app";
+import { InkInstanceProvider } from "./ink-instance";
 
 // Enter the terminal's alternate screen buffer (xterm "ti" / 1049h) so the
 // game takes over the viewport — every ink rerender starts at the top of a
@@ -23,7 +25,18 @@ export async function play(game: Game, gameDir: string): Promise<void> {
   process.on("SIGINT", () => { cleanup(); process.exit(130); });
   process.on("SIGTERM", () => { cleanup(); process.exit(143); });
   try {
-    const instance = render(React.createElement(App, { game, gameDir }));
+    // Provider gets a mutable ref because `render()` returns the
+    // Instance synchronously, but React needs the value to be
+    // construct-time. We populate the ref immediately after the call
+    // so children's first read sees it.
+    const ref: { current: Instance | null } = { current: null };
+    const instance = render(
+      React.createElement(InkInstanceProvider, {
+        value: ref,
+        children: React.createElement(App, { game, gameDir }),
+      }),
+    );
+    ref.current = instance;
     await instance.waitUntilExit();
   } finally {
     cleanup();

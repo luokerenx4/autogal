@@ -14,7 +14,7 @@ state:
     raid: null
     metCharacters: []
 inputs:
-  - { type: doActivity, id: "hub:upgrade_weapon" }
+  - { type: doActivity, id: "upgrade_weapon" }
   # Drain the denial narration into a real Output so we can assert on it
   - { type: next }
 assertions:

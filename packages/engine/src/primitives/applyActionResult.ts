@@ -1,4 +1,5 @@
 import type { ActionResult, PresetContext } from "../types";
+import { checkTriggers } from "./checkTriggers";
 import { mutateState } from "./mutateState";
 
 // Apply the atomic result of a module-provided ActionHandler:
@@ -16,7 +17,16 @@ export function applyActionResult(
   ctx: PresetContext,
   result: ActionResult,
 ): void {
-  if (result.deltas) mutateState(ctx, result.deltas, "action");
+  if (result.deltas) {
+    mutateState(ctx, result.deltas, "action");
+  } else {
+    // Handler may have mutated module-private state directly (zone
+    // updates, raid sub-state etc.) without returning a StateDelta.
+    // Always re-check triggers so a "no deltas" handler can still
+    // observe e.g. an HP=0 condition that crossed during its body.
+    // Trigger evaluation is cheap and idempotent.
+    checkTriggers(ctx);
+  }
   if (result.narrations && result.narrations.length > 0) {
     ctx.state.runtime.pendingNarrations.push(...result.narrations);
   }

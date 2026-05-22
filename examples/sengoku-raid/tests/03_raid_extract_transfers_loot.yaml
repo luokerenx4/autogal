@@ -46,7 +46,7 @@ state:
           isExtract: true
           pendingLoot: {}
 inputs:
-  - { type: doActivity, id: "raid:extract" }
+  - { type: doActivity, id: "extract" }
   - { type: next }
   - { type: next }
 assertions:

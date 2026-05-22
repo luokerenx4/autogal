@@ -321,7 +321,10 @@ describe("dispatchActivity — dynamic activity resolution via lastHubActivities
     expect(received.payload).toEqual({ zoneId: "crossroads" });
   });
 
-  test("ignores unavailable dynamic activity", async () => {
+  test("dispatches even when available:false — handler decides denial", async () => {
+    // The HubActivity's `available: false` is for UI display. The
+    // handler still runs when the player picks the activity, so it
+    // can surface a denial narration explaining WHY it's locked.
     let called = 0;
     const mod: Module = {
       id: "mymod",
@@ -329,7 +332,7 @@ describe("dispatchActivity — dynamic activity resolution via lastHubActivities
       actionHandlers: {
         "m:rest": () => {
           called++;
-          return {};
+          return { narrations: ["denied: not actually unavailable"] };
         },
       },
     };
@@ -351,7 +354,10 @@ describe("dispatchActivity — dynamic activity resolution via lastHubActivities
     ];
 
     await drain(dispatchActivity(ctx, "rest"));
-    expect(called).toBe(0);
+    expect(called).toBe(1);
+    expect(ctx.state.runtime.pendingNarrations).toContain(
+      "denied: not actually unavailable",
+    );
   });
 
   test("unknown activity id is silent no-op", async () => {

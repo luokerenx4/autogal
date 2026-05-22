@@ -61,7 +61,7 @@ state:
           isExtract: true
           pendingLoot: {}
 inputs:
-  - { type: doActivity, id: "raid:attack" }
+  - { type: doActivity, id: "attack" }
   # Drain any pending narrations the trigger pushes.
   - { type: next }
   - { type: next }

@@ -52,12 +52,14 @@ export async function* dispatchActivity(
 
   // Dynamic activity dispatch: resolve via the most recent hubMenu's
   // snapshot. If the activity declared an actionKind, synthesize an
-  // Action and run it.
+  // Action and run it. We don't pre-gate on `available: false` —
+  // that flag is for UI display; the handler is expected to surface
+  // its own denial narration when the player picks a blocked
+  // activity, so they understand WHY it's locked.
   const dyn = ctx.state.runtime.lastHubActivities.find(
     (a) => a.id === activityId,
   );
   if (dyn && dyn.kind === "action" && dyn.actionKind) {
-    if (!dyn.available) return "ok";
     const synthetic: Action = {
       id: dyn.id,
       title: dyn.title,

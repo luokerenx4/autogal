@@ -9,13 +9,15 @@ state:
     completedScripts: [000_intro]
     weapons:
       ancestor_yaodao: { power: 6 }
+    characters:
+      player:
+        stats:
+          hp: 25
+          mental: 8
+          spectral: 12
+          intellect: 0
+        custom: {}
     variables:
-      hp: 25
-      hpMax: 30
-      mental: 8
-      mentalMax: 10
-      spectral: 12
-      intellect: 0
       raidsCompleted: 0
       raidsFailed: 0
   sengoku-raid:
@@ -67,5 +69,5 @@ assertions:
     eq: 125
   # HP not restored (only failure resets HP — success keeps it).
   - kind: state
-    path: baseline.variables.hp
+    path: baseline.characters.player.stats.hp
     eq: 25

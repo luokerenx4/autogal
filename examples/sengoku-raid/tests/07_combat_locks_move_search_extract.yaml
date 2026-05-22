@@ -67,5 +67,5 @@ assertions:
     eq: false
   # HP unchanged
   - kind: state
-    path: baseline.variables.hp
+    path: baseline.characters.player.stats.hp
     eq: 30

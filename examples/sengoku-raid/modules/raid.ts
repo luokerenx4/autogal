@@ -1,18 +1,24 @@
 // sengoku-raid: the headless extraction-shooter module.
 //
 // Owns:
-//   - mode flag (HUB / RAID)
-//   - per-raid sub-state (current zone, encounter, pending loot)
-//   - persistent player flags (HP/mental/spectral/intellect via baseline.flags)
+//   - mode flag (HUB / RAID), per-raid sub-state (current zone,
+//     encounter, pending loot), and the metCharacters tracker — all
+//     in the module's own state slice at state["sengoku-raid"]
 //   - the hub menu (mode-dependent activities) via onHubBuild
 //   - all raid + hub actions via the raid:/hub: prefix, dispatched from
-//     the preset (NOT through engine actionMap — that's for static
-//     actions/*.yaml only)
-//   - reactive triggers: death, spectral overload
+//     the preset. R2 will convert these to standard actionHandlers.
+//   - reactive triggers: death (player.hp ≤ 0), spectral overload
+//     (player.spectral ≥ 100)
 //
-// Why not training preset?
-//   We want HP/spectral as free-form clampable numbers and we want our
-//   onHubBuild to win first-wins. Skipping game.training avoids both.
+// Player stats (HP / mental / spectral / intellect) live on the
+// `player` character (characters/player.md) with declared min/max.
+// raidsCompleted / raidsFailed live as engine variables (declared in
+// game.yaml — they're game-level counters, not player attributes).
+//
+// Why not the training preset?
+//   We want raid/hub modes instead of day/slot calendar, and we want
+//   our onHubBuild to win first-wins. Skipping game.training avoids
+//   both.
 
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -44,29 +50,47 @@ const MODULE_DIR = dirname(fileURLToPath(import.meta.url));
 const MAPS_DIR = join(MODULE_DIR, "..", "maps");
 
 // ============================================================================
-// Persistent player stats (baseline.variables). Engine's variable delta
-// is additive for numbers, so { variables: { hp: -5 } } subtracts.
+// Player stats live on the `player` character (characters/player.md)
+// with declared min/max — the engine clamps automatically through
+// mutateState. `playerStat` / `setPlayerStat` are thin readers/writers
+// kept until R2 converts every site to ActionResult { deltas } returns.
 // ============================================================================
 
-const STAT_DEFAULTS = {
-  hp: 30,
-  hpMax: 30,
-  mental: 10,
-  mentalMax: 10,
-  spectral: 5,
-  intellect: 0,
-  raidsCompleted: 0,
-  raidsFailed: 0,
-};
+type PlayerStat = "hp" | "mental" | "spectral" | "intellect";
 
-type Stat = keyof typeof STAT_DEFAULTS;
-
-function getFlag(ctx: PresetContext, name: Stat): number {
-  const v = ctx.state.baseline.variables[name];
-  return typeof v === "number" ? v : STAT_DEFAULTS[name];
+function playerStat(ctx: PresetContext, name: PlayerStat): number {
+  return ctx.state.baseline.characters.player?.stats[name] ?? 0;
 }
 
-function setFlag(ctx: PresetContext, name: Stat, value: number): void {
+function playerStatMax(ctx: PresetContext, name: PlayerStat): number {
+  return (
+    ctx.game.characters.find((c) => c.id === "player")?.stats?.[name]?.max ?? 0
+  );
+}
+
+function setPlayerStat(
+  ctx: PresetContext,
+  name: PlayerStat,
+  value: number,
+): void {
+  const c = ctx.state.baseline.characters.player;
+  if (!c) return;
+  const def = ctx.game.characters.find((cd) => cd.id === "player")?.stats?.[
+    name
+  ];
+  const min = def?.min ?? Number.NEGATIVE_INFINITY;
+  const max = def?.max ?? Number.POSITIVE_INFINITY;
+  c.stats[name] = Math.max(min, Math.min(max, value));
+}
+
+type GameVariable = "raidsCompleted" | "raidsFailed";
+
+function getVar(ctx: PresetContext, name: GameVariable): number {
+  const v = ctx.state.baseline.variables[name];
+  return typeof v === "number" ? v : 0;
+}
+
+function setVar(ctx: PresetContext, name: GameVariable, value: number): void {
   ctx.state.baseline.variables[name] = value;
 }
 
@@ -283,9 +307,9 @@ function buildStatSnapshots(ctx: PresetContext) {
     {
       id: "hp",
       name: "体力",
-      value: getFlag(ctx, "hp"),
+      value: playerStat(ctx, "hp"),
       min: 0,
-      max: getFlag(ctx, "hpMax"),
+      max: playerStatMax(ctx, "hp"),
       thresholds: [
         { min: 0, label: "瀕死", color: "red" as const },
         { min: 6, label: "負傷", color: "yellow" as const },
@@ -295,9 +319,9 @@ function buildStatSnapshots(ctx: PresetContext) {
     {
       id: "mental",
       name: "精神",
-      value: getFlag(ctx, "mental"),
+      value: playerStat(ctx, "mental"),
       min: 0,
-      max: getFlag(ctx, "mentalMax"),
+      max: playerStatMax(ctx, "mental"),
       thresholds: [
         { min: 0, label: "崩壊", color: "red" as const },
         { min: 3, label: "安定", color: "green" as const },
@@ -306,7 +330,7 @@ function buildStatSnapshots(ctx: PresetContext) {
     {
       id: "spectral",
       name: "霊体化",
-      value: getFlag(ctx, "spectral"),
+      value: playerStat(ctx, "spectral"),
       min: 0,
       max: 100,
       thresholds: [
@@ -316,7 +340,7 @@ function buildStatSnapshots(ctx: PresetContext) {
         { min: 80, label: "暴走寸前", color: "red" as const },
       ],
     },
-    { id: "intellect", name: "学識", value: getFlag(ctx, "intellect"), min: 0, max: 99 },
+    { id: "intellect", name: "学識", value: playerStat(ctx, "intellect"), min: 0, max: 99 },
     { id: "ryo", name: "両", value: ryo, min: 0, max: 99999 },
   ];
 }
@@ -414,8 +438,8 @@ function buildHubMenu(ctx: PresetContext): Output {
   });
 
   // Rest (recover HP/mental)
-  const hp = getFlag(ctx, "hp");
-  const hpMax = getFlag(ctx, "hpMax");
+  const hp = playerStat(ctx, "hp");
+  const hpMax = playerStatMax(ctx, "hp");
   if (hp < hpMax) {
     activities.push({
       id: "hub:rest",
@@ -432,7 +456,7 @@ function buildHubMenu(ctx: PresetContext): Output {
   // Only available in hub (combat is too tense per篝's teaching), and
   // only when player actually has the skill.
   if (ctx.state.baseline.knownSkills.includes("chinkonho")) {
-    const spec = getFlag(ctx, "spectral");
+    const spec = playerStat(ctx, "spectral");
     activities.push({
       id: "hub:use_chinkonho",
       kind: "action",
@@ -726,7 +750,7 @@ function endRaidExtract(ctx: PresetContext): void {
   const mapName = m.raid.mapName;
   m.raid = null;
   m.mode = "hub";
-  setFlag(ctx, "raidsCompleted", getFlag(ctx, "raidsCompleted") + 1);
+  setVar(ctx, "raidsCompleted", getVar(ctx, "raidsCompleted") + 1);
 
   ctx.state.runtime.pendingNarrations.push(
     `${mapName}から撤退に成功。${lootSummary.length > 0 ? "持ち帰った戦利品：" + lootSummary.join("、") + "。" : "今回は手ぶら。"}`,
@@ -739,12 +763,12 @@ function endRaidFailure(ctx: PresetContext, reason: string): void {
   const mapName = m.raid.mapName;
   m.raid = null;
   m.mode = "hub";
-  setFlag(ctx, "raidsFailed", getFlag(ctx, "raidsFailed") + 1);
+  setVar(ctx, "raidsFailed", getVar(ctx, "raidsFailed") + 1);
   // Reset HP/mental/spectral to defaults (death/overload triggered).
   // hp = 1 so player has to rest; mental partial; spectral cut.
-  setFlag(ctx, "hp", 1);
-  setFlag(ctx, "mental", Math.max(1, Math.floor(getFlag(ctx, "mentalMax") / 2)));
-  setFlag(ctx, "spectral", Math.max(5, Math.floor(getFlag(ctx, "spectral") / 2)));
+  setPlayerStat(ctx, "hp", 1);
+  setPlayerStat(ctx, "mental", Math.max(1, Math.floor(playerStatMax(ctx, "mental") / 2)));
+  setPlayerStat(ctx, "spectral", Math.max(5, Math.floor(playerStat(ctx, "spectral") / 2)));
   ctx.state.runtime.pendingNarrations.push(
     `${mapName}での討伐は失敗——${reason}。戦利品は全て失われた。気がついたら大名府の御殿医の枕元。`,
   );
@@ -761,8 +785,8 @@ function doAttackRound(ctx: PresetContext, kind: "normal" | "sneak"): void {
   if (!zone.encounter) return;
 
   const sword = getSwordPower(ctx);
-  const spec = getFlag(ctx, "spectral");
-  const intellect = getFlag(ctx, "intellect");
+  const spec = playerStat(ctx, "spectral");
+  const intellect = playerStat(ctx, "intellect");
 
   // Player strikes first.
   let damage: number;
@@ -792,7 +816,7 @@ function doAttackRound(ctx: PresetContext, kind: "normal" | "sneak"): void {
   zone.encounter.enemyHp -= damage;
 
   // Spectral creep from striking
-  setFlag(ctx, "spectral", Math.min(100, spec + 1));
+  setPlayerStat(ctx, "spectral", Math.min(100, spec + 1));
 
   if (zone.encounter.enemyHp <= 0) {
     // Victory
@@ -812,7 +836,7 @@ function doAttackRound(ctx: PresetContext, kind: "normal" | "sneak"): void {
         }),
       );
     }
-    setFlag(ctx, "spectral", Math.max(0, getFlag(ctx, "spectral") - absorb));
+    setPlayerStat(ctx, "spectral", Math.max(0, playerStat(ctx, "spectral") - absorb));
     const wid = ctx.state.baseline.equippedWeaponId;
     if (wid) {
       const w = ctx.state.baseline.weapons[wid];
@@ -834,13 +858,13 @@ function doAttackRound(ctx: PresetContext, kind: "normal" | "sneak"): void {
   // High spectral makes the player less coordinated defending.
 
   const finalEnemyDamage = isFumble ? Math.floor(enemyHit * 1.6) : enemyHit;
-  setFlag(ctx, "hp", getFlag(ctx, "hp") - finalEnemyDamage);
+  setPlayerStat(ctx, "hp", playerStat(ctx, "hp") - finalEnemyDamage);
   ctx.state.runtime.pendingNarrations.push(
     isFumble
       ? `${enemyName(ctx, zone.encounter.enemyId)}の反撃。霊体化が暴れて体が思うように動かず——${finalEnemyDamage} のダメージ。`
       : `${enemyName(ctx, zone.encounter.enemyId)}の反撃。${finalEnemyDamage} のダメージ。`,
   );
-  setFlag(ctx, "mental", Math.max(0, getFlag(ctx, "mental") - 1));
+  setPlayerStat(ctx, "mental", Math.max(0, playerStat(ctx, "mental") - 1));
 }
 
 function doFlee(ctx: PresetContext): void {
@@ -862,7 +886,7 @@ function doFlee(ctx: PresetContext): void {
     return;
   }
 
-  const spec = getFlag(ctx, "spectral");
+  const spec = playerStat(ctx, "spectral");
   const dc = 30 + spec; // higher spec = harder (you're slow)
   const roll = ctx.rng() * 100;
   if (roll > dc - 10) {
@@ -871,10 +895,10 @@ function doFlee(ctx: PresetContext): void {
     );
     zone.encounter = null;
     zone.encounterCleared = true;
-    setFlag(ctx, "mental", Math.max(0, getFlag(ctx, "mental") - 1));
+    setPlayerStat(ctx, "mental", Math.max(0, playerStat(ctx, "mental") - 1));
   } else {
     const dmg = Math.max(2, enemyAttackPower(ctx, enemyId) + 1);
-    setFlag(ctx, "hp", getFlag(ctx, "hp") - dmg);
+    setPlayerStat(ctx, "hp", playerStat(ctx, "hp") - dmg);
     ctx.state.runtime.pendingNarrations.push(
       `背を見せた瞬間、${enemyName(ctx, enemyId)}に追いつかれた——${dmg} のダメージ。`,
     );
@@ -890,7 +914,7 @@ export async function* dispatchRaidActivity(
   activityId: string,
 ): AsyncGenerator<Output, "ok" | "quit", Input> {
   const result = yield* doDispatchRaidActivity(ctx, activityId);
-  // Module mutates baseline.variables directly via setFlag (bypassing
+  // Module mutates state directly via setPlayerStat / setVar (bypassing
   // mutateState), so triggers wouldn't otherwise fire. Force a check
   // after every handler completes.
   checkTriggers(ctx);
@@ -907,8 +931,8 @@ async function* doDispatchRaidActivity(
   if (activityId.startsWith("hub:depart:")) {
     const mapId = activityId.slice("hub:depart:".length);
     // Same prereq as buildHubMenu — block when HP isn't full.
-    const hp = getFlag(ctx, "hp");
-    const hpMax = getFlag(ctx, "hpMax");
+    const hp = playerStat(ctx, "hp");
+    const hpMax = playerStatMax(ctx, "hp");
     if (hp < hpMax) {
       return denyWithNarration(ctx, "体力が満たぬ。先に宿で休め。");
     }
@@ -988,13 +1012,13 @@ async function* doDispatchRaidActivity(
     return "ok";
   }
   if (activityId === "hub:rest") {
-    const hp = getFlag(ctx, "hp");
-    const hpMax = getFlag(ctx, "hpMax");
+    const hp = playerStat(ctx, "hp");
+    const hpMax = playerStatMax(ctx, "hp");
     if (hp >= hpMax) {
       return denyWithNarration(ctx, "もう休む必要はない。体力は満たされている。");
     }
-    setFlag(ctx, "hp", hpMax);
-    setFlag(ctx, "mental", getFlag(ctx, "mentalMax"));
+    setPlayerStat(ctx, "hp", hpMax);
+    setPlayerStat(ctx, "mental", playerStatMax(ctx, "mental"));
     ctx.state.runtime.pendingNarrations.push(
       `宿で一晩明かす。体力と精神を回復した。霊体化は鎮まらないが、刀は静かに鞘に収まっている。`,
     );
@@ -1004,14 +1028,14 @@ async function* doDispatchRaidActivity(
     if (!ctx.state.baseline.knownSkills.includes("chinkonho")) {
       return denyWithNarration(ctx, "鎮魂法はまだ伝授されていない。");
     }
-    const spec = getFlag(ctx, "spectral");
+    const spec = playerStat(ctx, "spectral");
     if (spec < 10) {
       return denyWithNarration(
         ctx,
         "霊体化がまだ低い。今鎮める意味はない。",
       );
     }
-    setFlag(ctx, "spectral", Math.max(0, spec - 20));
+    setPlayerStat(ctx, "spectral", Math.max(0, spec - 20));
     ctx.state.runtime.pendingNarrations.push(
       `刀を逆手に取り、心臓の真上に当てる。長く、一度息を吐く。胸の奥でうねっていたものが、二十、押し戻された。`,
     );
@@ -1142,7 +1166,7 @@ async function* doDispatchRaidActivity(
 const triggers: Trigger[] = [
   {
     id: "raid_death_hp",
-    when: { variable: { name: "hp", max: 0 } },
+    when: { characterStat: { character: "player", name: "hp", max: 0 } },
     do: (ctx) => {
       const m = moduleState(ctx);
       if (m.mode === "raid") {
@@ -1153,7 +1177,7 @@ const triggers: Trigger[] = [
   },
   {
     id: "raid_death_spectral",
-    when: { variable: { name: "spectral", min: 100 } },
+    when: { characterStat: { character: "player", name: "spectral", min: 100 } },
     do: (ctx) => {
       const m = moduleState(ctx);
       if (m.mode === "raid") {
@@ -1179,11 +1203,10 @@ const raidModule: Module = {
   }),
 
   onSessionStart: (ctx) => {
-    for (const [key, value] of Object.entries(STAT_DEFAULTS)) {
-      if (ctx.state.baseline.variables[key] === undefined) {
-        ctx.state.baseline.variables[key] = value;
-      }
-    }
+    // Player stats (hp/mental/spectral/intellect) are pre-populated from
+    // characters/player.md's declared initials — no manual bootstrap
+    // here. raidsCompleted/raidsFailed are declared variables — engine
+    // pre-populates from game.yaml.
     if (ctx.state.baseline.inventory.ryo === undefined) {
       ctx.state.baseline.inventory.ryo = 100;
     }

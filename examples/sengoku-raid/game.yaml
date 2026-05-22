@@ -6,11 +6,8 @@ switches:
   learnedChinkonho: false
   learnedHayagake: false
 variables:
-  hp: { type: number, initial: 30 }
-  hpMax: { type: number, initial: 30 }
-  mental: { type: number, initial: 10 }
-  mentalMax: { type: number, initial: 10 }
-  spectral: { type: number, initial: 5 }
-  intellect: { type: number, initial: 0 }
+  # Game-level counters. Player stats (hp / mental / spectral / intellect)
+  # live on the `player` character's declared stats — see
+  # characters/player.md.
   raidsCompleted: { type: number, initial: 0 }
-  raidsFailed: { type: number, initial: 0 }
+  raidsFailed:    { type: number, initial: 0 }

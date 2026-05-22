@@ -203,17 +203,52 @@ function parseChoiceTail(tail: string): {
 }
 
 function mergeDeltas(a: StateDelta, b: StateDelta): StateDelta {
-  return {
-    ...(a.affection || b.affection
-      ? { affection: { ...(a.affection ?? {}), ...(b.affection ?? {}) } }
-      : {}),
-    ...(a.switches || b.switches
-      ? { switches: { ...(a.switches ?? {}), ...(b.switches ?? {}) } }
-      : {}),
-    ...(a.variables || b.variables
-      ? { variables: { ...(a.variables ?? {}), ...(b.variables ?? {}) } }
-      : {}),
-  };
+  const merged: StateDelta = {};
+  if (a.characterStats || b.characterStats) {
+    merged.characterStats = mergeCharacterStats(
+      a.characterStats,
+      b.characterStats,
+    );
+  }
+  if (a.switches || b.switches) {
+    merged.switches = { ...(a.switches ?? {}), ...(b.switches ?? {}) };
+  }
+  if (a.variables || b.variables) {
+    merged.variables = { ...(a.variables ?? {}), ...(b.variables ?? {}) };
+  }
+  return merged;
+}
+
+// `affection: { alice: 2 }` → `{ alice: { affection: 2 } }`. Reusable
+// at every effects-parsing site.
+export function desugarAffectionMap(
+  map: Record<string, number>,
+  existing?: Record<string, Record<string, number>>,
+): Record<string, Record<string, number>> {
+  const out: Record<string, Record<string, number>> = existing ?? {};
+  for (const [charId, value] of Object.entries(map)) {
+    if (typeof value !== "number") continue;
+    const slot = (out[charId] = out[charId] ?? {});
+    slot.affection = (slot.affection ?? 0) + value;
+  }
+  return out;
+}
+
+export function mergeCharacterStats(
+  a: Record<string, Record<string, number>> | undefined,
+  b: Record<string, Record<string, number>> | undefined,
+): Record<string, Record<string, number>> {
+  const out: Record<string, Record<string, number>> = {};
+  for (const [charId, stats] of Object.entries(a ?? {})) {
+    out[charId] = { ...stats };
+  }
+  for (const [charId, stats] of Object.entries(b ?? {})) {
+    const into = (out[charId] = out[charId] ?? {});
+    for (const [name, v] of Object.entries(stats)) {
+      into[name] = (into[name] ?? 0) + v;
+    }
+  }
+  return out;
 }
 
 function parseFenceBeat(content: string, source?: string): Beat {
@@ -323,10 +358,26 @@ function parseEffectsObject(
   const obj = raw as Record<string, unknown>;
   const delta: StateDelta = {};
   if (obj.affection !== undefined) {
+    // Sugar: `affection: { alice: 2 }` → characterStats.alice.affection.
     if (typeof obj.affection !== "object" || obj.affection === null) {
       throw new ScriptParseError("`affection` must be an object", source);
     }
-    delta.affection = obj.affection as Record<string, number>;
+    delta.characterStats = desugarAffectionMap(
+      obj.affection as Record<string, number>,
+      delta.characterStats,
+    );
+  }
+  if (obj.characterStats !== undefined) {
+    if (
+      typeof obj.characterStats !== "object" ||
+      obj.characterStats === null
+    ) {
+      throw new ScriptParseError("`characterStats` must be an object", source);
+    }
+    delta.characterStats = mergeCharacterStats(
+      delta.characterStats,
+      obj.characterStats as Record<string, Record<string, number>>,
+    );
   }
   if (obj.switches !== undefined) {
     if (typeof obj.switches !== "object" || obj.switches === null) {

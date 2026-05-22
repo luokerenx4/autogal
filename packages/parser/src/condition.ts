@@ -31,6 +31,9 @@ export function parseCondition(raw: unknown): Condition | undefined {
     return { scriptCompleted: obj.scriptCompleted };
   }
   if ("affection" in obj) {
+    // Sugar variant: kept verbatim in the AST since the Condition type
+    // accepts both `affection: { character, ... }` and `characterStat:
+    // { character, name, ... }`. The evaluator treats them identically.
     const a = obj.affection as Record<string, unknown> | undefined;
     if (!a || typeof a !== "object") {
       throw new ConditionParseError("`affection` must be an object");
@@ -41,6 +44,29 @@ export function parseCondition(raw: unknown): Condition | undefined {
     return {
       affection: {
         character: a.character,
+        ...(typeof a.min === "number" ? { min: a.min } : {}),
+        ...(typeof a.max === "number" ? { max: a.max } : {}),
+        ...(typeof a.eq === "number" ? { eq: a.eq } : {}),
+      },
+    };
+  }
+  if ("characterStat" in obj) {
+    const a = obj.characterStat as Record<string, unknown> | undefined;
+    if (!a || typeof a !== "object") {
+      throw new ConditionParseError("`characterStat` must be an object");
+    }
+    if (typeof a.character !== "string") {
+      throw new ConditionParseError(
+        "`characterStat.character` must be a string",
+      );
+    }
+    if (typeof a.name !== "string") {
+      throw new ConditionParseError("`characterStat.name` must be a string");
+    }
+    return {
+      characterStat: {
+        character: a.character,
+        name: a.name,
         ...(typeof a.min === "number" ? { min: a.min } : {}),
         ...(typeof a.max === "number" ? { max: a.max } : {}),
         ...(typeof a.eq === "number" ? { eq: a.eq } : {}),

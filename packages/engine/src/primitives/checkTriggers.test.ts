@@ -58,7 +58,7 @@ describe("checkTriggers — edge detection", () => {
     const ctx = makeCtx(game);
 
     expect(fires.alice_likes_you).toBe(0);
-    mutateState(ctx, { affection: { alice: 5 } }, "action");
+    mutateState(ctx, { characterStats: { alice: { affection: 5 } } }, "action");
     expect(fires.alice_likes_you).toBe(1);
     expect(ctx.state.baseline.switches.friended).toBe(true);
   });
@@ -73,10 +73,10 @@ describe("checkTriggers — edge detection", () => {
     ]);
     const ctx = makeCtx(game);
 
-    mutateState(ctx, { affection: { alice: 5 } }, "action");
+    mutateState(ctx, { characterStats: { alice: { affection: 5 } } }, "action");
     expect(fires.alice_high).toBe(1);
 
-    mutateState(ctx, { affection: { alice: 1 } }, "action");
+    mutateState(ctx, { characterStats: { alice: { affection: 1 } } }, "action");
     expect(fires.alice_high).toBe(1);
   });
 
@@ -90,13 +90,13 @@ describe("checkTriggers — edge detection", () => {
     ]);
     const ctx = makeCtx(game);
 
-    mutateState(ctx, { affection: { alice: 5 } }, "action");
+    mutateState(ctx, { characterStats: { alice: { affection: 5 } } }, "action");
     expect(fires.spectral_bad).toBe(1);
 
-    mutateState(ctx, { affection: { alice: -3 } }, "action");
+    mutateState(ctx, { characterStats: { alice: { affection: -3 } } }, "action");
     expect(fires.spectral_bad).toBe(1);
 
-    mutateState(ctx, { affection: { alice: 3 } }, "action");
+    mutateState(ctx, { characterStats: { alice: { affection: 3 } } }, "action");
     expect(fires.spectral_bad).toBe(2);
   });
 
@@ -111,11 +111,11 @@ describe("checkTriggers — edge detection", () => {
     ]);
     const ctx = makeCtx(game);
 
-    mutateState(ctx, { affection: { alice: 3 } }, "action");
+    mutateState(ctx, { characterStats: { alice: { affection: 3 } } }, "action");
     expect(fires.once_only).toBe(1);
 
-    mutateState(ctx, { affection: { alice: -2 } }, "action");
-    mutateState(ctx, { affection: { alice: 5 } }, "action");
+    mutateState(ctx, { characterStats: { alice: { affection: -2 } } }, "action");
+    mutateState(ctx, { characterStats: { alice: { affection: 5 } } }, "action");
     expect(fires.once_only).toBe(1);
     expect(ctx.state.runtime.firedTriggers).toContain("once_only");
   });
@@ -163,13 +163,13 @@ describe("checkTriggers — cascade bounding", () => {
     ]);
     const ctx = makeCtx(game);
 
-    mutateState(ctx, { affection: { alice: 3 } }, "action");
+    mutateState(ctx, { characterStats: { alice: { affection: 3 } } }, "action");
     expect(fires.A).toBe(1);
     expect(fires.B).toBe(0); // bounded — B did not fire this wave
     expect(ctx.state.runtime.activeTriggers).toEqual(["A"]);
 
     // Any next mutation lets B see itself as a rising edge.
-    mutateState(ctx, { affection: { alice: 0 } }, "action");
+    mutateState(ctx, { characterStats: { alice: { affection: 0 } } }, "action");
     expect(fires.B).toBe(1);
   });
 });
@@ -186,9 +186,9 @@ describe("checkTriggers — fired and active bookkeeping", () => {
     const ctx = makeCtx(game);
 
     expect(ctx.state.runtime.activeTriggers).toEqual([]);
-    mutateState(ctx, { affection: { alice: 5 } }, "action");
+    mutateState(ctx, { characterStats: { alice: { affection: 5 } } }, "action");
     expect(ctx.state.runtime.activeTriggers).toContain("high");
-    mutateState(ctx, { affection: { alice: -10 } }, "action");
+    mutateState(ctx, { characterStats: { alice: { affection: -10 } } }, "action");
     expect(ctx.state.runtime.activeTriggers).not.toContain("high");
   });
 
@@ -208,7 +208,7 @@ describe("checkTriggers — fired and active bookkeeping", () => {
     ]);
     const ctx = makeCtx(game);
 
-    mutateState(ctx, { affection: { alice: 2, bob: 2 } }, "action");
+    mutateState(ctx, { characterStats: { alice: { affection: 2 }, bob: { affection: 2 } } }, "action");
     expect(ctx.state.runtime.firedTriggers).toEqual(["once_only"]);
   });
 });
@@ -225,7 +225,7 @@ describe("checkTriggers — trigger result application", () => {
       },
     ]);
     const ctx = makeCtx(game);
-    mutateState(ctx, { affection: { alice: 3 } }, "action");
+    mutateState(ctx, { characterStats: { alice: { affection: 3 } } }, "action");
     expect(ctx.state.runtime.pendingNarrations).toEqual([
       "alice 朝你点头致意",
     ]);
@@ -242,7 +242,7 @@ describe("checkTriggers — trigger result application", () => {
       },
     ]);
     const ctx = makeCtx(game);
-    mutateState(ctx, { affection: { alice: 3 } }, "action");
+    mutateState(ctx, { characterStats: { alice: { affection: 3 } } }, "action");
     const log = (ctx.state.milestones as { log: unknown[] }).log;
     expect(log).toEqual([{ name: "first" }]);
   });
@@ -267,7 +267,7 @@ test("checkTriggers works as a standalone primitive", () => {
     },
   ]);
   const ctx = makeCtx(game);
-  applyDelta(ctx.state, { affection: { alice: 5 } });
+  applyDelta(ctx.state, { characterStats: { alice: { affection: 5 } } });
   checkTriggers(ctx);
   expect(fires.trip).toBe(1);
 });

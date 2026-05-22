@@ -22,7 +22,16 @@ export interface VariableDef {
 }
 
 export interface CharacterState {
-  affection: number;
+  // Per-character numeric stats. Author declares these in the character
+  // markdown frontmatter (`stats: { affection: { initial: 0 } }`); the
+  // engine pre-populates from those initials. `affection` is the
+  // dominant case — inline-effect syntax `+alice` desugars to
+  // `characterStats: { alice: { affection: 1 } }` — but games can
+  // declare any number of stats (trust, friendship, anger, ...).
+  stats: Record<string, number>;
+  // Free-form custom slot. Engine doesn't interpret. Reserved for
+  // game-specific per-character state that doesn't fit the stats
+  // schema.
   custom: Record<string, FlagValue>;
 }
 
@@ -112,12 +121,22 @@ export interface ComposedState {
 export interface CharacterDef {
   id: string;
   name: string;
-  defaultAffection?: number;
+  // Declared per-character stats. Each entry's `initial` seeds the
+  // engine's CharacterState.stats at game start. `affection` is the
+  // canonical example but games can register any name.
+  stats?: Record<string, CharacterStatDef>;
   // Game-specific frontmatter the engine doesn't interpret. Anything
   // the parser found in <character>.md that isn't a known field lands
   // here verbatim, so game modules can read e.g. character.custom.gift_preference
   // without each parser growing a per-game vocabulary.
   custom?: Record<string, unknown>;
+}
+
+export interface CharacterStatDef {
+  initial: number;
+  min?: number;
+  max?: number;
+  description?: string;
 }
 
 // Engine-level standard item resource. Defined here (not in any
@@ -269,7 +288,20 @@ export type Condition =
   | { any: Condition[] }
   | { not: Condition }
   | { scriptCompleted: string }
+  // affection is the canonical character stat — `{ affection: { character,
+  // min/max/eq } }` is sugar for `{ characterStat: { character, name:
+  // "affection", ... } }`. Both shapes evaluate identically; kept here so
+  // hand-written TS / hand-written YAML can use the short form.
   | { affection: { character: string; min?: number; max?: number; eq?: number } }
+  | {
+      characterStat: {
+        character: string;
+        name: string;
+        min?: number;
+        max?: number;
+        eq?: number;
+      };
+    }
   | { switch: { name: string; eq?: boolean } }
   | {
       variable: {
@@ -301,7 +333,10 @@ export type Condition =
     };
 
 export interface StateDelta {
-  affection?: Record<string, number>;
+  // Per-character numeric stat deltas. Keyed by characterId → statName →
+  // signed delta. Additive (applyDelta sums). Inline-effect syntax like
+  // `+alice` desugars to `characterStats: { alice: { affection: 1 } }`.
+  characterStats?: Record<string, Record<string, number>>;
   // Boolean switches. Last-write-wins (applyDelta overwrites the bit).
   switches?: Record<string, boolean>;
   // Typed variables. Numeric variables are additive (set { variables:

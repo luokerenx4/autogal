@@ -16,9 +16,9 @@ describe("applyActionResult", () => {
     });
     const ctx = makeCtx(game);
 
-    applyActionResult(ctx, { deltas: { affection: { alice: 2 } } });
+    applyActionResult(ctx, { deltas: { characterStats: { alice: { affection: 2 } } } });
 
-    expect(ctx.state.baseline.characters.alice!.affection).toBe(2);
+    expect(ctx.state.baseline.characters.alice!.stats.affection).toBe(2);
     const mutated = tracker.events.find((e) => e.hook === "onStateMutated");
     expect(mutated).toBeDefined();
     expect(mutated && "source" in mutated ? mutated.source : null).toBe(
@@ -74,7 +74,7 @@ describe("applyActionResult", () => {
   test("undefined deltas / narrations / customLog is a no-op", () => {
     const ctx = makeCtx(makeGame({ characters: [makeCharacter("alice")] }));
     expect(() => applyActionResult(ctx, {})).not.toThrow();
-    expect(ctx.state.baseline.characters.alice!.affection).toBe(0);
+    expect(ctx.state.baseline.characters.alice!.stats.affection).toBe(0);
   });
 
   test("all three (deltas + narrations + customLog) apply atomically", () => {
@@ -86,12 +86,12 @@ describe("applyActionResult", () => {
     const ctx = makeCtx(game);
 
     applyActionResult(ctx, {
-      deltas: { affection: { alice: 3 } },
+      deltas: { characterStats: { alice: { affection: 3 } } },
       narrations: ["alice 朝你笑了"],
       customLog: { moduleId: "combat", entry: { ok: true } },
     });
 
-    expect(ctx.state.baseline.characters.alice!.affection).toBe(3);
+    expect(ctx.state.baseline.characters.alice!.stats.affection).toBe(3);
     expect(ctx.state.runtime.pendingNarrations).toEqual(["alice 朝你笑了"]);
     expect((ctx.state.combat as { log: unknown[] }).log).toEqual([
       { ok: true },

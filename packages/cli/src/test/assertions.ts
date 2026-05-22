@@ -115,11 +115,21 @@ function checkOutput(
 
 function readPath(obj: unknown, path: string): unknown {
   // Phase 2 legacy-path alias: `baseline.completedScripts` now lives at
-  // `baseline.completionOrder` (an ordered list of completed script ids).
-  // Existing fixtures continue to assert against the old path until they're
-  // rewritten, so transparently rewrite the alias here.
+  // `baseline.completionOrder`. Phase 3 legacy-path alias:
+  // `baseline.characters.<id>.affection` now lives at
+  // `baseline.characters.<id>.stats.affection`. Existing fixtures keep
+  // working until they're rewritten.
   if (path === "baseline.completedScripts") {
     return readPath(obj, "baseline.completionOrder");
+  }
+  const charAffectionMatch = path.match(
+    /^baseline\.characters\.([^.]+)\.affection$/,
+  );
+  if (charAffectionMatch) {
+    return readPath(
+      obj,
+      `baseline.characters.${charAffectionMatch[1]}.stats.affection`,
+    );
   }
   const parts = path.split(".");
   let cursor: unknown = obj;

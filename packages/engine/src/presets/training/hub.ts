@@ -69,7 +69,7 @@ export function buildHubSnapshot(state: ComposedState, game: Game): Output {
     affections: game.characters.map((c) => ({
       id: c.id,
       name: c.name,
-      value: state.baseline.characters[c.id]?.affection ?? 0,
+      value: state.baseline.characters[c.id]?.stats.affection ?? 0,
     })),
     activities,
   };
@@ -87,9 +87,12 @@ function formatEffectsHint(
 ): string | undefined {
   if (!effects) return undefined;
   const parts: string[] = [];
-  if (effects.affection) {
-    for (const [k, v] of Object.entries(effects.affection)) {
-      parts.push(`${k}${v >= 0 ? "+" : ""}${v}`);
+  if (effects.characterStats) {
+    for (const [charId, stats] of Object.entries(effects.characterStats)) {
+      for (const [name, v] of Object.entries(stats)) {
+        const suffix = name === "affection" ? "" : `.${name}`;
+        parts.push(`${charId}${suffix}${v >= 0 ? "+" : ""}${v}`);
+      }
     }
   }
   if (effects.stats) {

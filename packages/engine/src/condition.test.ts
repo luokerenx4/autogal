@@ -25,7 +25,7 @@ function trainingGame() {
 describe("evaluateCondition — affection", () => {
   test("min satisfied", () => {
     const state = createInitialState(twoCharGame());
-    applyDelta(state, { affection: { alice: 3 } });
+    applyDelta(state, { characterStats: { alice: { affection: 3 } } });
     expect(
       evaluateCondition(
         { affection: { character: "alice", min: 2 } },
@@ -56,7 +56,7 @@ describe("evaluateCondition — affection", () => {
 
   test("eq match", () => {
     const state = createInitialState(twoCharGame());
-    applyDelta(state, { affection: { alice: 4 } });
+    applyDelta(state, { characterStats: { alice: { affection: 4 } } });
     expect(
       evaluateCondition(
         { affection: { character: "alice", eq: 4 } },
@@ -175,7 +175,7 @@ describe("evaluateCondition — composite (all/any/not)", () => {
   function setup(): ComposedState {
     const state = createInitialState(twoCharGame());
     applyDelta(state, {
-      affection: { alice: 3 },
+      characterStats: { alice: { affection: 3 } },
       variables: { route: "alice" },
     });
     state.baseline.scripts["001_intro"] = { completed: true, selfSwitches: { A: false, B: false, C: false, D: false } };

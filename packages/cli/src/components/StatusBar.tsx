@@ -11,7 +11,7 @@ interface StatusBarProps {
 export function StatusBar({ game, state, sessionName }: StatusBarProps) {
   const characterChips = game.characters.map((c) => {
     const cs = state.baseline.characters[c.id];
-    const affection = cs?.affection ?? 0;
+    const affection = cs?.stats.affection ?? 0;
     return (
       <Text key={c.id}>
         <Text color="cyan">{c.name}</Text>

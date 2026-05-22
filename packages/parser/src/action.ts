@@ -1,6 +1,7 @@
 import { parse as parseYaml } from "yaml";
 import type { Action, StateDelta } from "@autogal/engine";
 import { parseCondition } from "./condition";
+import { desugarAffectionMap, mergeCharacterStats } from "./script";
 
 export class ActionParseError extends Error {}
 
@@ -90,7 +91,24 @@ function parseEffectsObject(
         `${source ?? "action"}: effects.affection must be an object`,
       );
     }
-    delta.affection = obj.affection as Record<string, number>;
+    delta.characterStats = desugarAffectionMap(
+      obj.affection as Record<string, number>,
+      delta.characterStats,
+    );
+  }
+  if (obj.characterStats !== undefined) {
+    if (
+      typeof obj.characterStats !== "object" ||
+      obj.characterStats === null
+    ) {
+      throw new ActionParseError(
+        `${source ?? "action"}: effects.characterStats must be an object`,
+      );
+    }
+    delta.characterStats = mergeCharacterStats(
+      delta.characterStats,
+      obj.characterStats as Record<string, Record<string, number>>,
+    );
   }
   if (obj.switches !== undefined) {
     if (typeof obj.switches !== "object" || obj.switches === null) {

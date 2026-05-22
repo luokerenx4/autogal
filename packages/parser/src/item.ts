@@ -1,5 +1,6 @@
 import type { ItemDef, StateDelta } from "@autogal/engine";
 import { extractCustom, splitFrontmatter } from "./frontmatter";
+import { desugarAffectionMap, mergeCharacterStats } from "./script";
 
 export class ItemParseError extends Error {}
 
@@ -48,7 +49,24 @@ function parseEffectsObject(
     if (typeof obj.affection !== "object" || obj.affection === null) {
       throw new ItemParseError(`${source}: effects.affection must be an object`);
     }
-    delta.affection = obj.affection as Record<string, number>;
+    delta.characterStats = desugarAffectionMap(
+      obj.affection as Record<string, number>,
+      delta.characterStats,
+    );
+  }
+  if (obj.characterStats !== undefined) {
+    if (
+      typeof obj.characterStats !== "object" ||
+      obj.characterStats === null
+    ) {
+      throw new ItemParseError(
+        `${source}: effects.characterStats must be an object`,
+      );
+    }
+    delta.characterStats = mergeCharacterStats(
+      delta.characterStats,
+      obj.characterStats as Record<string, Record<string, number>>,
+    );
   }
   if (obj.switches !== undefined) {
     if (typeof obj.switches !== "object" || obj.switches === null) {

@@ -25,9 +25,16 @@ export function evaluateCondition(
     return value === eq;
   }
   if ("affection" in cond) {
+    // Sugar: equivalent to characterStat with name="affection".
     const c = state.baseline.characters[cond.affection.character];
     if (!c) return false;
-    return rangeMatch(c.affection, cond.affection);
+    return rangeMatch(c.stats.affection ?? 0, cond.affection);
+  }
+  if ("characterStat" in cond) {
+    const c = state.baseline.characters[cond.characterStat.character];
+    if (!c) return false;
+    const value = c.stats[cond.characterStat.name] ?? 0;
+    return rangeMatch(value, cond.characterStat);
   }
   if ("switch" in cond) {
     const v = state.baseline.switches[cond.switch.name];

@@ -150,7 +150,7 @@ describe("parseScript — choice (? prompt)", () => {
       options: [
         {
           text: "答应",
-          effects: { affection: { alice: 1 } },
+          effects: { characterStats: { alice: { affection: 1 } } },
         },
       ],
     });
@@ -167,7 +167,7 @@ describe("parseScript — choice (? prompt)", () => {
     expect(beat?.type).toBe("choice");
     if (!beat || beat.type !== "choice") throw new Error();
     expect(beat.options[0]?.effects).toEqual({
-      affection: { alice: 2 },
+      characterStats: { alice: { affection: 2 } },
     });
   });
 
@@ -260,7 +260,7 @@ describe("parseScript — fenced YAML choice", () => {
       type: "effects",
       effects: {
         switches: { unlocked: true },
-        affection: { alice: 1 },
+        characterStats: { alice: { affection: 1 } },
       },
     });
   });

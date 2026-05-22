@@ -105,7 +105,7 @@ describe("dispatchActivity — script:", () => {
 describe("dispatchActivity — action:", () => {
   test("dispatches kindless action by applying effects directly", async () => {
     const action = makeAction("gift_flower", {
-      effects: { affection: { alice: 1 } },
+      effects: { characterStats: { alice: { affection: 1 } } },
     });
     const game = makeGame({
       characters: [makeCharacter("alice")],
@@ -115,7 +115,7 @@ describe("dispatchActivity — action:", () => {
 
     await drain(dispatchActivity(ctx, "action:gift_flower"));
 
-    expect(ctx.state.baseline.characters.alice!.affection).toBe(1);
+    expect(ctx.state.baseline.characters.alice!.stats.affection).toBe(1);
   });
 
   test("dispatches kinded action through actionHandlerRegistry", async () => {
@@ -126,7 +126,7 @@ describe("dispatchActivity — action:", () => {
         custom: ({ action }) => {
           handlerCallCount++;
           return {
-            deltas: { affection: { alice: 2 } },
+            deltas: { characterStats: { alice: { affection: 2 } } },
             narrations: [`handler ran for ${action.id}`],
           };
         },
@@ -156,7 +156,7 @@ describe("dispatchActivity — action:", () => {
     await drain(dispatchActivity(ctx, "action:do_thing"));
 
     expect(handlerCallCount).toBe(1);
-    expect(ctx.state.baseline.characters.alice!.affection).toBe(2);
+    expect(ctx.state.baseline.characters.alice!.stats.affection).toBe(2);
     expect(ctx.state.runtime.pendingNarrations).toContain(
       "handler ran for do_thing",
     );
@@ -173,12 +173,12 @@ describe("dispatchActivity — action:", () => {
     const { ret } = await drain(dispatchActivity(ctx, "action:nonexistent"));
 
     expect(ret).toBe("ok");
-    expect(ctx.state.baseline.characters.alice!.affection).toBe(0);
+    expect(ctx.state.baseline.characters.alice!.stats.affection).toBe(0);
   });
 
   test("respects requires — gated action does not run", async () => {
     const action = makeAction("vip_gift", {
-      effects: { affection: { alice: 5 } },
+      effects: { characterStats: { alice: { affection: 5 } } },
       requires: { affection: { character: "alice", min: 3 } },
     });
     const game = makeGame({
@@ -188,24 +188,24 @@ describe("dispatchActivity — action:", () => {
     const ctx = makeCtx(game);
 
     await drain(dispatchActivity(ctx, "action:vip_gift"));
-    expect(ctx.state.baseline.characters.alice!.affection).toBe(0);
+    expect(ctx.state.baseline.characters.alice!.stats.affection).toBe(0);
   });
 
   test("respects requires — gate satisfied, action runs", async () => {
     const action = makeAction("vip_gift", {
-      effects: { affection: { alice: 5 } },
+      effects: { characterStats: { alice: { affection: 5 } } },
       requires: { affection: { character: "alice", min: 3 } },
     });
     const game = makeGame({
       characters: [
-        makeCharacter("alice", { defaultAffection: 3 }),
+        makeCharacter("alice", { stats: { affection: { initial: 3 } } }),
       ],
       actions: [action],
     });
     const ctx = makeCtx(game);
 
     await drain(dispatchActivity(ctx, "action:vip_gift"));
-    expect(ctx.state.baseline.characters.alice!.affection).toBe(8);
+    expect(ctx.state.baseline.characters.alice!.stats.affection).toBe(8);
   });
 });
 
@@ -217,7 +217,7 @@ describe("dispatchActivity — hook composition", () => {
       onActionDispatch: () => "cancel",
     };
     const action = makeAction("forbidden", {
-      effects: { affection: { alice: 100 } },
+      effects: { characterStats: { alice: { affection: 100 } } },
     });
     const game = makeGame({
       characters: [makeCharacter("alice")],
@@ -228,7 +228,7 @@ describe("dispatchActivity — hook composition", () => {
 
     await drain(dispatchActivity(ctx, "action:forbidden"));
 
-    expect(ctx.state.baseline.characters.alice!.affection).toBe(0);
+    expect(ctx.state.baseline.characters.alice!.stats.affection).toBe(0);
     // onActionComplete should NOT fire on cancel
     expect(
       tracker.events.find((e) => e.hook === "onActionComplete"),
@@ -237,7 +237,7 @@ describe("dispatchActivity — hook composition", () => {
 
   test("onActionDispatch can substitute an alternate action", async () => {
     const substitute = makeAction("alt", {
-      effects: { affection: { alice: 7 } },
+      effects: { characterStats: { alice: { affection: 7 } } },
     });
     const subber: Module = {
       id: "subber",
@@ -246,7 +246,7 @@ describe("dispatchActivity — hook composition", () => {
     const game = makeGame({
       characters: [makeCharacter("alice")],
       actions: [
-        makeAction("original", { effects: { affection: { alice: 1 } } }),
+        makeAction("original", { effects: { characterStats: { alice: { affection: 1 } } } }),
         substitute,
       ],
       modules: [subber],
@@ -255,13 +255,13 @@ describe("dispatchActivity — hook composition", () => {
 
     await drain(dispatchActivity(ctx, "action:original"));
 
-    expect(ctx.state.baseline.characters.alice!.affection).toBe(7);
+    expect(ctx.state.baseline.characters.alice!.stats.affection).toBe(7);
   });
 
   test("hook ordering: dispatch → mutate → complete", async () => {
     const tracker = trackerModule();
     const action = makeAction("rest", {
-      effects: { affection: { alice: 1 } },
+      effects: { characterStats: { alice: { affection: 1 } } },
     });
     const game = makeGame({
       characters: [makeCharacter("alice")],

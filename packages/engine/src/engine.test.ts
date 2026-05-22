@@ -181,13 +181,15 @@ describe("Engine class", () => {
   test("serialize round-trips through hydrateState", async () => {
     const engine = new Engine(
       makeGame({
-        characters: [makeCharacter("alice", { defaultAffection: 2 })],
+        characters: [
+          makeCharacter("alice", { stats: { affection: { initial: 2 } } }),
+        ],
       }),
     );
     const json = engine.serialize();
     const parsed = JSON.parse(json) as {
-      baseline: { characters: Record<string, { affection: number }> };
+      baseline: { characters: Record<string, { stats: { affection: number } }> };
     };
-    expect(parsed.baseline.characters.alice?.affection).toBe(2);
+    expect(parsed.baseline.characters.alice?.stats.affection).toBe(2);
   });
 });

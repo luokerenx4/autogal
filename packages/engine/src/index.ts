@@ -85,6 +85,7 @@ export type {
   Beat,
   BaselineState,
   CharacterDef,
+  CharacterStatDef,
   CharacterState,
   ChoiceOption,
   ComposedState,

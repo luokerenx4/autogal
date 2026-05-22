@@ -93,38 +93,58 @@ function expandSeedSugar(
 ): Partial<ComposedState> {
   const baseline = (raw as { baseline?: Record<string, unknown> }).baseline;
   if (!baseline) return raw;
+  const next: Record<string, unknown> = { ...baseline };
+
+  // Phase 2 legacy: `completedScripts: [a, b]` → scripts + completionOrder
   const legacyList = baseline.completedScripts;
-  if (!Array.isArray(legacyList)) return raw;
-  const expanded: Record<string, unknown> = {
-    completed: true,
-    selfSwitches: { A: false, B: false, C: false, D: false },
-  };
-  const scriptsRecord: Record<string, unknown> = {
-    ...((baseline.scripts as Record<string, unknown>) ?? {}),
-  };
-  for (const id of legacyList) {
-    if (typeof id === "string" && !scriptsRecord[id]) {
-      scriptsRecord[id] = expanded;
+  if (Array.isArray(legacyList)) {
+    const scriptsRecord: Record<string, unknown> = {
+      ...((baseline.scripts as Record<string, unknown>) ?? {}),
+    };
+    for (const id of legacyList) {
+      if (typeof id === "string" && !scriptsRecord[id]) {
+        scriptsRecord[id] = {
+          completed: true,
+          selfSwitches: { A: false, B: false, C: false, D: false },
+        };
+      }
     }
+    const order = Array.isArray(baseline.completionOrder)
+      ? [...(baseline.completionOrder as unknown[])]
+      : [];
+    for (const id of legacyList) {
+      if (typeof id === "string" && !order.includes(id)) order.push(id);
+    }
+    next.scripts = scriptsRecord;
+    next.completionOrder = order;
+    delete next.completedScripts;
   }
-  const order = Array.isArray(baseline.completionOrder)
-    ? [...(baseline.completionOrder as unknown[])]
-    : [];
-  for (const id of legacyList) {
-    if (typeof id === "string" && !order.includes(id)) order.push(id);
+
+  // Phase 3 legacy: `characters.<id>.affection: N` →
+  // `characters.<id>.stats.affection: N`
+  const chars = baseline.characters as
+    | Record<string, Record<string, unknown>>
+    | undefined;
+  if (chars) {
+    const rewritten: Record<string, Record<string, unknown>> = {};
+    for (const [id, cs] of Object.entries(chars)) {
+      if (cs && typeof cs === "object" && "affection" in cs) {
+        const { affection, stats, ...rest } = cs as {
+          affection?: unknown;
+          stats?: Record<string, unknown>;
+        };
+        rewritten[id] = {
+          ...rest,
+          stats: { ...(stats ?? {}), affection },
+        };
+      } else {
+        rewritten[id] = cs;
+      }
+    }
+    next.characters = rewritten;
   }
-  const { completedScripts: _stripped, ...restBaseline } = baseline as {
-    completedScripts?: unknown;
-    [k: string]: unknown;
-  };
-  return {
-    ...raw,
-    baseline: {
-      ...restBaseline,
-      scripts: scriptsRecord,
-      completionOrder: order,
-    },
-  } as Partial<ComposedState>;
+
+  return { ...raw, baseline: next } as Partial<ComposedState>;
 }
 
 export function mergeState(

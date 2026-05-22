@@ -51,10 +51,13 @@ export function createInitialState(
 }
 
 export function applyDelta(state: ComposedState, delta: StateDelta): void {
-  if (delta.affection) {
-    for (const [charId, change] of Object.entries(delta.affection)) {
+  if (delta.characterStats) {
+    for (const [charId, statDeltas] of Object.entries(delta.characterStats)) {
       const c = state.baseline.characters[charId];
-      if (c) c.affection += change;
+      if (!c) continue;
+      for (const [name, change] of Object.entries(statDeltas)) {
+        c.stats[name] = (c.stats[name] ?? 0) + change;
+      }
     }
   }
   if (delta.switches) {

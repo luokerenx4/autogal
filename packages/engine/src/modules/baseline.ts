@@ -40,7 +40,9 @@ const useItemHandler: ActionHandler = ({ state, action, game }) => {
     inventory: { [action.itemId]: -1 },
   };
   if (itemDef.effects) {
-    if (itemDef.effects.affection) deltas.affection = itemDef.effects.affection;
+    if (itemDef.effects.characterStats) {
+      deltas.characterStats = itemDef.effects.characterStats;
+    }
     if (itemDef.effects.switches) deltas.switches = itemDef.effects.switches;
     if (itemDef.effects.variables) {
       deltas.variables = itemDef.effects.variables;
@@ -74,10 +76,13 @@ const useSkillHandler: ActionHandler = ({ state, action, game }) => {
 // last-write-wins on flag values. Used by useSkill to combine the
 // skill's cost + effects into one atomic delta.
 function mergeDelta(dst: StateDelta, src: StateDelta): void {
-  if (src.affection) {
-    dst.affection = dst.affection ?? {};
-    for (const [k, v] of Object.entries(src.affection)) {
-      dst.affection[k] = (dst.affection[k] ?? 0) + v;
+  if (src.characterStats) {
+    dst.characterStats = dst.characterStats ?? {};
+    for (const [charId, statDeltas] of Object.entries(src.characterStats)) {
+      const into = (dst.characterStats[charId] = dst.characterStats[charId] ?? {});
+      for (const [name, v] of Object.entries(statDeltas)) {
+        into[name] = (into[name] ?? 0) + v;
+      }
     }
   }
   if (src.stats) {
@@ -143,8 +148,16 @@ export function createBaselineState(
 ): BaselineState {
   const charMap: Record<string, CharacterState> = {};
   for (const c of characters) {
+    const stats: Record<string, number> = {};
+    for (const [name, def] of Object.entries(c.stats ?? {})) {
+      stats[name] = def.initial;
+    }
+    // Affection is the engine-canonical character stat. Declare a
+    // default of 0 if the character didn't register one, so inline
+    // effects `+alice` always have a slot to read from.
+    if (!("affection" in stats)) stats.affection = 0;
     charMap[c.id] = {
-      affection: c.defaultAffection ?? 0,
+      stats,
       custom: {},
     };
   }

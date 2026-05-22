@@ -9,36 +9,59 @@ import {
 } from "./test-utils";
 import type { WeaponDef } from "./types";
 
-describe("applyDelta — affection", () => {
-  test("adds to character affection", () => {
+describe("applyDelta — characterStats", () => {
+  test("adds to character affection (default stat)", () => {
     const game = twoCharGame();
     const state = createInitialState(game);
-    applyDelta(state, { affection: { alice: 2 } });
-    expect(state.baseline.characters.alice!.affection).toBe(2);
+    applyDelta(state, { characterStats: { alice: { affection: 2 } } });
+    expect(state.baseline.characters.alice!.stats.affection).toBe(2);
   });
 
   test("subtraction supported", () => {
     const game = makeGame({
-      characters: [makeCharacter("alice", { defaultAffection: 3 })],
+      characters: [
+        makeCharacter("alice", {
+          stats: { affection: { initial: 3 } },
+        }),
+      ],
     });
     const state = createInitialState(game);
-    applyDelta(state, { affection: { alice: -2 } });
-    expect(state.baseline.characters.alice!.affection).toBe(1);
+    applyDelta(state, { characterStats: { alice: { affection: -2 } } });
+    expect(state.baseline.characters.alice!.stats.affection).toBe(1);
   });
 
   test("unknown character is silently ignored", () => {
     const state = createInitialState(twoCharGame());
     expect(() =>
-      applyDelta(state, { affection: { ghost: 1 } }),
+      applyDelta(state, { characterStats: { ghost: { affection: 1 } } }),
     ).not.toThrow();
     expect(state.baseline.characters.ghost).toBeUndefined();
   });
 
   test("multiple characters in one delta", () => {
     const state = createInitialState(twoCharGame());
-    applyDelta(state, { affection: { alice: 2, bob: -1 } });
-    expect(state.baseline.characters.alice!.affection).toBe(2);
-    expect(state.baseline.characters.bob!.affection).toBe(-1);
+    applyDelta(state, {
+      characterStats: { alice: { affection: 2 }, bob: { affection: -1 } },
+    });
+    expect(state.baseline.characters.alice!.stats.affection).toBe(2);
+    expect(state.baseline.characters.bob!.stats.affection).toBe(-1);
+  });
+
+  test("non-affection stats supported", () => {
+    const game = makeGame({
+      characters: [
+        makeCharacter("alice", {
+          stats: { trust: { initial: 0 }, anger: { initial: 0 } },
+        }),
+      ],
+    });
+    const state = createInitialState(game);
+    applyDelta(state, {
+      characterStats: { alice: { trust: 3, anger: -1 } },
+    });
+    expect(state.baseline.characters.alice!.stats.trust).toBe(3);
+    expect(state.baseline.characters.alice!.stats.anger).toBe(-1);
+    expect(state.baseline.characters.alice!.stats.affection).toBe(0);
   });
 });
 
@@ -251,16 +274,16 @@ describe("applyDelta — stats", () => {
 });
 
 describe("createInitialState", () => {
-  test("seeds character affection from defaultAffection", () => {
+  test("seeds character affection from declared stats", () => {
     const game = makeGame({
       characters: [
-        makeCharacter("alice", { defaultAffection: 2 }),
+        makeCharacter("alice", { stats: { affection: { initial: 2 } } }),
         makeCharacter("bob"),
       ],
     });
     const state = createInitialState(game);
-    expect(state.baseline.characters.alice!.affection).toBe(2);
-    expect(state.baseline.characters.bob!.affection).toBe(0);
+    expect(state.baseline.characters.alice!.stats.affection).toBe(2);
+    expect(state.baseline.characters.bob!.stats.affection).toBe(0);
   });
 
   test("creates fresh runtime + baseline slices", () => {

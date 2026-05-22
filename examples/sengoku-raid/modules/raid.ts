@@ -1,45 +1,45 @@
-// sengoku-raid: the headless extraction-shooter module.
+// sengoku-raid: the headless extraction-shooter module. Reference
+// implementation for "what an RPGMaker-native autogal module looks
+// like" after Phase 6.
 //
 // Owns:
 //   - mode flag (HUB / RAID), per-raid sub-state (current zone,
 //     encounter, pending loot), and the metCharacters tracker — all
 //     in the module's own state slice at state["sengoku-raid"]
 //   - the hub menu (mode-dependent activities) via onHubBuild
-//   - all raid + hub actions via the raid:/hub: prefix, dispatched from
-//     the preset. R2 will convert these to standard actionHandlers.
+//   - 12 raid/hub action handlers declared via module.actionHandlers
+//     + provides. Dispatched by the engine's standard
+//     actionHandlerRegistry; activities carry actionKind + payload
+//     so the engine routes Input.doActivity through one code path.
 //   - reactive triggers: death (player.hp ≤ 0), spectral overload
 //     (player.spectral ≥ 100)
 //
-// Player stats (HP / mental / spectral / intellect) live on the
-// `player` character (characters/player.md) with declared min/max.
-// raidsCompleted / raidsFailed live as engine variables (declared in
-// game.yaml — they're game-level counters, not player attributes).
+// Storage layout:
+//   - Player stats (HP / mental / spectral / intellect) live on the
+//     `player` character (characters/player.md) with declared
+//     min/max. Engine clamps on every mutateState write.
+//   - raidsCompleted / raidsFailed are declared variables (game.yaml).
+//   - Maps load via the engine's parser as a first-class resource
+//     (maps/*.yaml → ctx.game.maps / ctx.mapMap). The module reads
+//     them; it no longer touches the filesystem.
 //
 // Why not the training preset?
 //   We want raid/hub modes instead of day/slot calendar, and we want
 //   our onHubBuild to win first-wins. Skipping game.training avoids
 //   both.
 
-import { readdirSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-
 import { evaluateCondition } from "@autogal/engine";
-
-// Bun ships with a built-in YAML parser; we use it here so games don't
-// need to declare a `yaml` dependency to load map data files. If we
-// later want to run under Node, swap to the `yaml` package (already in
-// the workspace's devDependencies).
-declare const Bun: { YAML: { parse: (s: string) => unknown } };
-const parseYaml = (s: string) => Bun.YAML.parse(s);
 import type {
   ActionContext,
   ActionHandler,
   ActionResult,
+  CharacterSpawnRule,
   ComposedState,
   Game,
   HubActivity,
   Input,
+  MapDef,
+  MapZoneDef,
   Module,
   Output,
   PresetContext,
@@ -58,11 +58,6 @@ type Ctx = {
 };
 
 const MODULE_ID = "sengoku-raid";
-
-// Resolve our own directory so we can find maps/ alongside us.
-// Engine doesn't tell modules where the game root is, so we infer.
-const MODULE_DIR = dirname(fileURLToPath(import.meta.url));
-const MAPS_DIR = join(MODULE_DIR, "..", "maps");
 
 // ============================================================================
 // Player stats live on the `player` character (characters/player.md)
@@ -157,121 +152,22 @@ function moduleState(ctx: Ctx): RaidModuleState {
 }
 
 // ============================================================================
-// Map definitions — module-private data (not registered with engine)
+// Maps — loaded by the engine's parser as a first-class resource type
+// (packages/parser/src/map.ts). Module consumes them via ctx.game.maps
+// or the per-id ctx.mapMap lookup that buildPresetContext exposes.
 // ============================================================================
 
-interface MapDef {
-  id: string;
-  name: string;
-  difficulty: number;
-  description: string;
-  spawnZoneId: string;
-  zones: MapZoneDef[];
-  characterSpawns?: CharacterSpawnRule[];
+function getMap(ctx: Ctx, mapId: string): MapDef | undefined {
+  return ctx.game.maps?.find((m) => m.id === mapId);
 }
 
-interface MapZoneDef {
-  id: string;
-  name: string;
-  connections: { dir: string; target: string }[];
-  isExtract?: boolean;
-  encounterTable?: { enemyId: string | null; weight: number }[];
-  lootTable?: { itemId: string | null; min: number; max: number; weight: number }[];
-}
-
-interface CharacterSpawnRule {
-  characterId: string;
-  zones: string[];
-  chance: number;          // 0..1
-  encounterScriptId: string;
-  // Module evaluates: never re-spawn after first meeting (we check
-  // metCharacters). Additional gates could go here later (day count,
-  // weapon power, etc.) but vertical slice keeps it simple.
-}
-
-// MAPS are loaded eagerly at module evaluation time from maps/*.yaml.
-// We use synchronous fs reads here so the table is populated by the
-// time Module.initialize() runs — engine doesn't have a "load maps"
-// asset category, so this is the module's own asset registry.
-// Adding a new map = drop a YAML file in maps/, no code changes.
-const MAPS: Record<string, MapDef> = loadMapsFromDisk();
-
-function loadMapsFromDisk(): Record<string, MapDef> {
-  const out: Record<string, MapDef> = {};
-  let files: string[];
-  try {
-    files = readdirSync(MAPS_DIR).filter(
-      (f) => f.endsWith(".yaml") || f.endsWith(".yml"),
-    );
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") return out;
-    throw err;
-  }
-  for (const f of files.sort()) {
-    const raw = readFileSync(join(MAPS_DIR, f), "utf-8");
-    const parsed = parseYaml(raw) as Record<string, unknown>;
-    const map = normalizeMapDef(parsed, f);
-    out[map.id] = map;
-  }
-  return out;
-}
-
-function normalizeMapDef(raw: Record<string, unknown>, src: string): MapDef {
-  const id = String(raw.id ?? "");
-  if (!id) throw new Error(`${src}: missing id`);
-  const zonesRaw = raw.zones;
-  if (!Array.isArray(zonesRaw)) {
-    throw new Error(`${src}: zones must be an array`);
-  }
-  const zones: MapZoneDef[] = zonesRaw.map((z, i) => {
-    const zo = z as Record<string, unknown>;
-    return {
-      id: String(zo.id ?? ""),
-      name: String(zo.name ?? zo.id ?? `zone_${i}`),
-      connections: (zo.connections as Array<{ dir: string; target: string }>) ?? [],
-      isExtract: !!zo.is_extract,
-      encounterTable: ((zo.encounter_table as Array<Record<string, unknown>>) ?? []).map(
-        (e) => ({
-          enemyId: (e.enemy as string | null) ?? null,
-          weight: Number(e.weight ?? 1),
-        }),
-      ),
-      lootTable: ((zo.loot_table as Array<Record<string, unknown>>) ?? []).map(
-        (l) => ({
-          itemId: (l.item as string | null) ?? null,
-          min: Number(l.min ?? 0),
-          max: Number(l.max ?? 0),
-          weight: Number(l.weight ?? 1),
-        }),
-      ),
-    };
-  });
-  const spawnsRaw = (raw.character_spawns as Array<Record<string, unknown>>) ?? [];
-  const characterSpawns: CharacterSpawnRule[] = spawnsRaw.map((s) => ({
-    characterId: String(s.character ?? ""),
-    zones: (s.zones as string[]) ?? [],
-    chance: Number(s.chance ?? 0.5),
-    encounterScriptId: String(s.encounter_script ?? ""),
-  }));
-  return {
-    id,
-    name: String(raw.name ?? id),
-    difficulty: Number(raw.difficulty ?? 1),
-    description: String(raw.description ?? ""),
-    spawnZoneId: String(raw.spawn_zone_id ?? zones[0]?.id ?? ""),
-    zones,
-    characterSpawns,
-  };
-}
-
-function discoverableMaps(_ctx: Ctx): string[] {
+function discoverableMaps(ctx: Ctx): string[] {
   // For now all maps are always discoverable. Future: gate harder maps
   // behind raidsCompleted thresholds or quest flags.
-  return Object.keys(MAPS).sort((a, b) => {
-    const da = MAPS[a]?.difficulty ?? 0;
-    const db = MAPS[b]?.difficulty ?? 0;
-    return da - db;
-  });
+  return (ctx.game.maps ?? [])
+    .slice()
+    .sort((a, b) => a.difficulty - b.difficulty)
+    .map((m) => m.id);
 }
 
 // ============================================================================
@@ -492,7 +388,7 @@ function buildHubMenu(ctx: Ctx): Output {
 
   // Depart on raid
   for (const mapId of discoverableMaps(ctx)) {
-    const map = MAPS[mapId];
+    const map = getMap(ctx, mapId);
     if (!map) continue;
     const hpFull = hp >= hpMax;
     activities.push({
@@ -681,7 +577,7 @@ function combatBlock(ctx: Ctx): string | null {
 // ============================================================================
 
 function startRaid(ctx: Ctx, mapId: string): void {
-  const map = MAPS[mapId];
+  const map = getMap(ctx, mapId);
   if (!map) throw new Error(`${MODULE_ID}: unknown map ${mapId}`);
   const m = moduleState(ctx);
 
@@ -739,7 +635,7 @@ function rollCharacterSpawn(
   mapId: string,
   zoneId: string,
 ): CharacterSpawnRule | null {
-  const map = MAPS[mapId];
+  const map = getMap(ctx, mapId);
   if (!map?.characterSpawns) return null;
   const m = moduleState(ctx);
   for (const rule of map.characterSpawns) {
@@ -953,7 +849,7 @@ const departHandler: ActionHandler = (ctx) => {
   if (playerStat(ctx, "hp") < playerStatMax(ctx, "hp")) {
     return denial("体力が満たぬ。先に宿で休め。");
   }
-  if (!(mapId in MAPS)) {
+  if (!getMap(ctx, mapId)) {
     return denial(`その地は地図にない（${mapId}）。`);
   }
   startRaid(ctx, mapId);

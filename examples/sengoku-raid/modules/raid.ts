@@ -147,6 +147,15 @@ interface RaidModuleState {
   mode: "hub" | "raid";
   raid: RaidInstance | null;
   metCharacters: string[];
+  // Currently-invited companion. Cleared on raid end (success or
+  // failure) regardless of HP. The companion's switch
+  // `companion_<id>` is the player-facing source of truth — that
+  // is what onChoicePresented / onBeatBefore key on.
+  companion: string | null;
+  // Companion HP for current raid. 10 cap. When this hits 0 the
+  // companion is downed → affection -3, switch flipped off,
+  // companion_downed variable += 1.
+  companionHp: number;
 }
 
 function moduleState(ctx: Ctx): RaidModuleState {
@@ -408,6 +417,34 @@ function buildHubMenu(ctx: Ctx): Output {
       cost: 0,
       available: spec >= 10,
       lockedReason: spec >= 10 ? undefined : "霊体化が低すぎて鎮める意味がない",
+    });
+  }
+
+  // 同行者システム — invite a met character with affection >= 4.
+  // Only one companion at a time. Flipping a companion_<id> switch
+  // is what onChoicePresented / onBeatBefore key on; m.companion is
+  // the runtime mirror.
+  for (const charId of m.metCharacters) {
+    const char = ctx.game.characters.find((c) => c.id === charId);
+    if (!char) continue;
+    const affection =
+      ctx.state.baseline.characters[charId]?.stats.affection ?? 0;
+    if (affection < 4) continue;
+    const alreadyInvited = m.companion === charId;
+    activities.push({
+      id: `invite:${charId}`,
+      kind: "action",
+      actionKind: "invite",
+      payload: { characterId: charId },
+      title: alreadyInvited
+        ? `${char.name}を同行から外す`
+        : `${char.name}を次の出帰りに誘う`,
+      description: alreadyInvited
+        ? "同行を解く（次の出立では一人）"
+        : "親密度 4 以上で同行可。他者を誘うと自動的に交代",
+      category: "social",
+      cost: 0,
+      available: true,
     });
   }
 
@@ -747,6 +784,18 @@ function rollLoot(ctx: Ctx, zone: ZoneInstance): Record<string, number> {
   return { [pick.itemId]: count };
 }
 
+// Clear companion state on raid end. Switches stay set (player kept
+// the bond between raids); only the runtime "in party right now" flag
+// resets so the player has to re-invite each raid (otherwise the
+// system feels less like a deliberate decision).
+function clearCompanionAfterRaid(ctx: Ctx): void {
+  const m = moduleState(ctx);
+  if (!m.companion) return;
+  ctx.state.baseline.switches[`companion_${m.companion}`] = false;
+  m.companion = null;
+  m.companionHp = 0;
+}
+
 function endRaidExtract(ctx: Ctx): void {
   const m = moduleState(ctx);
   if (!m.raid) return;
@@ -759,9 +808,26 @@ function endRaidExtract(ctx: Ctx): void {
     lootSummary.push(`${itemName(ctx, itemId)} ×${count}`);
   }
   const mapName = m.raid.mapName;
+
+  // If companion survived the raid (HP > 0), mark the persistent
+  // "befriended" switch and grant +1 affection. This is the loop:
+  // invite → survive together → unlock deeper bond scenes.
+  if (m.companion && m.companionHp > 0) {
+    const companionId = m.companion;
+    ctx.state.baseline.switches[`befriended_${companionId}`] = true;
+    const c = ctx.state.baseline.characters[companionId];
+    if (c) c.stats.affection = (c.stats.affection ?? 0) + 1;
+    const charName =
+      ctx.game.characters.find((x) => x.id === companionId)?.name ?? companionId;
+    ctx.state.runtime.pendingNarrations.push(
+      `${charName}は無事に大名府まで歩いた。一度共に出帰った仲——刀を握る手の重さが、少し変わる。親密度 +1。`,
+    );
+  }
+
   m.raid = null;
   m.mode = "hub";
   setVar(ctx, "raidsCompleted", getVar(ctx, "raidsCompleted") + 1);
+  clearCompanionAfterRaid(ctx);
 
   ctx.state.runtime.pendingNarrations.push(
     `${mapName}から撤退に成功。${lootSummary.length > 0 ? "持ち帰った戦利品：" + lootSummary.join("、") + "。" : "今回は手ぶら。"}`,
@@ -775,6 +841,7 @@ function endRaidFailure(ctx: Ctx, reason: string): void {
   m.raid = null;
   m.mode = "hub";
   setVar(ctx, "raidsFailed", getVar(ctx, "raidsFailed") + 1);
+  clearCompanionAfterRaid(ctx);
   // Reset HP/mental/spectral to defaults (death/overload triggered).
   // hp = 1 so player has to rest; mental partial; spectral cut.
   setPlayerStat(ctx, "hp", 1);
@@ -783,6 +850,43 @@ function endRaidFailure(ctx: Ctx, reason: string): void {
   ctx.state.runtime.pendingNarrations.push(
     `${mapName}での討伐は失敗——${reason}。戦利品は全て失われた。気がついたら大名府の御殿医の枕元。`,
   );
+}
+
+// Companion damage redirect — called from the enemy counter-attack
+// in doAttackRound. If a companion is in party, the companion absorbs
+// part of the damage (offers tactical value at risk of downing them).
+//
+// Returns the residual damage that should still hit the player.
+function tryCompanionAbsorb(ctx: Ctx, raw: number): number {
+  const m = moduleState(ctx);
+  if (!m.companion || m.companionHp <= 0 || !m.raid) return raw;
+  const absorbed = Math.min(m.companionHp, Math.ceil(raw / 2));
+  m.companionHp -= absorbed;
+  const charName =
+    ctx.game.characters.find((c) => c.id === m.companion!)?.name ?? m.companion!;
+  ctx.state.runtime.pendingNarrations.push(
+    `${charName}が割って入った——${absorbed} のダメージを彼女が引き受けた。残り HP ${m.companionHp}/10。`,
+  );
+
+  // Downed?
+  if (m.companionHp <= 0) {
+    const downedName = charName;
+    const charId = m.companion;
+    m.companion = null;
+    m.companionHp = 0;
+    ctx.state.baseline.switches[`companion_${charId}`] = false;
+    ctx.state.baseline.variables.companion_downed =
+      (typeof ctx.state.baseline.variables.companion_downed === "number"
+        ? ctx.state.baseline.variables.companion_downed
+        : 0) + 1;
+    // -3 affection. Engine clamps to character's min if declared.
+    const c = ctx.state.baseline.characters[charId!];
+    if (c) c.stats.affection = Math.max(0, (c.stats.affection ?? 0) - 3);
+    ctx.state.runtime.pendingNarrations.push(
+      `${downedName}は倒れた。意識はある——だが、もう刀は握れぬ。お主の中で何かが折れた。親密度 -3。`,
+    );
+  }
+  return raw - absorbed;
 }
 
 // ============================================================================
@@ -883,11 +987,14 @@ function doAttackRound(ctx: Ctx, kind: "normal" | "sneak"): void {
   // High spectral makes the player less coordinated defending.
 
   const finalEnemyDamage = isFumble ? Math.floor(enemyHit * 1.6) : enemyHit;
-  setPlayerStat(ctx, "hp", playerStat(ctx, "hp") - finalEnemyDamage);
+  // 同行者が割って入るかチェック。Companion soaks half (rounded up),
+  // remainder hits player. Companion HP=0 → downed (handled inside).
+  const residual = tryCompanionAbsorb(ctx, finalEnemyDamage);
+  setPlayerStat(ctx, "hp", playerStat(ctx, "hp") - residual);
   ctx.state.runtime.pendingNarrations.push(
     isFumble
-      ? `${enemyName(ctx, zone.encounter.enemyId)}の反撃。霊体化が暴れて体が思うように動かず——${finalEnemyDamage} のダメージ。`
-      : `${enemyName(ctx, zone.encounter.enemyId)}の反撃。${finalEnemyDamage} のダメージ。`,
+      ? `${enemyName(ctx, zone.encounter.enemyId)}の反撃。霊体化が暴れて体が思うように動かず——${residual} のダメージ。`
+      : `${enemyName(ctx, zone.encounter.enemyId)}の反撃。${residual} のダメージ。`,
   );
   setPlayerStat(ctx, "mental", Math.max(0, playerStat(ctx, "mental") - 1));
 }
@@ -899,12 +1006,17 @@ function doFlee(ctx: Ctx): void {
   if (!zone.encounter) return;
   const enemyId = zone.encounter.enemyId;
 
-  // Hayagake (taught by 霞): flee always succeeds, no damage, no mental
-  // cost. The "猟師の足" is the technical reason; narratively this is the
-  // one favor she asked for in return.
-  if (ctx.state.baseline.knownSkills.includes("hayagake")) {
+  const m2 = moduleState(ctx);
+
+  // Hayagake (taught by 霞) OR 霞 currently in party — flee always
+  // succeeds with no damage/no mental cost.
+  if (
+    ctx.state.baseline.knownSkills.includes("hayagake") ||
+    m2.companion === "kasumi"
+  ) {
+    const reason = m2.companion === "kasumi" ? "霞の手が手首を取った" : "霞に教わった足運び";
     ctx.state.runtime.pendingNarrations.push(
-      `霞に教わった足運び——${enemyName(ctx, enemyId)}が振り向く半秒前に、お主はもう間合いの外。`,
+      `${reason}——${enemyName(ctx, enemyId)}が振り向く半秒前に、お主はもう間合いの外。`,
     );
     zone.encounter = null;
     zone.encounterCleared = true;
@@ -1086,6 +1198,19 @@ const moveHandler: ActionHandler = (ctx) => {
   m.raid.currentZoneId = target;
   m.raid.turnsTaken += 1;
   const zone = m.raid.zones[target]!;
+
+  // 篝同行者 passive: each new zone, spectral -1. Kasumi/mio don't
+  // alter movement (kasumi's passive lands in doFlee; mio's in a
+  // future scry action).
+  if (m.companion === "kagari") {
+    const spec = playerStat(ctx, "spectral");
+    if (spec > 0) {
+      setPlayerStat(ctx, "spectral", Math.max(0, spec - 1));
+      ctx.state.runtime.pendingNarrations.push(
+        `篝が刀を握り直す。歩を合わせるたび、胸の奥のものが一寸だけ静かになる——霊体化 -1。`,
+      );
+    }
+  }
 
   if (zone.visited) {
     return { narrations: [`${zone.name}に戻る。一度通った道。`] };
@@ -1277,6 +1402,54 @@ const extractHandler: ActionHandler = (ctx) => {
   return {};
 };
 
+// 同行者 invite/uninvite handler. Toggles companion + the public
+// `companion_<id>` switch (hooks key off the switch since switches are
+// in the engine-modeled state, not module-private).
+const inviteHandler: ActionHandler = (ctx) => {
+  const charId = ctx.action.payload?.characterId as string | undefined;
+  if (!charId) return denial("誰を誘うか指定されていない。");
+  const m = moduleState(ctx);
+  if (!m.metCharacters.includes(charId)) {
+    return denial("会ったことのない相手は誘えない。");
+  }
+  if (m.mode === "raid") {
+    return denial("出立後は誘えない。大名府に戻ってから。");
+  }
+  const affection =
+    ctx.state.baseline.characters[charId]?.stats.affection ?? 0;
+  if (affection < 4 && m.companion !== charId) {
+    return denial("まだ同行を頼める仲ではない（親密度 4 が要る）。");
+  }
+  const charName =
+    ctx.game.characters.find((c) => c.id === charId)?.name ?? charId;
+
+  // Toggle off if already invited.
+  if (m.companion === charId) {
+    m.companion = null;
+    m.companionHp = 0;
+    return {
+      deltas: { switches: { [`companion_${charId}`]: false } },
+      narrations: [`${charName}に同行を解いた旨を伝えた。`],
+    };
+  }
+
+  // Replace any prior companion, flip switches accordingly.
+  const switches: Record<string, boolean> = {
+    [`companion_${charId}`]: true,
+  };
+  if (m.companion) {
+    switches[`companion_${m.companion}`] = false;
+  }
+  m.companion = charId;
+  m.companionHp = 10;
+  return {
+    deltas: { switches },
+    narrations: [
+      `${charName}は頷いた。「次の出帰り、隣で歩く。」`,
+    ],
+  };
+};
+
 // ============================================================================
 // Triggers: HP <= 0 or spectral >= 100 during a raid → failure
 // ============================================================================
@@ -1371,6 +1544,25 @@ const triggers: Trigger[] = [
       };
     },
   },
+  // 三花の盟 — once-only trigger when all three companions have
+  // survived at least one raid each. Composite of three switches via
+  // the `all` connector. The reward is a special script that branches
+  // the endings.
+  {
+    id: "three_flowers_alliance",
+    once: true,
+    when: {
+      all: [
+        { switch: { name: "befriended_kagari" } },
+        { switch: { name: "befriended_kasumi" } },
+        { switch: { name: "befriended_mio" } },
+      ],
+    },
+    do: (ctx) => {
+      queueLetterIfHub(ctx, "three_flowers_alliance");
+      return {};
+    },
+  },
 ];
 
 // ============================================================================
@@ -1385,6 +1577,8 @@ const raidModule: Module = {
     mode: "hub",
     raid: null,
     metCharacters: [],
+    companion: null,
+    companionHp: 0,
   }),
 
   // Action handler kinds the module supplies. Engine namespaces them as
@@ -1407,6 +1601,7 @@ const raidModule: Module = {
     "negotiate_listen",
     "negotiate_release",
     "yaodao_voice",
+    "invite",
   ],
   actionHandlers: {
     depart: departHandler,
@@ -1424,6 +1619,7 @@ const raidModule: Module = {
     negotiate_listen: negotiateListenHandler,
     negotiate_release: negotiateReleaseHandler,
     yaodao_voice: yaodaoVoiceHandler,
+    invite: inviteHandler,
   },
 
   onSessionStart: (ctx) => {
@@ -1471,6 +1667,87 @@ const raidModule: Module = {
         m.metCharacters.push("mio");
       }
     }
+  },
+
+  // ============== Companion-aware reducers ==============
+  //
+  // onActionDispatch (first-wins): when a companion is in party at
+  // critical HP, veto `attack` and `sneak_strike` dispatches. Player
+  // must flee, use chinkonho, or let HP recover before re-engaging.
+  // Returns "cancel" — engine still fires onActionComplete with
+  // result=undefined, but the handler body doesn't run.
+  onActionDispatch: (ctx, action) => {
+    const m = moduleState(ctx);
+    if (
+      m.companion &&
+      m.companionHp > 0 &&
+      m.companionHp <= 3 &&
+      (action.kind === "attack" || action.kind === "sneak_strike")
+    ) {
+      const charName =
+        ctx.game.characters.find((c) => c.id === m.companion!)?.name ??
+        m.companion!;
+      ctx.state.runtime.pendingNarrations.push(
+        `${charName}が刀を抑えた。「下がれ、深い」——その目に、お主が今日見たどの鬼より強い意志。攻撃は取り消された。`,
+      );
+      return "cancel";
+    }
+    return;
+  },
+
+  // onBeatBefore (reducer): in bond scripts, if the player's spectral
+  // is already past the "危険" threshold (≥50), shadow specific dialogue
+  // beats with an alternate text that acknowledges the change. Uses
+  // the `{ replace: <beat> }` return form so the timeline still
+  // advances one beat per drain.
+  onBeatBefore: (ctx, scriptId, _beatIdx, beat) => {
+    if (!scriptId.startsWith("bond_")) return;
+    if (beat.type !== "dialogue") return;
+    if (playerStat(ctx, "spectral") < 50) return;
+    // Replace one specific tag — first dialogue beat where speaker is
+    // the bond target — with a darker variant. We just append a
+    // suffix to make it cheap & uniform.
+    return {
+      replace: {
+        ...beat,
+        text: `${beat.text}（——その目を、見つめ返せなかった。お主の瞳が、いつもと違うらしい。）`,
+      },
+    };
+  },
+
+  // onChoicePresented (reducer): in bond_*_03 scenes, when a *different*
+  // companion is in party, lock the boldest option (the last one, which
+  // is the +2-affection "I commit" choice). Player can still pick the
+  // milder options. The lock represents "I won't say that in front of
+  // her" social pressure.
+  //
+  // NOTE on the reducer surface: the engine's runScript resolves choices
+  // by indexing back into the original `beat.options` (runScript.ts:105).
+  // That means reducers can MARK options unavailable but cannot ADD new
+  // ones meaningfully — extra options shown to the player don't have a
+  // corresponding ChoiceOption to dispatch. So this hook is for
+  // contextual locking only, matching hook-test's coverage.
+  onChoicePresented: (ctx, scriptId, _beatIdx, options) => {
+    if (!scriptId.match(/^bond_\w+_03$/)) return;
+    const m = moduleState(ctx);
+    if (!m.companion) return;
+    const subjectMatch = scriptId.match(/^bond_(\w+)_03$/);
+    if (!subjectMatch) return;
+    const subject = subjectMatch[1];
+    if (m.companion === subject) return; // self in party — no jealousy axis
+    const sideName =
+      ctx.game.characters.find((c) => c.id === m.companion!)?.name ??
+      m.companion!;
+    const lastIdx = options.length - 1;
+    return options.map((opt, idx) =>
+      idx === lastIdx
+        ? {
+            ...opt,
+            available: false,
+            lockedReason: `${sideName}が隣にいる。今ここで口にする言葉ではない。`,
+          }
+        : opt,
+    );
   },
 
   onHubBuild: (ctx) => {

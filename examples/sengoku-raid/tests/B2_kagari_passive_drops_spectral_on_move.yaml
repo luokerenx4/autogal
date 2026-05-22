@@ -1,0 +1,76 @@
+name: 提案B：篝が同行している間、ゾーン移動するたび spectral -1
+description: |
+  Seed an in-raid state with kagari as companion and spectral=40.
+  Move from spawn to crossroads — spectral should be 39.
+state:
+  baseline:
+    completedScripts: [000_intro]
+    weapons:
+      ancestor_yaodao: { power: 6 }
+    characters:
+      player:
+        stats: { hp: 30, mental: 8, spectral: 40, intellect: 5 }
+      kagari:
+        stats: { affection: 5 }
+    switches:
+      companion_kagari: true
+  sengoku-raid:
+    mode: raid
+    metCharacters: [kagari]
+    companion: kagari
+    companionHp: 10
+    raid:
+      mapId: kuro_swamp
+      mapName: 黒沼地
+      currentZoneId: edge
+      turnsTaken: 0
+      pendingLoot: {}
+      zones:
+        edge:
+          id: edge
+          name: 沼の縁
+          visited: true
+          searched: false
+          encounter: null
+          encounterCleared: false
+          encounterTable: [{ enemyId: null, weight: 1 }]
+          lootTable: []
+          connections: [{ dir: 奥, target: crossroads }]
+          isExtract: false
+          pendingLoot: {}
+        crossroads:
+          id: crossroads
+          name: 三叉路
+          visited: false
+          searched: false
+          encounter: null
+          encounterCleared: false
+          encounterTable: [{ enemyId: null, weight: 1 }]
+          lootTable: []
+          connections:
+            - { dir: 東, target: shrine }
+          isExtract: false
+          pendingLoot: {}
+        shrine:
+          id: shrine
+          name: 潰れた社
+          visited: false
+          searched: false
+          encounter: null
+          encounterCleared: false
+          encounterTable: []
+          lootTable: []
+          connections: [{ dir: 戻る, target: crossroads }]
+          isExtract: true
+          pendingLoot: {}
+inputs:
+  - { type: doActivity, id: "move:crossroads" }
+  - { type: next }
+  - { type: next }
+assertions:
+  - kind: state
+    path: baseline.characters.player.stats.spectral
+    eq: 39
+  - kind: state
+    path: sengoku-raid.raid.currentZoneId
+    eq: crossroads

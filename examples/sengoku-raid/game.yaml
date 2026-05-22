@@ -12,6 +12,11 @@ switches:
   companion_kagari: false
   companion_kasumi: false
   companion_mio: false
+  # Persistent "ever survived a raid together" — gates the bond_*_03
+  # script tier and unlocks the three_flowers_alliance trigger.
+  befriended_kagari: false
+  befriended_kasumi: false
+  befriended_mio: false
   # Met-mio flag for milestone triggers. Module also tracks via
   # metCharacters; this switch exists so trigger `when:` conditions
   # can compose against `switch:` predicates uniformly.
@@ -23,6 +28,8 @@ switches:
   chose_court_loyal:  false   # 公儀に服す
   chose_court_defy:   false   # 公儀に刀を抜く
   chose_court_silent: false   # 黙して退く（隠遁）
+  # 三花の盟 — 三人とも befriended なら milestone trigger 経由で誓う
+  three_flowers_pledged: false
 
 variables:
   # Raid counters — incremented by endRaidExtract / endRaidFailure.

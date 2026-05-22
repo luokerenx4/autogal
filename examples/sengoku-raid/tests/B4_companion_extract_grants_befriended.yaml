@@ -1,0 +1,64 @@
+name: 提案B：同行者 alive で extract → befriended_<id> flip + 親密度+1
+description: |
+  Seed an in-raid state with kasumi as companion (HP 8) at the extract
+  zone. Extract — befriended_kasumi flips true, kasumi affection +1,
+  companion clears, raid counters tick.
+state:
+  baseline:
+    completedScripts: [000_intro, letter_01_suspicion]
+    characters:
+      player:
+        stats: { hp: 30, mental: 8, spectral: 25, intellect: 5 }
+      kasumi:
+        stats: { affection: 5 }
+    switches:
+      companion_kasumi: true
+    variables:
+      raidsCompleted: 4
+      shogun_chapter: 1
+  runtime:
+    firedTriggers: [letter_01_dispatch]
+  sengoku-raid:
+    mode: raid
+    metCharacters: [kasumi]
+    companion: kasumi
+    companionHp: 8
+    raid:
+      mapId: kuro_swamp
+      mapName: 黒沼地
+      currentZoneId: shrine
+      turnsTaken: 4
+      pendingLoot: {}
+      zones:
+        shrine:
+          id: shrine
+          name: 潰れた社
+          visited: true
+          searched: true
+          encounter: null
+          encounterCleared: false
+          encounterTable: []
+          lootTable: []
+          connections: [{ dir: 戻る, target: crossroads }]
+          isExtract: true
+          pendingLoot: {}
+inputs:
+  - { type: doActivity, id: "extract" }
+  - { type: next }
+  - { type: next }
+assertions:
+  - kind: state
+    path: baseline.switches.befriended_kasumi
+    eq: true
+  - kind: state
+    path: baseline.characters.kasumi.affection
+    eq: 6
+  - kind: state
+    path: baseline.switches.companion_kasumi
+    eq: false
+  - kind: state
+    path: sengoku-raid.companion
+    eq: null
+  - kind: state
+    path: baseline.variables.raidsCompleted
+    eq: 5

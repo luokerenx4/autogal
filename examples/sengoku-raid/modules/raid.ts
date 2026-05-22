@@ -577,7 +577,10 @@ function enemyName(ctx: PresetContext, enemyId: string): string {
 function enemyAttackPower(ctx: PresetContext, enemyId: string): number {
   const e = ctx.game.enemies?.find((x) => x.id === enemyId);
   if (!e) return 1;
-  const raw = (e as unknown as { attack_power?: unknown }).attack_power;
+  // EnemyDef preserves `stats: Record<string, number>` (see parseEnemy)
+  // but drops other custom frontmatter fields. So attack_power lives
+  // inside `stats:` in the enemy .md, not at top level.
+  const raw = e.stats?.attack_power;
   return typeof raw === "number" ? raw : 1;
 }
 

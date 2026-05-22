@@ -2,7 +2,8 @@
 id: oni_lesser
 name: 下級の鬼
 hp: 8
-attack_power: 3
+stats:
+  attack_power: 3
 narrations:
   intro: "灯心が一斉に揺れる。藪から這い出してきたのは——HP {hp} の{name}。"
   victory: "鬼は霧散した。妖力が刀に吸い込まれる——霊体化 -{absorb}, 妖刀威力 +{swordGain}。"

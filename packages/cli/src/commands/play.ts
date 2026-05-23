@@ -20,13 +20,13 @@ export async function playCommand(args: Args): Promise<void> {
       );
       process.exit(2);
     }
-    if (candidates.length === 1) {
-      gameDir = candidates[0]!.dir;
-    } else {
-      const picked = await pickGame(candidates);
-      if (!picked) return;
-      gameDir = picked.dir;
-    }
+    // Always show the picker, even for a single candidate — the picker
+    // surface also exposes save sessions, so auto-picking robs the
+    // player of the "新游戏 / 继续" choice. Explicit-path invocation
+    // (`autogal play <dir>`) skips the picker as before.
+    const picked = await pickGame(candidates);
+    if (!picked) return;
+    gameDir = picked.dir;
   }
   const game = await loadGame(gameDir);
   const absoluteDir = path.resolve(gameDir);

@@ -8,6 +8,7 @@ import type {
   Script,
 } from "../types";
 import { END_LABEL } from "../types";
+import { drainNarrations } from "./drainNarrations";
 import {
   fireOnBeatAfter,
   fireOnBeatBefore,
@@ -38,6 +39,15 @@ export async function* runScript(
   const { state } = ctx;
 
   fireOnScriptStart(ctx, script.id);
+
+  // Drain any narrations the onScriptStart hooks pushed BEFORE we yield
+  // the first beat. Without this, step()'s prime/input pattern can
+  // re-yield beat 0: the prime of the next step would yield the queued
+  // narration (discarded by step), and only the subsequent input would
+  // re-enter runScript at the still-unadvanced beatIndex, yielding the
+  // first beat a second time. See drainNarrations.ts for the broader
+  // peek/step protocol this guards against.
+  yield* drainNarrations(ctx);
 
   while (state.baseline.beatIndex < script.beats.length) {
     const beatIdx = state.baseline.beatIndex;

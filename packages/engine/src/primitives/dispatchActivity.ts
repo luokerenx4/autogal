@@ -71,6 +71,16 @@ export async function* dispatchActivity(
     if (dispatched === "cancel") return "ok";
     return yield* runAction(ctx, dispatched);
   }
+  // Activity id not found in any resolution path. If a hub menu was
+  // recently built (lastHubActivities non-empty), the player is in a
+  // selection flow and picked something stale or out-of-context (e.g.,
+  // a hub action while combat replaced the menu). Surface a generic
+  // hint so the input isn't swallowed in silence. We don't narrate
+  // when lastHubActivities is empty: that's typically test fixtures
+  // dispatching by id before any hub has been built.
+  if (ctx.state.runtime.lastHubActivities.length > 0) {
+    yield { type: "narration", text: "今はそれは出来ぬ。" };
+  }
   return "ok";
 }
 

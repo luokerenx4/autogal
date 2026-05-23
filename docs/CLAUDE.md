@@ -85,13 +85,16 @@ packages/cli/src/
   components/           ink widgets
 
 examples/
-  starter/              tiniest end-to-end (vn preset)
-  hook-test/            hook integration smoke test (notify-all + first-wins + veto + triggers)
-  eject-test/           ejection smoke test (just verifies an ejected preset still runs)
-  spectral-demo/        full game: training preset, ejected, all 5 typed resources, custom combat module
-  sengoku-raid/         extraction-shooter: raid-as-preset-mode, prefix-routed dispatch, maps/*.yaml,
-                        per-character affection bond + skill unlocks, no training: block
+  sengoku-raid/         flagship: extraction-shooter raid loop + GalGame bonds, 13/15
+                        module hooks, full Condition AST, composite triggers, selfSwitch,
+                        weapon.custom, ejected preset
+  hook-test/            (hidden) hook integration smoke test (notify-all + first-wins + reducer)
+  eject-test/           (hidden) ejection smoke test — minimal training preset reference
+  _invalid_typo/        (hidden) negative fixture: validator must reject undeclared switch
 ```
+
+`hidden: true` in a fixture's `game.yaml` makes `bun run play`'s discovery
+skip it. Engine fixtures use this; `bun run test:fixtures` still runs them.
 
 ## How a step happens
 
@@ -121,7 +124,7 @@ Follow the pattern established by `Item` / `Enemy` / `Weapon` / `Skill`:
 10. **`packages/parser/src/inline-effects.ts`** + **`script.ts`** + **`action.ts`** — accept the new StateDelta field.
 11. **`packages/parser/src/index.ts`** — extend `buildGame` signature.
 12. **`packages/cli/src/loader.ts`** — scan the new directory.
-13. **`examples/spectral-demo/`** — add demo content + at least one fixture exercising the read AND write paths.
+13. **`examples/sengoku-raid/`** — add demo content + at least one fixture exercising the read AND write paths.
 14. **`.claude/skills/autogal-author/SKILL.md`** — document the file format for AI authors.
 
 Recent precedents: read the diffs for commits `cb7b9f3` (items), `0220799` (enemies), `6470ff8` (weapons), `c2efdb5` (skills). They're the template.
@@ -170,7 +173,7 @@ Symmetric: add variant, make the relevant primitive accept it, make the interact
 
 A gameplay module is a `.ts` file under the game's `modules/`. Default-export a `Module`. `id` should be unique. Use the module's id as the key for its private state namespace (`state[id]`). Reach into engine state ONLY via primitives (`giveItem`, `mutateState`, etc.) — never write `state.baseline.*` directly.
 
-See `examples/spectral-demo/modules/combat.ts` for the canonical pattern: action handler for `kind: combat`, a reactive trigger (`learn_purify`), private log in `state["spectral-combat"]`.
+See `examples/sengoku-raid/modules/raid.ts` for the canonical pattern: action handlers for ~20 action kinds, reactive triggers (including `once: true` milestones with composite `when:`), private state namespace (`state["sengoku-raid"]`), and a wide hook surface (onScriptStart/Complete, onActionDispatch first-wins, onBeatBefore + onChoicePresented reducers, onStateMutated observer).
 
 ### Add a fixture
 
@@ -178,7 +181,7 @@ See `examples/spectral-demo/modules/combat.ts` for the canonical pattern: action
 
 ## Testing
 
-`bun test` runs the in-tree unit tests. `bun run autogal test <game-folder>` runs all `tests/*.yaml` fixtures. CI runs both for `starter`, `hook-test`, `eject-test`, and `spectral-demo` on every PR.
+`bun test` runs the in-tree unit tests. `bun run autogal test <game-folder>` runs all `tests/*.yaml` fixtures. CI runs both for `sengoku-raid`, `hook-test`, and `eject-test` on every PR, plus `scripts/test-validate-negative.sh` for `_invalid_typo`.
 
 The engine is testable without ink: instantiate `new Engine(game)`, push synthetic inputs, assert on yielded outputs. Fixture infrastructure does exactly that.
 

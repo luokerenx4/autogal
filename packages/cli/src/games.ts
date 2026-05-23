@@ -6,6 +6,15 @@ export interface GameCandidate {
   dir: string;
   relPath: string;
   title: string;
+  // Mirrors the manifest's `hidden:` flag. `discoverGames` filters
+  // hidden candidates out by default; callers that want to show
+  // everything (e.g. `autogal sessions --all`) pass includeHidden.
+  hidden: boolean;
+}
+
+export interface DiscoverOptions {
+  // If true, return hidden candidates too. Default false.
+  includeHidden?: boolean;
 }
 
 const SKIP_DIRS = new Set([
@@ -17,7 +26,10 @@ const SKIP_DIRS = new Set([
   ".cache",
 ]);
 
-export async function discoverGames(roots: string[]): Promise<GameCandidate[]> {
+export async function discoverGames(
+  roots: string[],
+  opts: DiscoverOptions = {},
+): Promise<GameCandidate[]> {
   const seen = new Map<string, GameCandidate>();
   for (const root of roots) {
     const abs = path.resolve(root);
@@ -40,7 +52,10 @@ export async function discoverGames(roots: string[]): Promise<GameCandidate[]> {
       if (s.isDirectory()) await tryAdd(sub, seen);
     }
   }
-  return [...seen.values()].sort((a, b) => a.relPath.localeCompare(b.relPath));
+  const all = [...seen.values()].sort((a, b) =>
+    a.relPath.localeCompare(b.relPath),
+  );
+  return opts.includeHidden ? all : all.filter((c) => !c.hidden);
 }
 
 async function tryAdd(
@@ -55,9 +70,11 @@ async function tryAdd(
     return;
   }
   let title = path.basename(dir);
+  let hidden = false;
   try {
     const m = parseManifest(content);
     if (m.title) title = m.title;
+    if (m.hidden === true) hidden = true;
   } catch {
     // keep basename fallback
   }
@@ -65,5 +82,6 @@ async function tryAdd(
     dir,
     relPath: path.relative(process.cwd(), dir) || ".",
     title,
+    hidden,
   });
 }

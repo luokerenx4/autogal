@@ -1,7 +1,0 @@
-title: 樱花季 / Cherry Blossom Season
-
-variables:
-  route:
-    type: string
-    initial: ""
-    description: 周末决定的分支 — "alice" / "bea" / "neither"

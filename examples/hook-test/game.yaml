@@ -1,4 +1,6 @@
 title: hook-test
+# Engine fixture, not a playable game. `bun run play` skips this.
+hidden: true
 modules:
   - ./modules/tracker.ts
 switches:

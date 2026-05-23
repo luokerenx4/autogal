@@ -302,7 +302,7 @@ function buildAffectionSnapshots(ctx: Ctx) {
     .map((c) => ({
       id: c.id,
       name: c.name,
-      value: ctx.state.baseline.characters[c.id]?.affection ?? 0,
+      value: ctx.state.baseline.characters[c.id]?.stats.affection ?? 0,
     }));
 }
 
@@ -805,11 +805,14 @@ function buildRaidMenu(ctx: Ctx): Output {
 // ============================================================================
 
 // "Loot" = any item whose .md frontmatter carries a numeric `sell_value`
-// — the炼器師 collects them. Item .md files are loaded by the engine
-// (parseItem) which now preserves unknown fields on item.custom, so
-// adding a new sellable item is purely a content change (drop a new
-// items/<id>.md with a `sell_value:` line).
+// AND is not flagged `material: true`. Materials (oni_horn, soul_shard,
+// cursed_blade_fragment) still have sell_value so they can be sold
+// individually if a future action exposes them, but `sell_all_loot`
+// skips them so a player who hits "sell" doesn't vend their upgrade
+// stockpile.
 function isLoot(ctx: Ctx, itemId: string): boolean {
+  const item = ctx.game.items?.find((i) => i.id === itemId);
+  if (item?.custom?.material === true) return false;
   return typeof sellValueOf(ctx, itemId) === "number";
 }
 
@@ -944,8 +947,12 @@ function startRaid(ctx: Ctx, mapId: string): void {
   spawn.pendingLoot = rollLoot(ctx, spawn);
   // Spawn has trivial encounter table (only `null`) — encounter stays null.
 
+  const flavor =
+    typeof map.custom?.entry_narration === "string"
+      ? (map.custom.entry_narration as string)
+      : "霧が脛に絡みつく。";
   ctx.state.runtime.pendingNarrations.push(
-    `${map.name}に踏み入る。霧が脛に絡みつく。`,
+    `${map.name}に踏み入る。${flavor}`,
   );
 }
 

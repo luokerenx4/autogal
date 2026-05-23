@@ -2,6 +2,7 @@ id: mt_houkyou
 name: 砲響山
 difficulty: 3
 description: 江戸の北西。十数年前の戦で焼けた山。今もまだ赤熱の岩が残り、夜は唸る。
+entry_narration: 焼け石の唸りが、地の底から響く。靴底の革がじりじりと焦げる音がする。
 spawn_zone_id: foothills
 
 zones:

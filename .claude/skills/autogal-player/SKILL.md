@@ -16,7 +16,7 @@ Check three things:
 3. **Pick a session name.** A session is your save file. Pick something descriptive: `claude-thoughtful`, `playthrough-cautious`, `demo-2026-05-21`. Don't use someone else's session — that overwrites their save.
 
 ```bash
-GAME="examples/starter"           # adjust to actual game dir
+GAME="examples/sengoku-raid"      # adjust to actual game dir
 SESSION="claude-$(date +%H%M%S)"  # or any unique name
 ```
 
@@ -133,29 +133,31 @@ You can't go "back" within a single session (engine is forward-only), but you ca
 - The only `autogal` subcommands you should use for play: **peek, step**. (`sessions` is informational; `test` and `autoplay` are not for playing.)
 - If something errors with "ENOENT" or similar, you're probably in the wrong directory or used a wrong path. Don't keep retrying — check `pwd` and `ls`.
 
-## Example transcript (greedy persona, takes the first option every time)
+## Example transcript
 
 ```bash
 $ autogal peek "$GAME" --session "$SESSION"
-{"output":{"type":"scriptComplete","completedId":null,"nextAvailable":[{"id":"001_meeting_alice","title":"樱花树下"}]},"done":false,"state":{...}}
+{"output":{"type":"dialogue","speakerName":"narrator","text":"慶長十年、初秋。"},"done":false,"state":{"baseline":{"currentScriptId":"000_intro",...}}}
 
-# Only one script available, select it.
-$ autogal step "$GAME" --session "$SESSION" --input '{"type":"select","scriptId":"001_meeting_alice"}'
-{"output":{"type":"narration","text":"四月的午后..."},...}
-
+# Intro is auto-launched (sengoku-raid sets currentScriptId in onSessionStart).
+# Just drain it with `next`.
 $ autogal step "$GAME" --session "$SESSION" --input '{"type":"next"}'
-{"output":{"type":"narration","text":"那里有一棵很大的樱花树。"},...}
+{"output":{"type":"dialogue","speakerName":"narrator","text":"江戸城本丸の大広間。蝋燭の煙が天井に渦を巻く。"},...}
 
-# ... continue until choice
-$ autogal step "$GAME" --session "$SESSION" --input '{"type":"choose","index":0}'
-{"output":{"type":"narration","text":"她抬起头..."},...}
-
-# ... eventually
+# ... drain ~12 beats of intro until the hub menu appears
 $ autogal step "$GAME" --session "$SESSION" --input '{"type":"next"}'
+{"output":{"type":"hubMenu","snapshot":{"activities":[{"id":"depart:kuro_swamp","title":"出立 — 黒沼地（難度 1）",...}, ...]}}, ...}
+
+# Depart on the easiest raid.
+$ autogal step "$GAME" --session "$SESSION" --input '{"type":"doActivity","id":"depart:kuro_swamp"}'
+{"output":{"type":"narration","text":"黒沼地に踏み入る。霧が脛に絡みつく。"},...}
+
+# ... eventually you'll see a choice (kagari first-meet) or end at an ending.
+$ autogal peek "$GAME" --session "$SESSION"
 {"output":{"type":"gameEnd"},"done":true,...}
 
 # Report:
-> 通关。结局：005c_bea_good — 下学期碧河替我报了足球部。
+> 通关。结局：ending_pure_rite — 公儀の道、鎮魂結界の儀。
 ```
 
 That's it. The whole skill.

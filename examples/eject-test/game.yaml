@@ -1,4 +1,7 @@
 title: 我的训练 mode 游戏
+# Engine fixture: minimal training-preset eject reference, not for play.
+# `bun run play` skips this; load explicitly with the full path to inspect.
+hidden: true
 preset: ./preset/run.ts
 training:
   slotsPerDay: 3

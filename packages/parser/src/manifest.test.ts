@@ -117,4 +117,25 @@ describe("parseManifest — basic", () => {
     expect(m.switches).toBeUndefined();
     expect(m.variables).toBeUndefined();
   });
+
+  test("hidden: true is parsed", () => {
+    const m = parseManifest("title: t\nhidden: true\n");
+    expect(m.hidden).toBe(true);
+  });
+
+  test("hidden: false is parsed", () => {
+    const m = parseManifest("title: t\nhidden: false\n");
+    expect(m.hidden).toBe(false);
+  });
+
+  test("hidden omitted is undefined (treated as not hidden)", () => {
+    const m = parseManifest("title: t\n");
+    expect(m.hidden).toBeUndefined();
+  });
+
+  test("hidden non-boolean throws", () => {
+    expect(() => parseManifest("title: t\nhidden: yes\n")).toThrow(
+      /`hidden` must be a boolean/,
+    );
+  });
 });

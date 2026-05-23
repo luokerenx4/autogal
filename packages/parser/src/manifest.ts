@@ -24,6 +24,11 @@ export interface Manifest {
   // a relative path the loader resolves via dynamic import (the
   // ejected-preset case from `autogal init --eject`).
   preset?: string;
+  // Default-hide from `bun run play` / `autogal play` interactive
+  // picker. Engine fixtures and test-only games set this true so
+  // they don't pollute the candidate list. They're still loadable by
+  // explicit path; this only affects discovery.
+  hidden?: boolean;
 }
 
 export class ManifestParseError extends Error {}
@@ -65,6 +70,12 @@ export function parseManifest(content: string): Manifest {
       throw new ManifestParseError("`preset` must be a string");
     }
     manifest.preset = obj.preset;
+  }
+  if (obj.hidden !== undefined) {
+    if (typeof obj.hidden !== "boolean") {
+      throw new ManifestParseError("`hidden` must be a boolean");
+    }
+    manifest.hidden = obj.hidden;
   }
   return manifest;
 }

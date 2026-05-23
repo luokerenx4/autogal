@@ -6,12 +6,8 @@ A game is a folder of markdown files. You play it in your terminal — from a ma
 
 ```bash
 bun install
-bun run play              # boot "樱花季" — minimal pure VN demo
+bun run play              # boot 妖刀奇譚 — the bundled flagship game
 bun run autoplay          # watch a built-in AI persona play through
-
-# Or try the training-mode demo:
-bun packages/cli/src/bin.ts play examples/spectral-demo
-bun packages/cli/src/bin.ts autoplay examples/spectral-demo --persona greedy -v
 ```
 
 ## Make your own
@@ -56,26 +52,33 @@ autogal/
 │   ├── parser/    Markdown + frontmatter + YAML fence → engine AST.
 │   └── cli/       The `autogal` binary: init / play / step / peek / autoplay / test / sessions.
 ├── examples/
-│   ├── starter/        "樱花季" — pure VN, 10 scripts, 2 chars, 5 endings (5–10 min)
-│   ├── spectral-demo/  "妖刀さくら抄" — training-mode demo with day/time/stats/combat
-│   │                   (10 scripts, 2 chars, 9 actions, 5 endings, ~14 in-game days)
-│   └── sengoku-raid/   "妖刀奇譚" — extraction-shooter raid loop, 2 maps × 10 zones,
-│                       2 美少女 妖刀使, boss + unlockable skills
+│   ├── sengoku-raid/    "妖刀奇譚" — bundled flagship. Extraction-shooter raid loop +
+│   │                    GalGame bonds + 3 endings + most of the engine surface
+│   │                    (13/15 module hooks, full Condition AST, selfSwitch,
+│   │                    composite triggers, weapon.custom)
+│   ├── hook-test/       (hidden) engine fixture — full Module.onX coverage
+│   ├── eject-test/      (hidden) engine fixture — training preset eject reference
+│   └── _invalid_typo/   (hidden) negative fixture — validator must reject
 └── .claude/skills/
     ├── autogal-player/SKILL.md   for AIs that play
     └── autogal-author/SKILL.md   for AIs that write content
 ```
 
+The three `(hidden)` directories declare `hidden: true` in their `game.yaml`;
+`bun run play` skips them automatically. They're still loadable by explicit
+path, and `bun run test:fixtures` runs them as engine regression coverage.
+
 ## Three game modes
 
-**Pure VN** (like `starter`): scripts only. Between scripts, the engine yields a
+**Pure VN**: scripts only. Between scripts, the engine yields a
 `scriptComplete` picker. Affection + flags + branching. Classic visual novel.
+No module required.
 
-**Training mode** (like `spectral-demo`): add a `training:` block to `game.yaml`
-and the hub becomes era-style. Day/time slots, stats with caps, an `actions/`
-folder of daily activities, optional combat mini-loop with crit/fumble mechanics
-tied to a `spectral` stat, end conditions that trigger ending scripts. Story
-scripts coexist with daily actions as activities in the hub.
+**Training mode**: add a `training:` block to `game.yaml` and the hub becomes
+era-style. Day/time slots, stats with caps, an `actions/` folder of daily
+activities, optional combat mini-loop, end conditions that trigger ending
+scripts. Story scripts coexist with daily actions as activities in the hub.
+The `examples/eject-test/` fixture is the minimal reference for this mode.
 
 **Extraction-shooter** (like `sengoku-raid`): no `training:` block — instead, a
 game module owns a `mode: "hub" | "raid"` flag and provides mode-appropriate hub
@@ -86,8 +89,7 @@ and the engine's `completedScripts` never gets polluted. Set-piece scenes still
 use scripts (intros, character first-meets, bonding beats); the random raid
 content lives in module action handlers with `ctx.rng()`.
 
-See `examples/spectral-demo/README.md` and `examples/sengoku-raid/README.md` for
-the full designs.
+See `examples/sengoku-raid/README.md` for the flagship's full design.
 
 ## How a play session is structured
 
@@ -245,18 +247,14 @@ here to gameplay regression.
 ## Built-in personas (no API key)
 
 ```bash
-autogal autoplay ./examples/starter      --persona greedy    -v   # always pick first option
-autogal autoplay ./examples/starter      --persona charmer   -v   # always pick last
-autogal autoplay ./examples/starter      --persona rude      -v   # always pick index 1
-autogal autoplay ./examples/starter      --persona random    -v   # uniform random
-autogal autoplay ./examples/spectral-demo --persona hunter   -v   # training-mode-aware
 autogal autoplay ./examples/sengoku-raid --persona extractor -v   # always extract / flee / sell
 autogal autoplay ./examples/sengoku-raid --persona delver    -v   # always attack / push deepest
 ```
 
-Each persona produces a deterministic-ish playthrough that lands on a specific
-ending. `random` is for fuzz-testing path coverage. For LLM-driven personas use
-the [`autogal-player` skill](.claude/skills/autogal-player/SKILL.md).
+Generic personas — `greedy`, `charmer`, `rude`, `random`, `hunter` — also ship
+for any game (always-first / always-last / always-second / uniform-random /
+training-aware). They're useful for fuzz-testing path coverage. For LLM-driven
+personas use the [`autogal-player` skill](.claude/skills/autogal-player/SKILL.md).
 
 ## Architecture in one paragraph
 

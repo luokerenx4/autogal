@@ -1,8 +1,0 @@
-id: rest_school
-title: 在校园发呆
-description: 缓慢回复体力
-category: rest
-slot: day
-cost: 1
-effects:
-  stats: { physical: 2 }

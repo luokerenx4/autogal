@@ -1,9 +1,0 @@
-id: sleep
-title: 睡觉
-description: 完全恢复体力，灵体化 +3
-category: rest
-slot: night
-cost: 1
-kind: sleep
-effects:
-  stats: { mental: 2, spectral: 3 }

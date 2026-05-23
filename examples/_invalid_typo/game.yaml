@@ -1,4 +1,7 @@
 title: _invalid_typo
+# Negative-test fixture: the script references an undeclared switch.
+# `bun run play` skips this; validator rejects the load (by design).
+hidden: true
 
 switches:
   unlocked: false

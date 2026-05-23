@@ -2,6 +2,7 @@ id: kuro_swamp
 name: 黒沼地
 difficulty: 1
 description: 江戸の南三里。霧深く、夜になると啼くものがいる。
+entry_narration: 霧が脛に絡みつく。
 spawn_zone_id: edge
 
 zones:

@@ -2,6 +2,7 @@ id: sumida_river
 name: 隅田河
 difficulty: 2
 description: 江戸の東。汽水の濁り、葦の藪。月の出ない晩は鬼の通り道。
+entry_narration: 葦の藪が、足首より高く伸びている。汽水の臭いが鼻を打つ。
 spawn_zone_id: bridge_foot
 
 zones:

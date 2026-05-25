@@ -13,6 +13,7 @@ import type {
   WeaponDef,
   WeaponState,
 } from "../types";
+import { emptyVisualState } from "../types";
 
 export const BASELINE_NAMESPACE = "baseline";
 
@@ -184,6 +185,7 @@ export function createBaselineState(
     weapons: weaponMap,
     equippedWeaponId,
     knownSkills: [],
+    visuals: emptyVisualState(),
   };
 }
 

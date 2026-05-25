@@ -11,7 +11,7 @@ export {
   resolveModules,
   resolveRunFn,
 } from "./state";
-export { makeScriptState } from "./types";
+export { makeScriptState, emptyVisualState } from "./types";
 export {
   trainingPreset,
   TRAINING_NAMESPACE,
@@ -82,6 +82,11 @@ export type {
   ActionContext,
   ActionHandler,
   ActionResult,
+  AssetKind,
+  AssetRefs,
+  AssetRenderings,
+  AssetSize,
+  AssetSpec,
   Beat,
   BaselineState,
   CharacterDef,
@@ -123,6 +128,7 @@ export type {
   TrainingState,
   VariableDef,
   VariableValue,
+  VisualState,
   WeaponDef,
   WeaponState,
 } from "./types";

@@ -1,6 +1,7 @@
-import { runLoop } from "@autogal/engine";
-import type { Output } from "@autogal/engine";
+import { emptyVisualState, runLoop } from "@autogal/engine";
+import type { Output, VisualState } from "@autogal/engine";
 import { loadGame } from "../loader";
+import { diffVisualLines } from "../presenters/visualSummary";
 import { personaDescriptions, personas } from "../test/personas";
 
 interface Args {
@@ -35,10 +36,35 @@ export async function autoplayCommand(args: Args): Promise<void> {
     `\n=== autoplay: ${game.title} (persona: ${args.persona}) ===\n\n`,
   );
 
+  const assetMap = new Map((game.assets ?? []).map((a) => [a.path, a]));
+  // Closure-tracked previous visual state so we only emit framing
+  // lines on *changes* — without this every dialogue/narration that
+  // carries an unchanged visualState would re-print the same banner.
+  let prevVisuals: VisualState = emptyVisualState();
+
   const result = await runLoop(game, undefined, persona, {
     maxSteps: args.maxSteps,
     onStep: args.verbose
       ? (entry) => {
+          const nextVisuals = entry.output.visualState;
+          if (nextVisuals) {
+            for (const line of diffVisualLines(
+              prevVisuals,
+              nextVisuals,
+              assetMap,
+            )) {
+              process.stderr.write("  " + line + "\n");
+            }
+            // Snapshot: the engine mutates state.baseline.visuals
+            // in place, so without a deep copy `prevVisuals` would
+            // point to the same live object as `nextVisuals` and
+            // future diffs would always be empty.
+            prevVisuals = {
+              bg: nextVisuals.bg,
+              portraits: { ...nextVisuals.portraits },
+              cg: nextVisuals.cg,
+            };
+          }
           const line = formatOutput(entry.output);
           if (line) process.stderr.write(line + "\n");
         }

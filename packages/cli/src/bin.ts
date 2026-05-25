@@ -8,6 +8,7 @@ import { testCommand } from "./commands/test";
 import { autoplayCommand } from "./commands/autoplay";
 import { initCommand } from "./commands/init";
 import { screenshotCommand } from "./commands/screenshot";
+import { assetsListCommand } from "./commands/assets";
 
 const HELP = `autogal — a headless RPG Maker for the terminal
 
@@ -47,6 +48,13 @@ COMMANDS
       novel) or "training" (hub + day/slot/stats). --eject additionally
       copies the preset's main-loop source into <dir>/preset/ with
       imports rewritten so the author can edit run.ts directly.
+
+  assets   <game-dir> list [--missing] [--format table|json]
+      List visual assets declared under <game-dir>/assets/. Each row
+      shows which renderings (tui.ans, tui.txt, source.png, web.*) are
+      present and the spec's placeholder text. --missing narrows to
+      assets without any TUI rendering — the worklist for the next
+      round of art generation.
 
   screenshot <game-dir> [--keys "K1,K2,..."] [--cols N] [--rows N]
              [--wait-ms N] [--out FILE]
@@ -93,6 +101,8 @@ async function main(): Promise<void> {
       return runInit(rest);
     case "screenshot":
       return runScreenshot(rest);
+    case "assets":
+      return runAssets(rest);
     default:
       process.stderr.write(`Unknown command: ${subcommand}\n\n${HELP}`);
       process.exit(1);
@@ -246,6 +256,38 @@ async function runScreenshot(args: string[]): Promise<void> {
     waitMs: Number(values["wait-ms"] ?? "400"),
     ...(values.session !== undefined ? { session: values.session } : {}),
     ...(values.out !== undefined ? { out: values.out } : {}),
+  });
+}
+
+async function runAssets(args: string[]): Promise<void> {
+  const [sub, ...rest] = args;
+  if (sub !== "list") {
+    process.stderr.write(
+      "Usage: autogal assets list <game-dir> [--missing] [--format table|json]\n",
+    );
+    process.exit(2);
+  }
+  const { values, positionals } = parseArgs({
+    args: rest,
+    options: {
+      missing: { type: "boolean", default: false },
+      format: { type: "string", default: "table" },
+    },
+    allowPositionals: true,
+  });
+  const gameDir = requirePositional(
+    positionals,
+    "autogal assets list <game-dir> [--missing] [--format table|json]",
+  );
+  const fmt = values.format ?? "table";
+  if (fmt !== "table" && fmt !== "json") {
+    process.stderr.write(`--format must be 'table' or 'json' (got ${fmt})\n`);
+    process.exit(2);
+  }
+  await assetsListCommand({
+    gameDir,
+    missing: Boolean(values.missing),
+    format: fmt as "table" | "json",
   });
 }
 

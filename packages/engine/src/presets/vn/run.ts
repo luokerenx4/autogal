@@ -70,7 +70,7 @@ export async function* vnRun(
     // No script — show scriptComplete picker with available next scripts.
     const available = listAvailableScripts(ctx);
     if (available.length === 0) {
-      yield { type: "gameEnd" };
+      yield { type: "gameEnd", visualState: ctx.state.baseline.visuals };
       return;
     }
     const order = ctx.state.baseline.completionOrder;
@@ -79,6 +79,7 @@ export async function* vnRun(
       type: "scriptComplete",
       completedId,
       nextAvailable: available,
+      visualState: ctx.state.baseline.visuals,
     };
     if (input.type === "quit") return;
     if (input.type !== "select") continue;

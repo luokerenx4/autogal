@@ -1,0 +1,202 @@
+import { describe, expect, test } from "bun:test";
+import { AssetParseError, parseAssetSpec } from "./asset";
+
+describe("parseAssetSpec — minimal", () => {
+  test("minimum required fields produce a valid spec", () => {
+    const spec = parseAssetSpec(
+      [
+        "kind: portrait",
+        'description: "a young swordswoman, half body"',
+        'prompt: "anime style portrait of a young female swordswoman"',
+        'placeholder: "[篝・微笑] 若き女剣士、淡く笑む"',
+      ].join("\n"),
+      "assets/portraits/kagari-smile",
+    );
+    expect(spec).toEqual({
+      path: "assets/portraits/kagari-smile",
+      kind: "portrait",
+      description: "a young swordswoman, half body",
+      prompt: "anime style portrait of a young female swordswoman",
+      placeholder: "[篝・微笑] 若き女剣士、淡く笑む",
+    });
+  });
+
+  test("path comes from the relPath argument verbatim", () => {
+    const spec = parseAssetSpec(
+      'kind: bg\ndescription: x\nprompt: y\nplaceholder: z\n',
+      "assets/backgrounds/foo",
+    );
+    expect(spec.path).toBe("assets/backgrounds/foo");
+  });
+});
+
+describe("parseAssetSpec — kind", () => {
+  test("portrait / bg / cg all accepted", () => {
+    for (const kind of ["portrait", "bg", "cg"] as const) {
+      const spec = parseAssetSpec(
+        `kind: ${kind}\ndescription: x\nprompt: y\nplaceholder: z\n`,
+        `assets/x/y`,
+      );
+      expect(spec.kind).toBe(kind);
+    }
+  });
+
+  test("unknown kind throws", () => {
+    expect(() =>
+      parseAssetSpec(
+        "kind: sprite\ndescription: x\nprompt: y\nplaceholder: z\n",
+        "assets/x/y",
+      ),
+    ).toThrow(/kind.*portrait.*bg.*cg/);
+  });
+
+  test("missing kind throws", () => {
+    expect(() =>
+      parseAssetSpec("description: x\nprompt: y\nplaceholder: z\n", "x"),
+    ).toThrow(AssetParseError);
+  });
+});
+
+describe("parseAssetSpec — required fields", () => {
+  test("missing description throws", () => {
+    expect(() =>
+      parseAssetSpec(
+        "kind: portrait\nprompt: y\nplaceholder: z\n",
+        "x",
+      ),
+    ).toThrow(/description/);
+  });
+
+  test("empty placeholder throws", () => {
+    expect(() =>
+      parseAssetSpec(
+        'kind: portrait\ndescription: x\nprompt: y\nplaceholder: ""\n',
+        "x",
+      ),
+    ).toThrow(/placeholder/);
+  });
+});
+
+describe("parseAssetSpec — snake_case → camelCase", () => {
+  test("style_ref → styleRef", () => {
+    const spec = parseAssetSpec(
+      [
+        "kind: portrait",
+        "description: x",
+        "prompt: y",
+        "placeholder: z",
+        "style_ref: assets/portraits/kagari-normal",
+      ].join("\n"),
+      "assets/portraits/kagari-smile",
+    );
+    expect(spec.styleRef).toBe("assets/portraits/kagari-normal");
+    expect((spec as Record<string, unknown>).style_ref).toBeUndefined();
+  });
+
+  test("size_hint → sizeHint with cols/rows + aspect", () => {
+    const spec = parseAssetSpec(
+      [
+        "kind: portrait",
+        "description: x",
+        "prompt: y",
+        "placeholder: z",
+        "size_hint:",
+        "  tui: { cols: 30, rows: 20 }",
+        '  web: { aspect: "3:4" }',
+      ].join("\n"),
+      "assets/portraits/k",
+    );
+    expect(spec.sizeHint).toEqual({
+      tui: { cols: 30, rows: 20 },
+      web: { aspect: "3:4" },
+    });
+  });
+});
+
+describe("parseAssetSpec — refs", () => {
+  test("characters + emotion + extra ref keys preserved", () => {
+    const spec = parseAssetSpec(
+      [
+        "kind: cg",
+        "description: x",
+        "prompt: y",
+        "placeholder: z",
+        "refs:",
+        "  characters: [kagari, kasumi]",
+        "  emotion: smile",
+        "  location: 村外",
+        "  time: 黄昏",
+      ].join("\n"),
+      "assets/cgs/first-encounter",
+    );
+    expect(spec.refs).toEqual({
+      characters: ["kagari", "kasumi"],
+      emotion: "smile",
+      location: "村外",
+      time: "黄昏",
+    });
+  });
+
+  test("refs.characters must be string array", () => {
+    expect(() =>
+      parseAssetSpec(
+        [
+          "kind: portrait",
+          "description: x",
+          "prompt: y",
+          "placeholder: z",
+          "refs: { characters: [1, 2] }",
+        ].join("\n"),
+        "x",
+      ),
+    ).toThrow(/characters/);
+  });
+});
+
+describe("parseAssetSpec — tags + custom", () => {
+  test("tags array preserved", () => {
+    const spec = parseAssetSpec(
+      [
+        "kind: bg",
+        "description: x",
+        "prompt: y",
+        "placeholder: z",
+        "tags: [chapter-1, night]",
+      ].join("\n"),
+      "x",
+    );
+    expect(spec.tags).toEqual(["chapter-1", "night"]);
+  });
+
+  test("unknown keys land in custom", () => {
+    const spec = parseAssetSpec(
+      [
+        "kind: portrait",
+        "description: x",
+        "prompt: y",
+        "placeholder: z",
+        "license: CC-BY",
+        "palette_ref: muted",
+      ].join("\n"),
+      "x",
+    );
+    expect(spec.custom).toEqual({
+      license: "CC-BY",
+      palette_ref: "muted",
+    });
+  });
+});
+
+describe("parseAssetSpec — error surface", () => {
+  test("invalid YAML throws AssetParseError", () => {
+    expect(() => parseAssetSpec("::: bad ::: yaml", "x")).toThrow(
+      AssetParseError,
+    );
+  });
+
+  test("non-object YAML rejected", () => {
+    expect(() => parseAssetSpec("- just a list\n", "x")).toThrow(
+      AssetParseError,
+    );
+  });
+});

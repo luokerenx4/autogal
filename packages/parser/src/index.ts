@@ -1,5 +1,6 @@
 import type {
   Action,
+  AssetSpec,
   CharacterDef,
   EnemyDef,
   Game,
@@ -23,6 +24,7 @@ export { parseEnemy, EnemyParseError } from "./enemy";
 export { parseWeapon, WeaponParseError } from "./weapon";
 export { parseSkill, SkillParseError } from "./skill";
 export { parseMap, MapParseError } from "./map";
+export { parseAssetSpec, AssetParseError } from "./asset";
 export { validateGame, GameValidationError } from "./validate";
 export type { Manifest } from "./manifest";
 
@@ -37,6 +39,7 @@ export function buildGame(
   weapons?: WeaponDef[],
   skills?: SkillDef[],
   maps?: MapDef[],
+  assets?: AssetSpec[],
 ): Game {
   const game: Game = {
     title: manifest.title,
@@ -49,6 +52,7 @@ export function buildGame(
   if (weapons && weapons.length > 0) game.weapons = weapons;
   if (skills && skills.length > 0) game.skills = skills;
   if (maps && maps.length > 0) game.maps = maps;
+  if (assets && assets.length > 0) game.assets = assets;
   if (manifest.training) game.training = manifest.training;
   if (manifest.switches && manifest.switches.length > 0) {
     game.switches = manifest.switches;

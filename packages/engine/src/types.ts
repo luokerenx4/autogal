@@ -85,6 +85,10 @@ export interface BaselineState {
   // Skills the player has learned. Empty for games that declare no
   // skills/ directory or for new sessions.
   knownSkills: string[];
+  // Current bg / per-slot portraits / cg. Mutated by setBg / setPortrait
+  // / clearVisuals / showCg / hideCg beats. Lazy-initialized to
+  // emptyVisualState() so old saves without this field still load.
+  visuals: VisualState;
 }
 
 export interface TrainingState {
@@ -145,6 +149,16 @@ export interface CharacterDef {
   // engine's CharacterState.stats at game start. `affection` is the
   // canonical example but games can register any name.
   stats?: Record<string, CharacterStatDef>;
+  // emotion-name → asset path (e.g.
+  // { default: "assets/portraits/kagari-normal",
+  //   smile:   "assets/portraits/kagari-smile" }). Script syntax
+  // `@kagari smile` resolves "smile" against this map at runtime. The
+  // declaration uses full asset paths (Option A in the asset design)
+  // — explicit at the source, terse at the reference site.
+  portraits?: Record<string, string>;
+  // Emotion key the engine falls back to when `@<character>` has no
+  // emotion token. Defaults to "default" when omitted.
+  defaultPortrait?: string;
   // Game-specific frontmatter the engine doesn't interpret. Anything
   // the parser found in <character>.md that isn't a known field lands
   // here verbatim, so game modules can read e.g. character.custom.gift_preference
@@ -328,6 +342,90 @@ export interface CharacterSpawnRule {
   encounterScriptId: string;
 }
 
+// Visual asset registry. An asset is a directory under
+// <gameDir>/assets/{portraits,backgrounds,cgs}/<slug>/ containing a
+// spec.yaml plus any number of pre-rendered files (source.png,
+// tui.txt, tui.ans, web.webp). The engine never decodes images; it
+// only carries the spec + paths to those files so each frontend can
+// pick the best rendering it can display. Missing renderings degrade
+// to the spec's `placeholder` text — that text is also what AI/
+// headless consumers see, making it the self-describing ground truth
+// against which a misselected asset can be detected.
+export type AssetKind = "portrait" | "bg" | "cg";
+
+export interface AssetSpec {
+  // Logical id = the asset directory's forward-slash relative path
+  // from the game dir, e.g. "assets/portraits/kagari-smile". Scripts
+  // reference assets by this exact string.
+  path: string;
+  kind: AssetKind;
+  description: string;
+  prompt: string;
+  // Required short, display-facing text. Shown by TUI placeholder
+  // mode and by every headless consumer (peek/step JSON, autoplay
+  // stderr). Authors phrase it as a one-line "what this depicts"
+  // including the most semantic facts (character, mood, scene) so
+  // AI can detect a slot/spec mismatch without seeing the image.
+  placeholder: string;
+  // Optional pointer to another asset path used as a style anchor by
+  // the generation pipeline. Engine doesn't read it.
+  styleRef?: string;
+  refs?: AssetRefs;
+  sizeHint?: AssetSize;
+  tags?: string[];
+  // Pre-rendered files discovered alongside spec.yaml in this asset's
+  // directory. Engine populates absolute paths but never opens the
+  // files itself — frontends do that.
+  renderings: AssetRenderings;
+  // Forward-compat passthrough for unknown spec.yaml keys.
+  custom?: Record<string, unknown>;
+}
+
+export interface AssetRefs {
+  characters?: string[];
+  emotion?: string;
+  [k: string]: unknown;
+}
+
+export interface AssetSize {
+  tui?: { cols: number; rows: number };
+  web?: { aspect: string };
+}
+
+export interface AssetRenderings {
+  // tui.ans — ANSI-colored text rendering; TUI prefers this over txt.
+  // Constraint authoring side: must contain only SGR (color) escapes,
+  // no cursor-move. Engine never validates this; misuse manifests as
+  // visual glitches in the TUI.
+  tuiAns?: string;
+  // tui.txt — plain text rendering (ASCII art). TUI fallback when
+  // tui.ans is absent.
+  tuiTxt?: string;
+  // source.png — author's source image. Not consumed by any built-in
+  // frontend; reserved for tooling that re-renders downstream
+  // variants from a single source.
+  source?: string;
+  // web.webp / web.png — frontend-specific. Not currently consumed by
+  // any built-in frontend; reserved for a future web renderer.
+  web?: string;
+}
+
+// Current visual stack. `bg` is a single backdrop. `portraits` is a
+// per-slot map (initial slot set = { "center" }; left/right and others
+// reserved for future expansion). `cg` overlays the stage when
+// non-null — galgame convention: a CG takes over the visible area.
+// All values are asset paths (the AssetSpec.path key); resolve via
+// PresetContext.assetMap.
+export interface VisualState {
+  bg: string | null;
+  portraits: Record<string, string | null>;
+  cg: string | null;
+}
+
+export function emptyVisualState(): VisualState {
+  return { bg: null, portraits: {}, cg: null };
+}
+
 export interface StatDef {
   id: string;
   name: string;
@@ -448,7 +546,20 @@ export interface StateDelta {
 
 export type Beat =
   | { type: "narration"; text: string }
-  | { type: "dialogue"; speaker: string; text: string }
+  | {
+      type: "dialogue";
+      speaker: string;
+      text: string;
+      // Inline `@speaker emotion text` syntax: the second whitespace
+      // token (when lowercase-leading) is parsed as a *candidate*
+      // emotion. The engine resolves it against the character's
+      // portraits map at runtime — if the key exists, the engine
+      // mutates state.baseline.visuals.portraits.center to the
+      // resolved asset path; if not, the engine prepends
+      // `candidateEmotion + " "` back onto `text` and yields. This
+      // keeps the parser free of cross-file character lookups.
+      candidateEmotion?: string;
+    }
   | {
       type: "choice";
       prompt?: string;
@@ -462,7 +573,29 @@ export type Beat =
   | { type: "effects"; effects: StateDelta }
   | { type: "clear" }
   | { type: "label"; name: string }
-  | { type: "endScript" };
+  | { type: "endScript" }
+  // Silent visual-state beats. None of these yield an Output by
+  // themselves; they mutate state.baseline.visuals and the next
+  // narration/dialogue/choice carries the updated VisualState. Parser
+  // produces them from frontmatter (`bg:`, `defaultPortraits:`),
+  // `:bg/:cg/:portrait/:clear-visuals/:hide-cg` directive lines, and
+  // inline `@speaker emotion text` syntax.
+  | { type: "setBg"; assetPath: string | null }
+  | {
+      type: "setPortrait";
+      slot: string;
+      // Either provide an explicit path (from `:portrait` directive)
+      // OR a (characterId, emotion) pair (from `@speaker emotion`
+      // inline) and let the engine resolve via the character's
+      // portraits map. Engine prefers the explicit path when both
+      // are present.
+      assetPath?: string | null;
+      characterId?: string;
+      emotion?: string;
+    }
+  | { type: "clearVisuals" }
+  | { type: "showCg"; assetPath: string }
+  | { type: "hideCg" };
 
 export interface ChoiceOption {
   text: string;
@@ -768,6 +901,10 @@ export interface Game {
   // Engine-level map registry — see MapDef. Empty / absent for games
   // that declare no maps/ directory.
   maps?: MapDef[];
+  // Visual asset registry — see AssetSpec. Empty / absent for games
+  // that declare no assets/ directory. Scripts reference entries by
+  // their `path` (a forward-slash relative path from game dir).
+  assets?: AssetSpec[];
   training?: TrainingConfig;
   modules?: Module[];
   // Preset selector. Either a built-in name ("vn" / "training") or a
@@ -839,19 +976,31 @@ export interface HubSnapshot {
 }
 
 export type Output =
-  | { type: "narration"; text: string }
-  | { type: "dialogue"; speakerId: string; speakerName: string; text: string }
+  | { type: "narration"; text: string; visualState?: VisualState }
+  | {
+      type: "dialogue";
+      speakerId: string;
+      speakerName: string;
+      text: string;
+      visualState?: VisualState;
+    }
   | {
       type: "choice";
       prompt?: string;
       options: RenderedChoice[];
       // Passthrough of ChoiceBeat.view — see Beat definition above.
       view?: string;
+      visualState?: VisualState;
     }
-  | { type: "scriptComplete"; completedId: string | null; nextAvailable: ScriptInfo[] }
-  | { type: "hubMenu"; snapshot: HubSnapshot }
-  | { type: "gameEnd"; reason?: string }
-  | { type: "clear" };
+  | {
+      type: "scriptComplete";
+      completedId: string | null;
+      nextAvailable: ScriptInfo[];
+      visualState?: VisualState;
+    }
+  | { type: "hubMenu"; snapshot: HubSnapshot; visualState?: VisualState }
+  | { type: "gameEnd"; reason?: string; visualState?: VisualState }
+  | { type: "clear"; visualState?: VisualState };
 
 export type Input =
   | { type: "next" }
@@ -885,6 +1034,10 @@ export interface PresetContext {
   weaponMap: Map<string, WeaponDef>;
   skillMap: Map<string, SkillDef>;
   mapMap: Map<string, MapDef>;
+  // AssetSpec.path → AssetSpec. Used by the engine to resolve
+  // `setPortrait` emotion → path lookups and by headless presenters
+  // to attach placeholder text alongside asset paths.
+  assetMap: Map<string, AssetSpec>;
   characterNameMap: Map<string, string>;
   // Injected RNG. Defaults to Math.random; tests can override for
   // deterministic combat / choice outcomes.

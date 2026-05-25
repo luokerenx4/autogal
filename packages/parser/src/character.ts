@@ -3,7 +3,14 @@ import { extractCustom, splitFrontmatter } from "./frontmatter";
 
 export class CharacterParseError extends Error {}
 
-const KNOWN_KEYS = ["id", "name", "defaultAffection", "stats"] as const;
+const KNOWN_KEYS = [
+  "id",
+  "name",
+  "defaultAffection",
+  "stats",
+  "portraits",
+  "defaultPortrait",
+] as const;
 
 export function parseCharacter(content: string): CharacterDef {
   const { meta } = splitFrontmatter(content);
@@ -30,9 +37,43 @@ export function parseCharacter(content: string): CharacterDef {
     }
   }
   if (Object.keys(stats).length > 0) def.stats = stats;
+
+  if (meta.portraits !== undefined) {
+    def.portraits = parsePortraits(meta.id, meta.portraits);
+  }
+  if (meta.defaultPortrait !== undefined) {
+    if (typeof meta.defaultPortrait !== "string" || meta.defaultPortrait.length === 0) {
+      throw new CharacterParseError(
+        `Character ${meta.id}.defaultPortrait must be a non-empty string`,
+      );
+    }
+    def.defaultPortrait = meta.defaultPortrait;
+  }
+
   const custom = extractCustom(meta, KNOWN_KEYS);
   if (custom) def.custom = custom;
   return def;
+}
+
+function parsePortraits(
+  charId: string,
+  raw: unknown,
+): Record<string, string> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new CharacterParseError(
+      `Character ${charId}.portraits must be an object map`,
+    );
+  }
+  const out: Record<string, string> = {};
+  for (const [emotion, val] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof val !== "string" || val.length === 0) {
+      throw new CharacterParseError(
+        `Character ${charId}.portraits.${emotion} must be a non-empty asset path string`,
+      );
+    }
+    out[emotion] = val;
+  }
+  return out;
 }
 
 function parseStat(

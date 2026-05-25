@@ -1,0 +1,48 @@
+import { describe, expect, test } from "bun:test";
+import { CharacterParseError, parseCharacter } from "./character";
+
+const front = (extra: string) =>
+  `---\nid: kagari\nname: 篝\n${extra}---\n\nbio body\n`;
+
+describe("parseCharacter — portraits", () => {
+  test("portraits map preserved verbatim", () => {
+    const c = parseCharacter(
+      front(
+        [
+          "portraits:",
+          "  default: assets/portraits/kagari-normal",
+          "  smile: assets/portraits/kagari-smile",
+          "  angry: assets/portraits/kagari-angry",
+        ].join("\n") + "\n",
+      ),
+    );
+    expect(c.portraits).toEqual({
+      default: "assets/portraits/kagari-normal",
+      smile: "assets/portraits/kagari-smile",
+      angry: "assets/portraits/kagari-angry",
+    });
+  });
+
+  test("defaultPortrait string preserved", () => {
+    const c = parseCharacter(front("defaultPortrait: normal\n"));
+    expect(c.defaultPortrait).toBe("normal");
+  });
+
+  test("non-string portrait value throws", () => {
+    expect(() =>
+      parseCharacter(front("portraits:\n  default: 5\n")),
+    ).toThrow(CharacterParseError);
+  });
+
+  test("portraits array form rejected", () => {
+    expect(() =>
+      parseCharacter(front("portraits: [a, b]\n")),
+    ).toThrow(CharacterParseError);
+  });
+
+  test("character without portraits unchanged", () => {
+    const c = parseCharacter(front(""));
+    expect(c.portraits).toBeUndefined();
+    expect(c.defaultPortrait).toBeUndefined();
+  });
+});

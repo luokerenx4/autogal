@@ -1,7 +1,10 @@
-import { readFile, readdir } from "node:fs/promises";
+import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import type {
   Action,
+  AssetKind,
+  AssetRenderings,
+  AssetSpec,
   CharacterDef,
   EnemyDef,
   Game,
@@ -16,6 +19,7 @@ import type {
 import {
   buildGame,
   parseAction,
+  parseAssetSpec,
   parseCharacter,
   parseEnemy,
   parseItem,
@@ -83,6 +87,9 @@ export async function loadGame(dir: string): Promise<Game> {
   );
   maps.sort((a, b) => a.id.localeCompare(b.id));
 
+  const assets = await loadAssets(dir);
+  assets.sort((a, b) => a.path.localeCompare(b.path));
+
   const modules = await loadModules(dir, manifest.modules ?? []);
 
   const game = buildGame(
@@ -96,7 +103,10 @@ export async function loadGame(dir: string): Promise<Game> {
     weapons,
     skills,
     maps,
+    assets,
   );
+
+  warnDanglingAssetRefs(game, assets);
 
   // If game.yaml's preset: is a relative path (the ejected-preset case),
   // dynamic-import the file and attach its default-exported RunFunction
@@ -161,4 +171,124 @@ async function loadDir<T>(
       return parse(content, file);
     }),
   );
+}
+
+// Walk <gameDir>/assets/{portraits,backgrounds,cgs}/ and for each
+// subdirectory that contains a spec.yaml, parse the spec and
+// enumerate its rendering files (tui.txt/tui.ans/source.png/web.*).
+// Returns one AssetSpec per discovered directory; missing top-level
+// kind subdirs (e.g. no cgs/ at all) are silently skipped — assets/
+// itself absent is also fine.
+//
+// Path keys are forward-slash relative to gameDir so script-level
+// references work cross-platform without normalization.
+const ASSET_KIND_DIRS: ReadonlyArray<{ name: string; kind: AssetKind }> = [
+  { name: "portraits", kind: "portrait" },
+  { name: "backgrounds", kind: "bg" },
+  { name: "cgs", kind: "cg" },
+];
+
+async function loadAssets(gameDir: string): Promise<AssetSpec[]> {
+  const assets: AssetSpec[] = [];
+  for (const { name, kind } of ASSET_KIND_DIRS) {
+    const root = path.join(gameDir, "assets", name);
+    let entries: string[];
+    try {
+      entries = await readdir(root);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") continue;
+      throw err;
+    }
+    for (const entry of entries) {
+      const assetDir = path.join(root, entry);
+      const specPath = path.join(assetDir, "spec.yaml");
+      let content: string;
+      try {
+        content = await readFile(specPath, "utf-8");
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code === "ENOENT") continue;
+        throw err;
+      }
+      const relPath = path
+        .relative(gameDir, assetDir)
+        .split(path.sep)
+        .join("/");
+      const spec = parseAssetSpec(content, relPath);
+      if (spec.kind !== kind) {
+        process.stderr.write(
+          `[assets] ${relPath}: declared kind="${spec.kind}" but lives under assets/${name}/ (expected kind="${kind}")\n`,
+        );
+      }
+      const renderings = await discoverRenderings(assetDir);
+      assets.push({ ...spec, renderings });
+    }
+  }
+  return assets;
+}
+
+async function discoverRenderings(assetDir: string): Promise<AssetRenderings> {
+  const out: AssetRenderings = {};
+  const tryFile = async (rel: string) => {
+    const abs = path.join(assetDir, rel);
+    try {
+      await stat(abs);
+      return abs;
+    } catch {
+      return undefined;
+    }
+  };
+  const ans = await tryFile("tui.ans");
+  if (ans) out.tuiAns = ans;
+  const txt = await tryFile("tui.txt");
+  if (txt) out.tuiTxt = txt;
+  const src = await tryFile("source.png");
+  if (src) out.source = src;
+  // Web slot accepts any of webp/png/jpg, in that priority. First match wins.
+  for (const ext of ["webp", "png", "jpg", "jpeg"]) {
+    const w = await tryFile(`web.${ext}`);
+    if (w) {
+      out.web = w;
+      break;
+    }
+  }
+  return out;
+}
+
+// Emit a stderr warning for every asset reference (in character
+// portraits, script frontmatter-seeded beats, or script body beats)
+// that doesn't resolve to a loaded AssetSpec. Warn-only — broken refs
+// fall back to placeholder mode at runtime; the warning just helps
+// authors notice.
+function warnDanglingAssetRefs(game: Game, assets: AssetSpec[]): void {
+  const known = new Set(assets.map((a) => a.path));
+  const warn = (msg: string) =>
+    process.stderr.write(`[assets] ${msg}\n`);
+
+  for (const c of game.characters) {
+    if (!c.portraits) continue;
+    for (const [emotion, p] of Object.entries(c.portraits)) {
+      if (!known.has(p)) {
+        warn(`character ${c.id}.portraits.${emotion} → "${p}" not found`);
+      }
+    }
+  }
+  for (const s of game.scripts) {
+    for (const beat of s.beats) {
+      if (beat.type === "setBg" && beat.assetPath !== null) {
+        if (!known.has(beat.assetPath)) {
+          warn(`script ${s.id} :bg → "${beat.assetPath}" not found`);
+        }
+      } else if (beat.type === "setPortrait" && beat.assetPath) {
+        if (!known.has(beat.assetPath)) {
+          warn(
+            `script ${s.id} :portrait ${beat.slot} → "${beat.assetPath}" not found`,
+          );
+        }
+      } else if (beat.type === "showCg") {
+        if (!known.has(beat.assetPath)) {
+          warn(`script ${s.id} :cg → "${beat.assetPath}" not found`);
+        }
+      }
+    }
+  }
 }

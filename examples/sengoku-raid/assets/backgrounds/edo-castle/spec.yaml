@@ -1,0 +1,20 @@
+kind: bg
+description: |
+  江戸城本丸の大広間。蝋燭の煙が天井に渦を巻き、上座には
+  御簾。床の畳と一段高い上座、その奥の襖絵。慶長十年・初秋
+  の宵。
+prompt: |
+  Interior of the great hall at Edo Castle, early Edo period. Candle
+  smoke curling toward a coffered wooden ceiling. Bamboo blinds on
+  the upper dais where the shogun's chamberlain sits. Tatami floor,
+  fusuma sliding doors at the back painted with autumn pines. Mood:
+  formal, hushed, late autumn evening, warm candlelight against
+  cold dusk.
+placeholder: "[江戸城・大広間] 蝋燭の煙が立ち上る、慶長十年初秋の宵"
+refs:
+  location: edo-castle
+  time: 黄昏
+size_hint:
+  tui: { cols: 80, rows: 24 }
+  web: { aspect: "16:9" }
+tags: [chapter-1, formal]

@@ -26,14 +26,14 @@ describe("step / peek — gameEnd terminality", () => {
   test("peek at gameEnd reports done:true (not done:false with gameEnd output)", async () => {
     const { game, state } = exhaustedGame();
     const r = await peek(game, state);
-    expect(r.output).toEqual({ type: "gameEnd" });
+    expect(r.output).toMatchObject({ type: "gameEnd" });
     expect(r.done).toBe(true);
   });
 
   test("step at gameEnd is idempotent: returns gameEnd, done:true", async () => {
     const { game, state } = exhaustedGame();
     const r = await step(game, state, { type: "next" });
-    expect(r.output).toEqual({ type: "gameEnd" });
+    expect(r.output).toMatchObject({ type: "gameEnd" });
     expect(r.done).toBe(true);
   });
 
@@ -52,7 +52,7 @@ describe("step / peek — gameEnd terminality", () => {
       { type: "select" as const, scriptId: "001" },
     ]) {
       const r = await step(game, state, input);
-      expect(r.output).toEqual({ type: "gameEnd" });
+      expect(r.output).toMatchObject({ type: "gameEnd" });
       expect(r.done).toBe(true);
     }
   });

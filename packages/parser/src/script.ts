@@ -23,13 +23,66 @@ export function parseScript(content: string, source?: string): Script {
   const characters = readStringArray(meta, "characters");
 
   const beats = parseBody(body, source);
+
+  // Frontmatter `bg:` + `defaultPortraits:` produce synthetic
+  // setBg/setPortrait beats prepended to the script. Inserted BEFORE
+  // any labels so a `goto` jump still lands after the visual seed
+  // has been applied.
+  const seedBeats: Beat[] = [];
+  if (meta.bg !== undefined) {
+    if (typeof meta.bg !== "string" || meta.bg.length === 0) {
+      throw new ScriptParseError("`bg` frontmatter must be a non-empty string", source);
+    }
+    seedBeats.push({ type: "setBg", assetPath: meta.bg });
+  }
+  if (meta.defaultPortraits !== undefined) {
+    seedBeats.push(...parseDefaultPortraits(meta.defaultPortraits, source));
+  }
+  const finalBeats = seedBeats.length > 0 ? [...seedBeats, ...beats] : beats;
+
   return {
     id,
     title,
     ...(requires !== undefined ? { requires } : {}),
     ...(characters !== undefined ? { characters } : {}),
-    beats,
+    beats: finalBeats,
   };
+}
+
+// defaultPortraits: { center: { characterId: kagari, emotion: smile } }
+function parseDefaultPortraits(raw: unknown, source: string | undefined): Beat[] {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new ScriptParseError(
+      "`defaultPortraits` must be an object map { slot: { characterId, emotion } }",
+      source,
+    );
+  }
+  const out: Beat[] = [];
+  for (const [slot, val] of Object.entries(raw as Record<string, unknown>)) {
+    if (!val || typeof val !== "object" || Array.isArray(val)) {
+      throw new ScriptParseError(
+        `defaultPortraits.${slot} must be an object`,
+        source,
+      );
+    }
+    const obj = val as Record<string, unknown>;
+    const characterId = obj.characterId;
+    const emotion = obj.emotion;
+    if (typeof characterId !== "string" || characterId.length === 0) {
+      throw new ScriptParseError(
+        `defaultPortraits.${slot}.characterId must be a non-empty string`,
+        source,
+      );
+    }
+    if (typeof emotion !== "string" || emotion.length === 0) {
+      throw new ScriptParseError(
+        `defaultPortraits.${slot}.emotion must be a non-empty string`,
+        source,
+      );
+    }
+    out.push({ type: "setPortrait", slot, characterId, emotion });
+  }
+  return out;
 }
 
 function readString(
@@ -88,7 +141,7 @@ function parseBody(body: string, source?: string): Beat[] {
     }
 
     const block = collectBlock(lines, i);
-    beats.push(parseTextBlock(block, source));
+    beats.push(...parseTextBlock(block, source));
     i = block.endLine + 1;
   }
   return beats;
@@ -104,40 +157,125 @@ function collectBlock(lines: string[], start: number): BlockSpan {
   };
 }
 
-function parseTextBlock(block: BlockSpan, source?: string): Beat {
+function parseTextBlock(block: BlockSpan, source?: string): Beat[] {
   const first = (block.text.split("\n")[0] ?? "").trim();
 
   if (first === "[end]") {
-    return { type: "endScript" };
+    return [{ type: "endScript" }];
   }
   if (first.startsWith("?")) {
-    return parseChoiceBlock(block, source);
+    return [parseChoiceBlock(block, source)];
   }
   if (first.startsWith("@")) {
     return parseDialogueBlock(block, source);
   }
-  if (first.startsWith("#") && /^#\s*[a-zA-Z_][\w-]*\s*$/.test(first)) {
-    return { type: "label", name: first.replace(/^#\s*/, "").trim() };
+  if (first.startsWith(":")) {
+    return [parseDirectiveBlock(block, source)];
   }
-  return { type: "narration", text: block.text.trim() };
+  if (first.startsWith("#") && /^#\s*[a-zA-Z_][\w-]*\s*$/.test(first)) {
+    return [{ type: "label", name: first.replace(/^#\s*/, "").trim() }];
+  }
+  return [{ type: "narration", text: block.text.trim() }];
 }
 
-function parseDialogueBlock(block: BlockSpan, source?: string): Beat {
+// `@speaker [emotion] text...` — emotion token is optional. Matched
+// when the second whitespace-separated token is a lowercase
+// identifier (letters/digits/underscore/hyphen, must lead with a
+// letter). Whether that token is *actually* an emotion (vs. the first
+// word of the dialogue) is decided at runtime by the engine: it
+// consults the character's portraits map; unknown emotion → drops
+// the setPortrait beat's effect and restores the token to the
+// dialogue text. We tag the beat as `pendingEmotion` so the engine
+// can do that restoration. Parser stays free of cross-file lookups.
+const DIALOGUE_LINE = /^@(\S+)(?:\s+([a-z][\w-]*))?\s*(.*)$/;
+
+function parseDialogueBlock(block: BlockSpan, source?: string): Beat[] {
   const lines = block.text.split("\n");
   const first = lines[0] ?? "";
-  const match = first.match(/^@(\S+)\s*(.*)$/);
+  const match = first.match(DIALOGUE_LINE);
   if (!match || !match[1]) {
     throw new ScriptParseError(`Malformed dialogue line: ${first}`, source);
   }
   const speaker = match[1];
-  const firstText = match[2] ?? "";
+  const emotion = match[2];
+  const firstText = match[3] ?? "";
   const rest = lines.slice(1).join("\n");
   const text = firstText
     ? rest
       ? `${firstText}\n${rest}`
       : firstText
     : rest;
-  return { type: "dialogue", speaker, text: text.trim() };
+
+  const beat: Beat = { type: "dialogue", speaker, text: text.trim() };
+  if (emotion !== undefined && emotion.length > 0) {
+    beat.candidateEmotion = emotion;
+  }
+  return [beat];
+}
+
+// Directive lines: single-line beats starting with `:`. Supported:
+//   :bg <path>           → setBg
+//   :bg none             → setBg null (explicit clear)
+//   :cg <path>           → showCg
+//   :hide-cg             → hideCg
+//   :portrait <slot> <path?>  → setPortrait (empty path clears the slot)
+//   :clear-visuals       → clearVisuals
+//
+// The block must be a single line — multi-line `:` blocks are an
+// authoring error because every directive's semantics fit on one
+// line. Authors separate consecutive directives with a blank line
+// (same convention as every other beat).
+function parseDirectiveBlock(block: BlockSpan, source?: string): Beat {
+  const lines = block.text.split("\n").map((l) => l.trim()).filter(Boolean);
+  if (lines.length > 1) {
+    throw new ScriptParseError(
+      `Directive block must be a single line; got ${lines.length}. Separate directives with a blank line.`,
+      source,
+    );
+  }
+  const line = (lines[0] ?? "").trim();
+  const [head, ...rest] = line.split(/\s+/);
+  switch (head) {
+    case ":bg": {
+      if (rest.length === 0) {
+        throw new ScriptParseError(":bg requires an asset path or `none`", source);
+      }
+      const path = rest.join(" ").trim();
+      const asset = path === "none" || path === "null" ? null : path;
+      return { type: "setBg", assetPath: asset };
+    }
+    case ":cg": {
+      if (rest.length === 0) {
+        throw new ScriptParseError(":cg requires an asset path", source);
+      }
+      return { type: "showCg", assetPath: rest.join(" ").trim() };
+    }
+    case ":hide-cg":
+      if (rest.length > 0) {
+        throw new ScriptParseError(":hide-cg takes no arguments", source);
+      }
+      return { type: "hideCg" };
+    case ":portrait": {
+      const slot = rest[0];
+      if (!slot) {
+        throw new ScriptParseError(":portrait requires a slot name", source);
+      }
+      const path = rest.slice(1).join(" ").trim();
+      const asset =
+        path.length === 0 || path === "none" || path === "null" ? null : path;
+      return { type: "setPortrait", slot, assetPath: asset };
+    }
+    case ":clear-visuals":
+      if (rest.length > 0) {
+        throw new ScriptParseError(
+          ":clear-visuals takes no arguments",
+          source,
+        );
+      }
+      return { type: "clearVisuals" };
+    default:
+      throw new ScriptParseError(`Unknown directive: ${head}`, source);
+  }
 }
 
 function parseChoiceBlock(block: BlockSpan, source?: string): Beat {

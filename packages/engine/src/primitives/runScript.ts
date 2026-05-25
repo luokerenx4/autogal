@@ -65,7 +65,11 @@ export async function* runScript(
 
     switch (beat.type) {
       case "narration": {
-        const input = yield { type: "narration", text: beat.text };
+        const input = yield {
+          type: "narration",
+          text: beat.text,
+          visualState: state.baseline.visuals,
+        };
         if (input.type === "quit") return false;
         // Only `next` advances. Other input types (choose / doActivity
         // / select) sent against a narration are an input-order mistake
@@ -78,11 +82,33 @@ export async function* runScript(
       case "dialogue": {
         const speakerName =
           ctx.characterNameMap.get(beat.speaker) ?? beat.speaker;
+        // Resolve a candidate emotion against the character's
+        // portraits map. Hit → set state.baseline.visuals.portraits
+        // for the conventional "center" slot. Miss → restore the
+        // candidate token to the front of the dialogue text (it was
+        // not actually an emotion, just the first word of dialogue).
+        let dialogueText = beat.text;
+        if (beat.candidateEmotion !== undefined) {
+          const ch = ctx.game.characters.find((c) => c.id === beat.speaker);
+          const path = ch?.portraits?.[beat.candidateEmotion];
+          if (path) {
+            state.baseline.visuals.portraits.center = path;
+          } else {
+            // Restore the candidate to the dialogue text. Preserve the
+            // space iff there was any text after; otherwise the token
+            // becomes the entire dialogue.
+            dialogueText =
+              beat.text.length > 0
+                ? `${beat.candidateEmotion} ${beat.text}`
+                : beat.candidateEmotion;
+          }
+        }
         const input = yield {
           type: "dialogue",
           speakerId: beat.speaker,
           speakerName,
-          text: beat.text,
+          text: dialogueText,
+          visualState: state.baseline.visuals,
         };
         if (input.type === "quit") return false;
         if (input.type !== "next") continue;
@@ -110,6 +136,7 @@ export async function* runScript(
           prompt: beat.prompt,
           options: rendered,
           ...(beat.view !== undefined ? { view: beat.view } : {}),
+          visualState: state.baseline.visuals,
         };
         if (input.type === "quit") return false;
         if (input.type !== "choose") continue;
@@ -149,8 +176,51 @@ export async function* runScript(
         return true;
       }
       case "clear": {
-        const input = yield { type: "clear" };
+        const input = yield {
+          type: "clear",
+          visualState: state.baseline.visuals,
+        };
         if (input.type === "quit") return false;
+        break;
+      }
+      // Silent visual mutators — no yield, fall through to
+      // beatAfter + beatIndex++ at the bottom.
+      case "setBg": {
+        state.baseline.visuals.bg = beat.assetPath;
+        break;
+      }
+      case "setPortrait": {
+        let resolved: string | null = beat.assetPath ?? null;
+        // If no explicit path was provided, try to resolve via the
+        // character's portraits map. Used by the `defaultPortraits`
+        // frontmatter form (which carries characterId+emotion only).
+        if (
+          resolved === null &&
+          beat.assetPath === undefined &&
+          beat.characterId &&
+          beat.emotion
+        ) {
+          const ch = ctx.game.characters.find(
+            (c) => c.id === beat.characterId,
+          );
+          resolved = ch?.portraits?.[beat.emotion] ?? null;
+        }
+        state.baseline.visuals.portraits[beat.slot] = resolved;
+        break;
+      }
+      case "clearVisuals": {
+        // bg is the slowest-changing slot and stays through scene
+        // resets — authors clear it explicitly with `:bg none`.
+        state.baseline.visuals.portraits = {};
+        state.baseline.visuals.cg = null;
+        break;
+      }
+      case "showCg": {
+        state.baseline.visuals.cg = beat.assetPath;
+        break;
+      }
+      case "hideCg": {
+        state.baseline.visuals.cg = null;
         break;
       }
     }

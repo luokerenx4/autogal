@@ -87,6 +87,92 @@ export async function assetsListCommand(args: Args): Promise<void> {
   );
 }
 
+interface PromptsArgs {
+  gameDir: string;
+  // Optional specific asset path. When given, print just that asset's
+  // prompt (no separators, no header) — designed to be piped:
+  //   autogal assets prompts ./game assets/portraits/k-smile | pbcopy
+  // When omitted, print all assets' prompts with delimiters.
+  assetPath?: string;
+  missing: boolean;
+  format: "text" | "json";
+}
+
+// `autogal assets prompts <game-dir> [<asset-path>] [--missing] [--format text|json]`
+//
+// Surfaces the generation prompt(s) for asset specs so authors can
+// pipe them into an image generator (Midjourney, SD, Claude, etc.)
+// without copy-pasting from yaml. Single-asset form prints just the
+// prompt text — pipe-friendly. Multi-asset form prints kind/path
+// headers + prompts separated by `---` lines so the output is
+// scannable AND mechanically splittable.
+export async function assetsPromptsCommand(args: PromptsArgs): Promise<void> {
+  const game = await loadGame(args.gameDir);
+  const all = game.assets ?? [];
+
+  // Single-asset form: locate it, print just the prompt verbatim, exit.
+  // No path → 2; not-found → 2 with stderr. The convention matches how
+  // git plumbing commands emit "missing object" errors.
+  if (args.assetPath) {
+    const found = all.find((a) => a.path === args.assetPath);
+    if (!found) {
+      process.stderr.write(
+        `asset not found: ${args.assetPath}\n` +
+          `available: ${all.map((a) => a.path).join(", ") || "(none)"}\n`,
+      );
+      process.exit(2);
+    }
+    process.stdout.write(found.prompt);
+    if (!found.prompt.endsWith("\n")) process.stdout.write("\n");
+    return;
+  }
+
+  // Multi-asset form: optionally filter to missing.
+  const rows = args.missing
+    ? all.filter(
+        (a) =>
+          a.renderings.tuiAns === undefined && a.renderings.tuiTxt === undefined,
+      )
+    : all;
+
+  if (args.format === "json") {
+    process.stdout.write(
+      JSON.stringify(
+        rows.map((a) => ({
+          path: a.path,
+          kind: a.kind,
+          placeholder: a.placeholder,
+          prompt: a.prompt,
+        })),
+        null,
+        2,
+      ) + "\n",
+    );
+    return;
+  }
+
+  if (rows.length === 0) {
+    process.stdout.write(
+      args.missing
+        ? "All assets have at least one TUI rendering.\n"
+        : "No assets declared.\n",
+    );
+    return;
+  }
+
+  // Text form: one entry per asset, `# <kind>: <path>` header, then
+  // the placeholder as a `> blockquote`, then the prompt body, then
+  // a `---` separator. Markdown-friendly so the output drops cleanly
+  // into a generator's prompt input or a tracking document.
+  for (let i = 0; i < rows.length; i++) {
+    const a = rows[i]!;
+    process.stdout.write(`# ${a.kind}: ${a.path}\n`);
+    process.stdout.write(`> ${a.placeholder}\n\n`);
+    process.stdout.write(a.prompt.trimEnd() + "\n");
+    if (i < rows.length - 1) process.stdout.write("\n---\n\n");
+  }
+}
+
 function pad(s: string, w: number): string {
   return s.length >= w ? s : s + " ".repeat(w - s.length);
 }

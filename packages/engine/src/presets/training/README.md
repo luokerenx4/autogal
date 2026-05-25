@@ -1,7 +1,7 @@
 # training preset
 
-Day/slot/stats/hub game loop — what `examples/spectral-demo` (妖刀さくら抄)
-runs on. Same script-runner foundation as the vn preset, plus:
+Day/slot/stats/hub game loop — the minimal reference is
+`examples/eject-test`. Same script-runner foundation as the vn preset, plus:
 
 - **calendar**: slots advance after every action (via `onActionComplete`
   hook the bundled `trainingPreset` Module registers), days roll over,

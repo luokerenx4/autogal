@@ -9,7 +9,7 @@ import { autoplayCommand } from "./commands/autoplay";
 import { initCommand } from "./commands/init";
 import { screenshotCommand } from "./commands/screenshot";
 
-const HELP = `autogal — shell-native GalGame engine
+const HELP = `autogal — a headless RPG Maker for the terminal
 
 USAGE
   autogal <command> [args]

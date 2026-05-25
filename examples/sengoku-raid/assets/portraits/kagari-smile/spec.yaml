@@ -1,0 +1,18 @@
+kind: portrait
+description: |
+  篝（かがり）の半身像。戦国期の女剣士、藍鼠色の小袖に
+  たすき掛け、刀を背に淡く笑む。冷たい目元に、口角だけが
+  わずかに上がっている——一族当主としての余裕。
+prompt: |
+  Anime-style half-body portrait of Kagari, a young female swordswoman
+  from the late Sengoku era. Indigo-grey kosode with crossed sleeve
+  cords (tasuki), a katana across her back. Cold eyes, a faint smile
+  with the lips. Muted painterly palette. Background neutral / removed.
+placeholder: "[篝・微笑] 若き女剣士、刀を背に淡く笑む"
+refs:
+  characters: [kagari]
+  emotion: smile
+size_hint:
+  tui: { cols: 28, rows: 16 }
+  web: { aspect: "3:4" }
+tags: [main-cast]

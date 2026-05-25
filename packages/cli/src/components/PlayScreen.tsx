@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useReducer, useRef, useState } from "rea
 import { Box, Text, useInput } from "ink";
 import { useInkInstance } from "../ink-instance";
 import { watch } from "node:fs";
+import { sep } from "node:path";
 import { Engine } from "@autogal/engine";
 import type { ComposedState, Game, Input, Output } from "@autogal/engine";
 import { loadGame } from "../loader";
@@ -161,7 +162,15 @@ export function PlayScreen({
       if (!filename) return;
       if (filename.startsWith(".autogal")) return;
       if (filename.startsWith("node_modules")) return;
-      if (!/\.(md|yaml|yml)$/i.test(filename)) return;
+      // Trigger on game source edits (.md/.yaml frontmatter, including
+      // asset spec.yaml) AND on asset rendering files under assets/ —
+      // editing tui.txt should hot-reload too so authors iterating on
+      // ASCII art see the result without restarting.
+      const isSource = /\.(md|yaml|yml)$/i.test(filename);
+      const isAssetRendering =
+        filename.startsWith("assets" + sep) &&
+        /\.(txt|ans|png|webp|jpe?g)$/i.test(filename);
+      if (!isSource && !isAssetRendering) return;
       if (debounceTimer) clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
         void reload();

@@ -316,3 +316,248 @@ describe("parseScript — fenced YAML choice", () => {
     expect(s.beats[0]).toEqual({ type: "clear" });
   });
 });
+
+describe("parseScript — visual frontmatter", () => {
+  test("bg in frontmatter prepends a setBg beat", () => {
+    const s = parseScript(
+      source(
+        "id: x\ntitle: t\nbg: assets/backgrounds/mura-yugata",
+        "narration here",
+      ),
+    );
+    expect(s.beats[0]).toEqual({
+      type: "setBg",
+      assetPath: "assets/backgrounds/mura-yugata",
+    });
+    expect(s.beats[1]).toEqual({ type: "narration", text: "narration here" });
+  });
+
+  test("defaultPortraits prepends setPortrait beats", () => {
+    const s = parseScript(
+      source(
+        [
+          "id: x",
+          "title: t",
+          "defaultPortraits:",
+          "  center: { characterId: kagari, emotion: smile }",
+        ].join("\n"),
+        "@kagari hello",
+      ),
+    );
+    expect(s.beats[0]).toEqual({
+      type: "setPortrait",
+      slot: "center",
+      characterId: "kagari",
+      emotion: "smile",
+    });
+  });
+
+  test("bg + defaultPortraits both seed beats", () => {
+    const s = parseScript(
+      source(
+        [
+          "id: x",
+          "title: t",
+          "bg: assets/backgrounds/mura",
+          "defaultPortraits:",
+          "  center: { characterId: kagari, emotion: smile }",
+        ].join("\n"),
+        "",
+      ),
+    );
+    expect(s.beats).toEqual([
+      { type: "setBg", assetPath: "assets/backgrounds/mura" },
+      {
+        type: "setPortrait",
+        slot: "center",
+        characterId: "kagari",
+        emotion: "smile",
+      },
+    ]);
+  });
+
+  test("empty bg throws", () => {
+    expect(() =>
+      parseScript(source("id: x\ntitle: t\nbg: ''", "")),
+    ).toThrow(/bg/);
+  });
+
+  test("defaultPortraits missing characterId throws", () => {
+    expect(() =>
+      parseScript(
+        source(
+          [
+            "id: x",
+            "title: t",
+            "defaultPortraits:",
+            "  center: { emotion: smile }",
+          ].join("\n"),
+          "",
+        ),
+      ),
+    ).toThrow(/characterId/);
+  });
+});
+
+describe("parseScript — inline emotion", () => {
+  test("@speaker emotion text → dialogue with candidateEmotion", () => {
+    const s = parseScript(
+      source("id: x\ntitle: t", "@kagari smile こんにちは"),
+    );
+    expect(s.beats).toHaveLength(1);
+    expect(s.beats[0]).toEqual({
+      type: "dialogue",
+      speaker: "kagari",
+      text: "こんにちは",
+      candidateEmotion: "smile",
+    });
+  });
+
+  test("@speaker text — second token always becomes candidateEmotion when it matches the ident shape", () => {
+    // "hello" matches /^[a-z][\w-]*$/ so parser emits it as candidate;
+    // engine decides at runtime whether to keep it as a portrait
+    // selector or restore it to the dialogue text.
+    const s = parseScript(source("id: x\ntitle: t", "@kagari hello"));
+    expect(s.beats).toHaveLength(1);
+    expect(s.beats[0]).toEqual({
+      type: "dialogue",
+      speaker: "kagari",
+      text: "",
+      candidateEmotion: "hello",
+    });
+  });
+
+  test("uppercase or punctuated second token is NOT treated as candidate", () => {
+    // "Hello" starts with capital → not an emotion candidate.
+    const s = parseScript(source("id: x\ntitle: t", "@kagari Hello world"));
+    expect(s.beats).toHaveLength(1);
+    expect(s.beats[0]).toEqual({
+      type: "dialogue",
+      speaker: "kagari",
+      text: "Hello world",
+    });
+  });
+
+  test("hyphenated emotion accepted", () => {
+    const s = parseScript(
+      source("id: x\ntitle: t", "@kagari half-smile うん"),
+    );
+    expect((s.beats[0] as { candidateEmotion?: string }).candidateEmotion).toBe(
+      "half-smile",
+    );
+  });
+
+  test("dialogue starting with 「 — first token is the bracket, no emotion", () => {
+    const s = parseScript(
+      source("id: x\ntitle: t", "@kagari 「下がれ」"),
+    );
+    expect(s.beats).toHaveLength(1);
+    expect(s.beats[0]).toEqual({
+      type: "dialogue",
+      speaker: "kagari",
+      text: "「下がれ」",
+    });
+  });
+
+  test("emotion + bracket text — candidate set, text is the bracketed body", () => {
+    const s = parseScript(
+      source("id: x\ntitle: t", "@kagari smile 「下がれ」"),
+    );
+    expect(s.beats).toHaveLength(1);
+    expect(s.beats[0]).toEqual({
+      type: "dialogue",
+      speaker: "kagari",
+      text: "「下がれ」",
+      candidateEmotion: "smile",
+    });
+  });
+});
+
+describe("parseScript — visual directives", () => {
+  test(":bg <path> → setBg beat", () => {
+    const s = parseScript(
+      source("id: x\ntitle: t", ":bg assets/backgrounds/forest"),
+    );
+    expect(s.beats[0]).toEqual({
+      type: "setBg",
+      assetPath: "assets/backgrounds/forest",
+    });
+  });
+
+  test(":bg none → setBg null (explicit clear)", () => {
+    const s = parseScript(source("id: x\ntitle: t", ":bg none"));
+    expect(s.beats[0]).toEqual({ type: "setBg", assetPath: null });
+  });
+
+  test(":cg <path> → showCg", () => {
+    const s = parseScript(
+      source("id: x\ntitle: t", ":cg assets/cgs/first-encounter"),
+    );
+    expect(s.beats[0]).toEqual({
+      type: "showCg",
+      assetPath: "assets/cgs/first-encounter",
+    });
+  });
+
+  test(":hide-cg → hideCg", () => {
+    const s = parseScript(source("id: x\ntitle: t", ":hide-cg"));
+    expect(s.beats[0]).toEqual({ type: "hideCg" });
+  });
+
+  test(":portrait <slot> <path> → explicit setPortrait", () => {
+    const s = parseScript(
+      source("id: x\ntitle: t", ":portrait left assets/portraits/k-smile"),
+    );
+    expect(s.beats[0]).toEqual({
+      type: "setPortrait",
+      slot: "left",
+      assetPath: "assets/portraits/k-smile",
+    });
+  });
+
+  test(":portrait <slot> (no path) clears the slot", () => {
+    const s = parseScript(source("id: x\ntitle: t", ":portrait left"));
+    expect(s.beats[0]).toEqual({
+      type: "setPortrait",
+      slot: "left",
+      assetPath: null,
+    });
+  });
+
+  test(":clear-visuals → clearVisuals", () => {
+    const s = parseScript(source("id: x\ntitle: t", ":clear-visuals"));
+    expect(s.beats[0]).toEqual({ type: "clearVisuals" });
+  });
+
+  test("multiple directives separated by blank lines produce separate beats", () => {
+    const s = parseScript(
+      source(
+        "id: x\ntitle: t",
+        ":bg assets/bg/a\n\n:portrait center assets/portraits/x\n\n:cg assets/cgs/c",
+      ),
+    );
+    expect(s.beats).toEqual([
+      { type: "setBg", assetPath: "assets/bg/a" },
+      {
+        type: "setPortrait",
+        slot: "center",
+        assetPath: "assets/portraits/x",
+      },
+      { type: "showCg", assetPath: "assets/cgs/c" },
+    ]);
+  });
+
+  test("unknown directive throws", () => {
+    expect(() =>
+      parseScript(source("id: x\ntitle: t", ":unknownthing foo")),
+    ).toThrow(/Unknown directive/);
+  });
+
+  test("multi-line directive block throws", () => {
+    expect(() =>
+      parseScript(
+        source("id: x\ntitle: t", ":bg foo\n:cg bar"),
+      ),
+    ).toThrow(/single line/);
+  });
+});

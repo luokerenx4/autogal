@@ -1,6 +1,7 @@
 import { step } from "@autogal/engine";
 import type { Input } from "@autogal/engine";
 import { loadGame } from "../loader";
+import { joinVisualState } from "../presenters/visualSummary";
 import { appendLog, loadSession, saveSession } from "../session";
 
 interface Args {
@@ -26,8 +27,19 @@ export async function stepCommand(args: Args): Promise<void> {
     input,
     output: result.output,
   });
+  const assetMap = new Map((game.assets ?? []).map((a) => [a.path, a]));
+  const output =
+    result.output && result.output.visualState
+      ? {
+          ...result.output,
+          visualStateResolved: joinVisualState(
+            result.output.visualState,
+            assetMap,
+          ),
+        }
+      : result.output;
   const payload = {
-    output: result.output,
+    output,
     done: result.done,
     state: result.state,
   };

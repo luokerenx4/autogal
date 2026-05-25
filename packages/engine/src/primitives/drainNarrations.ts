@@ -25,7 +25,11 @@ export async function* drainNarrations(
   const q = ctx.state.runtime.pendingNarrations;
   while (q.length > 0) {
     const text = q[0]!;
-    const input = yield { type: "narration", text };
+    const input = yield {
+      type: "narration",
+      text,
+      visualState: ctx.state.baseline.visuals,
+    };
     if (input.type === "quit") return;
     if (input.type !== "next") continue;
     q.shift();

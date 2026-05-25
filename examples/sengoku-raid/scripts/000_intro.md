@@ -2,6 +2,7 @@
 id: 000_intro
 title: 江戸城・大広間
 characters: []
+bg: assets/backgrounds/edo-castle
 ---
 
 慶長十年、初秋。
@@ -26,7 +27,11 @@ characters: []
 
 @narrator 巻物が膝の前に置かれた。任地の地図と、最初の一枚が記された札。
 
+:cg assets/cgs/first-encounter
+
 @narrator 黒沼地。江戸の南三里。
+
+:hide-cg
 
 @narrator お主は刀を腰に差し、立ち上がる。
 

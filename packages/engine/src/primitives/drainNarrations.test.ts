@@ -34,7 +34,7 @@ describe("drainNarrations — input-type protocol", () => {
       { type: "next" },
       { type: "next" },
     ]);
-    expect(outputs).toEqual([
+    expect(outputs.map((o) => ({ type: o.type, text: (o as { text: string }).text }))).toEqual([
       { type: "narration", text: "first" },
       { type: "narration", text: "second" },
     ]);
@@ -47,7 +47,9 @@ describe("drainNarrations — input-type protocol", () => {
     const { outputs } = await drive(drainNarrations(ctx), [
       { type: "quit" },
     ]);
-    expect(outputs).toEqual([{ type: "narration", text: "first" }]);
+    expect(outputs.map((o) => ({ type: o.type, text: (o as { text: string }).text }))).toEqual([
+      { type: "narration", text: "first" },
+    ]);
     // Narration NOT consumed — caller will see it again next time
     expect(ctx.state.runtime.pendingNarrations).toEqual(["first", "second"]);
   });
@@ -64,7 +66,7 @@ describe("drainNarrations — input-type protocol", () => {
       { type: "doActivity", id: "attack" },
       { type: "next" },
     ]);
-    expect(outputs).toEqual([
+    expect(outputs.map((o) => ({ type: o.type, text: (o as { text: string }).text }))).toEqual([
       { type: "narration", text: "only" },
       { type: "narration", text: "only" },
       { type: "narration", text: "only" },

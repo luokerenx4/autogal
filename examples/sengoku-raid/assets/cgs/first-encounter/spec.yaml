@@ -1,0 +1,22 @@
+kind: cg
+description: |
+  巻物が膝の前に置かれた瞬間のCG。任地の地図と、最初の一枚
+  が記された札——黒沼地、江戸の南三里。札の表に朱で「初」
+  の一字。主人公の手が札に伸びる、刀の柄頭が画面の右下に。
+prompt: |
+  Cinematic close-up CG. A scroll has just been unrolled on a tatami
+  floor; a paper札 (wooden tag / card) lies beside it inscribed
+  with the kanji 初 in vermilion ink. The map of provinces beneath
+  shows a route to 黒沼地, south of Edo. The protagonist's right
+  hand reaches for the tag from frame-left; the pommel of his
+  katana intrudes into the lower-right of the composition.
+  Candlelight from above, deep shadows.
+placeholder: "[CG] 巻物が解かれ、最初の任地'黒沼地'の札が露わになる瞬間"
+refs:
+  characters: [player]
+  location: edo-castle
+  time: 黄昏
+size_hint:
+  tui: { cols: 80, rows: 30 }
+  web: { aspect: "16:9" }
+tags: [chapter-1, key-moment]

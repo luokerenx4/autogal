@@ -24,7 +24,7 @@ interface PresetScaffold {
 
 const README = (gameLine: string): string => `# 我的 autogal 游戏
 
-一个用 [autogal](https://github.com/luokerenx4/autogal) 引擎做的 GalGame。
+一个用 [autogal](https://github.com/luokerenx4/autogal) —— headless RPG Maker —— 做的游戏。引擎只管通用的资产 + state machine + lifecycle hook；游戏特有的玩法逻辑你自己写 \`modules/*.ts\`（或 eject 后改 \`preset/run.ts\`）。纯叙事 GalGame 只用 markdown 也能跑。
 ${gameLine}
 
 ## 玩
@@ -36,12 +36,15 @@ autogal autoplay . --persona greedy -v  # AI 玩
 
 ## 写
 
-游戏内容都是 markdown / yaml + 可选的 ts module：
+游戏内容是 markdown / yaml；玩法逻辑是可选的 ts module：
 
 - \`game.yaml\` — 标题、preset、可选 modules / training 配置
 - \`characters/\` — 角色定义
 - \`scripts/\` — 台本
-- \`actions/\` — training 模式才用，hub 上的动作
+- \`actions/\` — hub 上的动作（training 模式或自定义 module 用）
+- \`items/\` \`enemies/\` \`weapons/\` \`skills/\` — 可选的引擎资产
+- \`modules/\` — 可选的 ts module，写复杂玩法（action handler / trigger / lifecycle hook）
+- \`preset/\` — 可选，\`autogal init --eject\` 后落地的主循环
 - \`tests/\` — 回归测试
 
 ## 测试

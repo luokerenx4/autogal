@@ -5,17 +5,29 @@ description: Author content for an autogal GalGame — write or extend scripts (
 
 # autogal-author
 
-You're writing content for an autogal game. You don't write engine code — you only edit markdown and YAML files inside the game directory.
+You're authoring a game on top of **autogal — a headless RPG Maker**. The engine in `packages/engine` owns the universal pieces: typed resources (characters / items / enemies / weapons / skills / scripts / actions), a Condition DSL, 15 lifecycle hooks, reactive triggers, and one write path (`mutateState`). **Everything game-specific is yours to write.** That means:
+
+- Pure VN-shaped games: write only markdown + yaml. The engine's bundled `vn` and `training` presets cover the main loop.
+- Anything more interesting (custom combat, hub mode switches, raid loops, reactive milestones, state machines): drop into `modules/*.ts`. Action handlers, triggers, hook implementations, and a private state namespace are all yours.
+- Want to change the main loop itself (daybreak narrations, custom mode routing, novel hub patterns)? `autogal init --eject` copies the preset's `run.ts` into the game folder; you own it from there.
+
+What you **don't** touch is the engine itself — `packages/engine`, `packages/parser`, `packages/cli` are off-limits from inside a game folder. See `examples/sengoku-raid/modules/raid.ts` for the canonical shape of a "the game's logic lives here" module: ~20 action handlers, 13/15 hooks, composite triggers, its own state namespace.
 
 ## Where you are
 
-You should be in a folder that has:
-- `game.yaml` — manifest
+You should be in a folder that has at minimum:
+- `game.yaml` — manifest (title, preset, modules list, optional training config)
 - `characters/` — one .md file per character
 - `scripts/` — one .md file per 台本 (story segment)
-- `tests/` (optional) — fixture-based regression tests
 
-If any of those is missing, the user is starting from scratch — suggest `autogal init` to scaffold a template.
+And optionally:
+- `items/` `enemies/` `weapons/` `skills/` — engine-typed resources (one .md per id)
+- `actions/` — yaml-defined hub activities (one .yaml per id)
+- `modules/` — `*.ts` modules implementing custom mechanics
+- `preset/` — ejected main-loop source (`run.ts` + supporting files)
+- `tests/` — fixture-based regression tests
+
+If `game.yaml` / `characters/` / `scripts/` is missing entirely, the user is starting from scratch — suggest `autogal init` to scaffold a template.
 
 ## The script (.md) format
 
@@ -357,6 +369,52 @@ requires:
 under `skill.custom`. Combat / spirit modules read game-specific tags
 (school, element, passive marker) via `skill.custom.<key>`.
 
+## Action file format — `actions/*.yaml`
+
+Actions are hub-bound activities — anything that's not a script the player can pick when the engine yields a hub menu. Three flavors:
+
+**Engine-bundled `kind`** — the engine ships handlers for these:
+
+```yaml
+# actions/use_talisman.yaml
+id: use_talisman
+title: 撕一张镇魂札
+kind: useItem
+itemId: talisman                              # required for useItem
+requires:
+  inventory: { itemId: talisman, min: 1 }
+```
+
+`kind: useSkill` works the same with `skillId`. `kind: combat` declares an `enemyId` but **does not** dispatch on its own — a combat module has to register a handler for `kind: combat` (or for a more specific kind like `kind: raid`) and consume the action.
+
+**Effects-only action** — no `kind`, just `effects` + (optionally) `narrations`. The engine's bundled dispatcher applies the delta:
+
+```yaml
+# actions/study.yaml
+id: study
+title: 复习古文
+effects:
+  stats: { intellect: 1, mental: -2 }
+narrations:
+  - 灯下读到深夜。
+requires:
+  slot: { eq: 2 }                             # only at night, training mode
+```
+
+**Module-defined `kind`** — anything else. The action's `kind` is the dispatch key into your module's `actionHandlers`:
+
+```yaml
+# actions/depart.yaml
+id: depart_kuro_swamp
+title: 出征 · 黒沼地
+kind: depart                                  # raid module registers this
+mapId: kuro_swamp                             # arbitrary fields — module reads them
+requires:
+  stat: { name: hp, min: 1 }
+```
+
+All actions share a frontmatter envelope: `id` (required, unique), `title` (display), `requires` (Condition DSL — same grammar as scripts), `effects` (StateDelta, optional), `narrations` (string[], optional). Any other field is passed through to the dispatcher / handler verbatim.
+
 ## Script ID conventions (suggested, not enforced)
 
 Numeric prefix groups related scripts:
@@ -391,6 +449,31 @@ assertions:
 
 After writing or changing scripts, run `autogal test .` to check fixtures still pass.
 
+## When you need custom mechanics — `modules/*.ts`
+
+If the request fits in markdown — new scene, new branch, balance affection, swap dialogue, gate a script behind a flag, add an item or skill — stay in markdown.
+
+If the request needs **new behavior** the engine doesn't already do — custom combat math, hub mode switches, a raid loop, reactive milestones, hidden state, per-character passives, "when X reaches Y do Z" without polling — write a module under `modules/<name>.ts`. The engine exposes the surface for exactly this; that's what "headless RPG Maker" means.
+
+A module default-exports a `Module` with whichever of these slots are relevant:
+
+- `id` / `version` — required.
+- `actionHandlers: Record<string, ActionHandler>` — pick action `kind` strings; handle them atomically. An `ActionHandler` returns an `ActionResult` (`{ deltas?, narrations?, scriptStart? }`) — it does **not** yield. Multi-step output goes through `narrations: string[]`, drained one per step by the main loop.
+- `triggers: Trigger[]` — declarative reactive milestones (`{ when: Condition, do, once? }`). Rising-edge: fires when `when` transitions false→true. Cheap, scales to many.
+- 15 lifecycle hooks — `onSessionStart`, `onScriptStart`, `onScriptComplete`, `onBeatEnter`, `onChoicePresented`, `onChoiceSelected`, `onActionDispatch`, `onActionComplete`, `onStateMutated`, `onHubBuild`, `onTriggerFire`, `onEndConditionFire`, `onError`, `onSave`, `onLoad`. Three compose strategies depending on the hook: notify-all (every module observes), first-wins (`onHubBuild`, `onBeatEnter`, `onChoicePresented` — first non-void wins), veto (`onActionDispatch` — return `"cancel"` to short-circuit).
+- Private state namespace at `state[module.id]` — your module's data. Plain JSON only (no functions, no class instances, no `Date`s, no `Map`s). Engine state slots (`baseline.*`, `training.*`) you read freely; you write them only through primitives (`giveItem` / `mutateState` / `equipWeapon` / `learnSkill` / …).
+
+The canonical reference is `examples/sengoku-raid/modules/raid.ts`: ~20 action handlers, 13/15 hooks exercised, composite triggers with `once: true`, its own state namespace (`state["sengoku-raid"]`), no engine modifications. Read it before writing your own module — it's the template.
+
+After the module is written, declare it in `game.yaml`:
+
+```yaml
+modules:
+  - ./modules/raid.ts
+```
+
+For the special case of customizing the **main loop itself** (e.g. add a daybreak narration at the start of each new day, route activities across multiple modes), eject the preset: `autogal init <dir> --preset training --eject`. That copies `run.ts` + supporting files into `<dir>/preset/` and rewrites imports to `@autogal/engine`'s public surface. After ejection, you own the loop; engine updates don't flow in automatically.
+
 ## How to make changes
 
 1. **Understand the existing flow first.** Read `game.yaml`, all `characters/*.md`, all `scripts/*.md`. Note which scripts gate which (via `requires`). Build a mental map of the routes and endings.
@@ -399,12 +482,14 @@ After writing or changing scripts, run `autogal test .` to check fixtures still 
 4. **Test.** Run `autogal autoplay . --persona greedy` and `--persona charmer` and `--persona rude`. Each should still reach a defined ending. Then `autogal test .` to verify fixtures.
 5. **If a fixture is now wrong** (the design changed legitimately), update the fixture rather than the design — and tell the user what changed.
 
-## When NOT to touch
+## Where to make changes
 
-- Don't edit `engine/`, `parser/`, `cli/` source — that's engine, not content.
-- Don't touch `.autogal/sessions/` — those are player saves.
-- Don't change a character's `id` once scripts reference it. Add a new character if you need a new name.
-- Don't introduce a new beat type or condition operator the engine doesn't already support. (See the lists above.)
+- **DO** edit `scripts/`, `characters/`, `items/`, `enemies/`, `weapons/`, `skills/`, `actions/`, `tests/`, `game.yaml` — that's content.
+- **DO** edit `modules/*.ts` (and `preset/*.ts`, if ejected) when the game needs mechanics the engine doesn't already provide. New action `kind`s, new triggers, new private state, custom hub builds — they belong in a module, not in engine.
+- **DON'T** edit `packages/engine`, `packages/parser`, `packages/cli` source — that's the engine itself, off-limits from inside a game folder.
+- **DON'T** touch `.autogal/sessions/` — those are the player's saves.
+- **DON'T** change a character's `id` once scripts reference it. Add a new character if you need a new name.
+- **DON'T** invent new engine-level Beat types, `Condition` operators, `StateDelta` slots, `Output` / `Input` variants, or `Module` hooks — those need engine PRs. You CAN add new action `kind`s, new triggers, and new module-private state freely inside your own `modules/*.ts`.
 
 ## Stylistic guidance
 

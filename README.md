@@ -1,8 +1,10 @@
 # autogal
 
-A shell-native GalGame engine.
+A headless RPG Maker — an AI-first coding harness for GalGame-shaped games.
 
-A game is a folder of markdown files. You play it in your terminal — from a main menu, with save slots and an in-game pause menu. An AI can read the same game and play through it from the shell, by reading stdout and writing stdin, with no SDK required.
+The engine owns the universal pieces (characters, items, enemies, weapons, skills, scripts, actions, a Condition DSL, 15 lifecycle hooks, reactive triggers, one write path). Everything game-specific — the combat math, the hub layout, the raid loop, the ending semantics — is yours to write as `modules/*.ts` and, if you want, an ejected `preset/run.ts`. Pure visual novels can stay in markdown; anything more interesting drops into TypeScript without touching the engine.
+
+A game is a folder. You play it in your terminal — from a main menu, with save slots and an in-game pause menu. An AI can read the same folder and play through it from the shell, by reading stdout and writing stdin, with no SDK required. The same AI can also extend the game: write new scripts, design new mechanics, ship new modules.
 
 ```bash
 bun install
@@ -70,15 +72,18 @@ path, and `bun run test:fixtures` runs them as engine regression coverage.
 
 ## Three game modes
 
+The same harness underneath, three preset loop shapes on top. Pick whichever fits the game; drop into a module (or eject the preset) when you want a fourth.
+
 **Pure VN**: scripts only. Between scripts, the engine yields a
 `scriptComplete` picker. Affection + flags + branching. Classic visual novel.
 No module required.
 
-**Training mode**: add a `training:` block to `game.yaml` and the hub becomes
-era-style. Day/time slots, stats with caps, an `actions/` folder of daily
-activities, optional combat mini-loop, end conditions that trigger ending
-scripts. Story scripts coexist with daily actions as activities in the hub.
-The `examples/eject-test/` fixture is the minimal reference for this mode.
+**Training mode**: add a `training:` block to `game.yaml` and the hub becomes a
+calendar-driven activity menu. Day/time slots, stats with caps, an `actions/`
+folder of daily activities, optional combat mini-loop, end conditions that
+trigger ending scripts. Story scripts coexist with daily actions as activities
+in the hub. The `examples/eject-test/` fixture is the minimal reference for
+this mode.
 
 **Extraction-shooter** (like `sengoku-raid`): no `training:` block — instead, a
 game module owns a `mode: "hub" | "raid"` flag and provides mode-appropriate hub
@@ -97,7 +102,7 @@ See `examples/sengoku-raid/README.md` for the flagship's full design.
 
 ```
 樱花季 / Cherry Blossom Season
-autogal · shell-native GalGame
+autogal · headless RPG Maker
 
 ▸ 新游戏
   继续: play-20260521-143012    进行中 · 003_invitation · 2 完成

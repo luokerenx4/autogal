@@ -62,7 +62,7 @@ export function HubScreen({ game, gameDir, onAction }: HubScreenProps) {
   const header = (
     <Box flexDirection="column" paddingX={2} paddingY={1}>
       <Text bold>{game.title}</Text>
-      <Text dimColor>autogal · shell-native GalGame</Text>
+      <Text dimColor>autogal · headless RPG Maker</Text>
     </Box>
   );
   const footer = (

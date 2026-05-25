@@ -4,7 +4,7 @@ This file is for AI co-authors (Claude Code, Cursor, …) picking up this codeba
 
 ## What this project is
 
-A shell-native, headless-RPGMaker-shaped GalGame engine. A game is a folder. The engine runs in a terminal via ink; the same engine drives a web frontend and a JSON-in/JSON-out test harness.
+A headless RPG Maker — an AI-first coding harness for GalGame-shaped games. A game is a folder. The engine runs in a terminal via ink; the same engine drives a web frontend and a JSON-in/JSON-out test harness. The engine owns universal pieces (typed resources, Condition DSL, 15 lifecycle hooks, reactive triggers, one write path); each game owns its mechanics via `modules/*.ts` and, optionally, an ejected `preset/run.ts`.
 
 Three packages, never cross-import internals:
 

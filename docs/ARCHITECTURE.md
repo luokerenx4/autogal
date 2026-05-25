@@ -239,7 +239,7 @@ Saves are a single JSON file. AI playtester branching = snapshot + replay from a
 Two bundled presets:
 
 - **vn** (`packages/engine/src/presets/vn/`) — linear visual novel: walk scripts, accept inputs, end.
-- **training** (`packages/engine/src/presets/training/`) — calendar + day/slot + stats + hub + actions + scripts + end conditions. Used by `spectral-demo`.
+- **training** (`packages/engine/src/presets/training/`) — calendar + day/slot + stats + hub + actions + scripts + end conditions. Minimal reference: `examples/eject-test`.
 
 A game picks its preset in `game.yaml`:
 
@@ -253,7 +253,7 @@ preset: ./preset/run.ts     # ejected: ship your own run.ts
 
 `autogal init --preset training --eject` copies the bundled training preset (`run.ts`, `module.ts`, `hub.ts`, `sleepHandler.ts`, `index.ts`) into the game's `preset/` directory and rewrites imports to depend only on `@autogal/engine`'s public surface. After ejection, authors can edit the loop without touching engine source.
 
-`spectral-demo` ships ejected — its `preset/run.ts` adds a daybreak narration at the start of each new day's morning slot. Pure cosmetic; demonstrates the surface is real.
+`examples/eject-test` ships ejected — its `preset/run.ts` adds a daybreak narration at the start of each new day's morning slot. Pure cosmetic; demonstrates the surface is real.
 
 ## Game folder layout
 

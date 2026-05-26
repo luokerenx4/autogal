@@ -343,6 +343,57 @@ code, pre, .mono {
   font-size: 14px;
 }
 
+.edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.edit-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+}
+.edit-field > span {
+  color: var(--text-dim);
+  font-family: ui-monospace, monospace;
+}
+.edit-field input[type="text"],
+.edit-field input[type="number"],
+.edit-field textarea,
+.edit-textarea-full {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 6px 8px;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.4;
+  resize: vertical;
+}
+.edit-field textarea,
+.edit-textarea-full {
+  font-family: ui-monospace, monospace;
+  width: 100%;
+}
+.edit-textarea-full.mono {
+  font-family: ui-monospace, monospace;
+}
+.edit-field input:focus,
+.edit-field textarea:focus,
+.edit-textarea-full:focus {
+  outline: none;
+  border-color: var(--accent-dim);
+}
+.edit-field-row {
+  display: flex;
+  gap: 12px;
+}
+.edit-field-row .edit-field {
+  flex: 1;
+}
+
 .render-opts {
   margin-bottom: 12px;
   background: var(--panel-2);

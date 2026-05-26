@@ -10,6 +10,14 @@ export interface GameSummary {
 
 export type AssetKind = "portrait" | "bg" | "cg";
 
+export interface TuiRenderPrefs {
+  symbols?: string;
+  dither?: string;
+  colors?: string;
+  cols?: number;
+  rows?: number;
+}
+
 export interface AssetRow {
   path: string;
   kind: AssetKind;
@@ -27,12 +35,27 @@ export interface AssetRow {
     web?: { aspect: string };
   };
   tags?: string[];
+  tuiRender?: TuiRenderPrefs;
   renderings: {
     source: boolean;
     tuiTxt: boolean;
     tuiAns: boolean;
     web: boolean;
   };
+}
+
+// Subset of AssetRow the studio is allowed to mutate via PATCH.
+// Sent as the body of patchSpec; server rejects any other keys
+// (kind / path / renderings) with a 400.
+export interface PatchableSpecFields {
+  description?: string;
+  prompt?: string;
+  placeholder?: string;
+  styleRef?: string | null;
+  refs?: AssetRow["refs"];
+  sizeHint?: AssetRow["sizeHint"];
+  tags?: string[];
+  tuiRender?: TuiRenderPrefs;
 }
 
 export async function fetchGame(): Promise<GameSummary> {
@@ -133,6 +156,33 @@ export interface RenderOptions {
   rows?: number;
   dither?: DitherMode;
   colors?: ColorMode;
+}
+
+// Edit one or more mutable spec.yaml fields. Server rejects
+// non-editable keys (kind/path/custom/renderings) with 400 and
+// whitelist-validates symbol/dither/color enums on tuiRender. The
+// returned AssetRow reflects the post-write state, so the caller
+// can update local state without a separate fetch.
+export async function patchSpec(
+  assetPath: string,
+  fields: PatchableSpecFields,
+): Promise<AssetRow> {
+  const r = await fetch(`/api/assets/${assetPath}/spec`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(fields),
+  });
+  if (!r.ok) {
+    const body = await r.json().catch(() => ({ error: r.statusText }));
+    const e = new Error(
+      typeof body === "object" && body && "error" in body
+        ? String((body as { error: string }).error)
+        : r.statusText,
+    );
+    (e as Error & { status?: number }).status = r.status;
+    throw e;
+  }
+  return r.json();
 }
 
 // Invoke server-side chafa to produce tui.txt from source.png.

@@ -14,10 +14,12 @@ import {
   fetchHealth,
   fetchTuiAns,
   fetchTuiTxt,
+  patchSpec,
   renderTui,
   sourceImageUrl,
   uploadSource,
 } from "../api";
+import type { PatchableSpecFields } from "../api";
 
 // Server's whitelist (mirrored here for the dropdown). Each entry
 // carries a one-line `hint` shown next to the dropdown when that
@@ -158,14 +160,34 @@ export function AssetDetail() {
 
   // Render options form state. Defaults are "use chafa's own / spec's
   // hint" — only fields the user explicitly touched go into the POST
-  // body. Persisted in component state only; refreshing the page
-  // resets to defaults (intentional for v2-experiment-mode use).
+  // body. Hydrated from spec.tuiRender on asset load (v3): a winning
+  // combo persisted by the auto-save pathway pre-fills the form so
+  // re-rendering preserves the author's choice.
   const [symbols, setSymbols] = useState<SymbolSet | "">("");
   const [dither, setDither] = useState<DitherMode | "">("");
   const [colors, setColors] = useState<ColorMode | "">("");
   const [overrideSize, setOverrideSize] = useState(false);
   const [cols, setCols] = useState<string>("");
   const [rows, setRows] = useState<string>("");
+
+  // Edit-mode state for spec fields. `editing` toggles the read-only
+  // <dl> into a form; `editBuf` carries the dirty values until save.
+  // On save, we send only the keys that differ from `asset` so the
+  // YAML round-trip stays minimal (untouched keys keep their author-
+  // formatted layout). On discard, we drop the buffer.
+  const [editing, setEditing] = useState(false);
+  const [editBuf, setEditBuf] = useState<{
+    description: string;
+    prompt: string;
+    placeholder: string;
+    tagsCsv: string;
+    sizeTuiCols: string;
+    sizeTuiRows: string;
+    sizeWebAspect: string;
+    refsCharactersCsv: string;
+    refsEmotion: string;
+  } | null>(null);
+  const [saving, setSaving] = useState(false);
 
   // After an upload or render, the asset's renderings flip on the
   // server — refetch + re-pull the preview so the UI mirrors disk.
@@ -177,9 +199,27 @@ export function AssetDetail() {
     setAsset(null);
     setErr(null);
     setTuiPreview(null);
+    setEditing(false);
     fetchAsset(assetPath)
       .then((a) => {
         setAsset(a);
+        // Hydrate render-options form from persisted prefs. Setting
+        // each control from spec.tuiRender means a freshly opened
+        // page reflects the author's last successful render, not the
+        // generic "(default)" placeholders.
+        if (a.tuiRender) {
+          if (a.tuiRender.symbols) setSymbols(a.tuiRender.symbols as SymbolSet);
+          if (a.tuiRender.dither) setDither(a.tuiRender.dither as DitherMode);
+          if (a.tuiRender.colors) setColors(a.tuiRender.colors as ColorMode);
+          if (
+            typeof a.tuiRender.cols === "number" &&
+            typeof a.tuiRender.rows === "number"
+          ) {
+            setOverrideSize(true);
+            setCols(String(a.tuiRender.cols));
+            setRows(String(a.tuiRender.rows));
+          }
+        }
         // Match the TUI's priority: .ans wins over .txt. The preview
         // is a nice-to-have; fetch failures just leave the section
         // empty instead of erroring the whole page.
@@ -244,6 +284,126 @@ export function AssetDetail() {
       showToast(setToast, "path copied");
     } catch {
       showToast(setToast, "copy failed");
+    }
+  };
+
+  // Begin edit mode: snapshot the asset's current values into the
+  // edit buffer. Tags + refs.characters are flattened to comma-
+  // separated strings for the textinput; on save we split them back.
+  // The other fields are direct string copies.
+  const startEditing = () => {
+    if (!asset) return;
+    setEditBuf({
+      description: asset.description,
+      prompt: asset.prompt,
+      placeholder: asset.placeholder,
+      tagsCsv: (asset.tags ?? []).join(", "),
+      sizeTuiCols: asset.sizeHint?.tui?.cols
+        ? String(asset.sizeHint.tui.cols)
+        : "",
+      sizeTuiRows: asset.sizeHint?.tui?.rows
+        ? String(asset.sizeHint.tui.rows)
+        : "",
+      sizeWebAspect: asset.sizeHint?.web?.aspect ?? "",
+      refsCharactersCsv: (asset.refs?.characters ?? []).join(", "),
+      refsEmotion:
+        typeof asset.refs?.emotion === "string" ? asset.refs.emotion : "",
+    });
+    setEditing(true);
+  };
+
+  const cancelEditing = () => {
+    setEditing(false);
+    setEditBuf(null);
+  };
+
+  // Build a PatchableSpecFields payload from the diff between asset
+  // and editBuf. Only changed keys are sent — the YAML Document API
+  // on the server then only touches those lines, preserving any
+  // surrounding comments and key ordering.
+  const handleSave = async () => {
+    if (!asset || !editBuf) return;
+    const patch: PatchableSpecFields = {};
+
+    if (editBuf.description !== asset.description) {
+      patch.description = editBuf.description;
+    }
+    if (editBuf.prompt !== asset.prompt) {
+      patch.prompt = editBuf.prompt;
+    }
+    if (editBuf.placeholder !== asset.placeholder) {
+      patch.placeholder = editBuf.placeholder;
+    }
+
+    const newTags = editBuf.tagsCsv
+      .split(",")
+      .map((t) => t.trim())
+      .filter(Boolean);
+    if (
+      JSON.stringify(newTags) !== JSON.stringify(asset.tags ?? [])
+    ) {
+      patch.tags = newTags;
+    }
+
+    // sizeHint: collect a new full object iff anything inside changed.
+    const newSizeHint: AssetRow["sizeHint"] = {};
+    if (editBuf.sizeTuiCols !== "" || editBuf.sizeTuiRows !== "") {
+      const c = parseInt(editBuf.sizeTuiCols, 10);
+      const r = parseInt(editBuf.sizeTuiRows, 10);
+      if (Number.isFinite(c) && c > 0 && Number.isFinite(r) && r > 0) {
+        newSizeHint.tui = { cols: c, rows: r };
+      }
+    }
+    if (editBuf.sizeWebAspect !== "") {
+      newSizeHint.web = { aspect: editBuf.sizeWebAspect };
+    }
+    if (JSON.stringify(newSizeHint) !== JSON.stringify(asset.sizeHint ?? {})) {
+      patch.sizeHint = newSizeHint;
+    }
+
+    // refs: only the structured fields (characters, emotion). Other
+    // free-form ref keys would round-trip through the server but the
+    // form doesn't expose them — full-edit lives in spec.yaml direct.
+    const newCharacters = editBuf.refsCharactersCsv
+      .split(",")
+      .map((t) => t.trim())
+      .filter(Boolean);
+    const oldCharacters = asset.refs?.characters ?? [];
+    const oldEmotion =
+      typeof asset.refs?.emotion === "string" ? asset.refs.emotion : "";
+    if (
+      JSON.stringify(newCharacters) !== JSON.stringify(oldCharacters) ||
+      editBuf.refsEmotion !== oldEmotion
+    ) {
+      // Preserve other ref keys verbatim; only mutate characters /
+      // emotion. The server replaces sub-objects whole when we set
+      // refs, so we need to carry the unchanged keys through.
+      const merged: Record<string, unknown> = { ...(asset.refs ?? {}) };
+      if (newCharacters.length > 0) merged.characters = newCharacters;
+      else delete merged.characters;
+      if (editBuf.refsEmotion !== "") merged.emotion = editBuf.refsEmotion;
+      else delete merged.emotion;
+      patch.refs = merged as AssetRow["refs"];
+    }
+
+    if (Object.keys(patch).length === 0) {
+      showToast(setToast, "no changes");
+      setEditing(false);
+      setEditBuf(null);
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const updated = await patchSpec(assetPath, patch);
+      setAsset(updated);
+      setEditing(false);
+      setEditBuf(null);
+      showToast(setToast, "spec saved");
+    } catch (e) {
+      showToast(setToast, (e as Error).message);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -335,42 +495,141 @@ export function AssetDetail() {
       <div className="detail-layout">
         <div>
           <div className="detail-section">
-            <h2>spec</h2>
-            <dl className="kv">
-              <dt>kind</dt>
-              <dd>{asset.kind}</dd>
-              <dt>placeholder</dt>
-              <dd>{asset.placeholder}</dd>
-              {asset.styleRef && (
-                <>
-                  <dt>style_ref</dt>
-                  <dd className="mono">{asset.styleRef}</dd>
-                </>
+            <h2 style={{ display: "flex", justifyContent: "space-between" }}>
+              <span>spec</span>
+              {editing ? (
+                <span className="row">
+                  <button
+                    className="btn"
+                    onClick={cancelEditing}
+                    disabled={saving}
+                  >
+                    discard
+                  </button>
+                  <button
+                    className="btn primary"
+                    onClick={handleSave}
+                    disabled={saving}
+                  >
+                    {saving ? "saving…" : "save"}
+                  </button>
+                </span>
+              ) : (
+                <button className="btn" onClick={startEditing}>
+                  edit
+                </button>
               )}
-              {asset.sizeHint?.tui && (
-                <>
-                  <dt>size_hint.tui</dt>
-                  <dd className="mono">
-                    {asset.sizeHint.tui.cols} × {asset.sizeHint.tui.rows}
-                  </dd>
-                </>
-              )}
-              {asset.sizeHint?.web && (
-                <>
-                  <dt>size_hint.web</dt>
-                  <dd className="mono">aspect {asset.sizeHint.web.aspect}</dd>
-                </>
-              )}
-              {asset.tags && asset.tags.length > 0 && (
-                <>
-                  <dt>tags</dt>
-                  <dd>{asset.tags.join(", ")}</dd>
-                </>
-              )}
-            </dl>
+            </h2>
+            {!editing && (
+              <dl className="kv">
+                <dt>kind</dt>
+                <dd>{asset.kind}</dd>
+                <dt>placeholder</dt>
+                <dd>{asset.placeholder}</dd>
+                {asset.styleRef && (
+                  <>
+                    <dt>style_ref</dt>
+                    <dd className="mono">{asset.styleRef}</dd>
+                  </>
+                )}
+                {asset.sizeHint?.tui && (
+                  <>
+                    <dt>size_hint.tui</dt>
+                    <dd className="mono">
+                      {asset.sizeHint.tui.cols} × {asset.sizeHint.tui.rows}
+                    </dd>
+                  </>
+                )}
+                {asset.sizeHint?.web && (
+                  <>
+                    <dt>size_hint.web</dt>
+                    <dd className="mono">aspect {asset.sizeHint.web.aspect}</dd>
+                  </>
+                )}
+                {asset.tags && asset.tags.length > 0 && (
+                  <>
+                    <dt>tags</dt>
+                    <dd>{asset.tags.join(", ")}</dd>
+                  </>
+                )}
+              </dl>
+            )}
+            {editing && editBuf && (
+              <div className="edit-form">
+                <div className="muted" style={{ fontSize: 11, marginBottom: 6 }}>
+                  kind = <code>{asset.kind}</code> (not editable). path ={" "}
+                  <code>{asset.path}</code>.
+                </div>
+                <label className="edit-field">
+                  <span>placeholder</span>
+                  <textarea
+                    rows={2}
+                    value={editBuf.placeholder}
+                    onChange={(e) =>
+                      setEditBuf({ ...editBuf, placeholder: e.target.value })
+                    }
+                  />
+                </label>
+                <label className="edit-field">
+                  <span>tags (csv)</span>
+                  <input
+                    type="text"
+                    value={editBuf.tagsCsv}
+                    placeholder="chapter-1, main-cast"
+                    onChange={(e) =>
+                      setEditBuf({ ...editBuf, tagsCsv: e.target.value })
+                    }
+                  />
+                </label>
+                <div className="edit-field-row">
+                  <label className="edit-field">
+                    <span>tui cols</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={500}
+                      value={editBuf.sizeTuiCols}
+                      onChange={(e) =>
+                        setEditBuf({ ...editBuf, sizeTuiCols: e.target.value })
+                      }
+                    />
+                  </label>
+                  <label className="edit-field">
+                    <span>tui rows</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={500}
+                      value={editBuf.sizeTuiRows}
+                      onChange={(e) =>
+                        setEditBuf({ ...editBuf, sizeTuiRows: e.target.value })
+                      }
+                    />
+                  </label>
+                  <label className="edit-field">
+                    <span>web aspect</span>
+                    <input
+                      type="text"
+                      value={editBuf.sizeWebAspect}
+                      placeholder="3:4"
+                      onChange={(e) =>
+                        setEditBuf({
+                          ...editBuf,
+                          sizeWebAspect: e.target.value,
+                        })
+                      }
+                    />
+                  </label>
+                </div>
+              </div>
+            )}
           </div>
 
-          {asset.refs && Object.keys(asset.refs).length > 0 && (
+          {/* refs section: read-only when not editing; the structured
+              characters/emotion fields edited inline below. Free-form
+              ref keys (location, time, ...) only round-trip through
+              the API — not exposed in the form yet. */}
+          {!editing && asset.refs && Object.keys(asset.refs).length > 0 && (
             <div className="detail-section" style={{ marginTop: 16 }}>
               <h2>refs</h2>
               <dl className="kv">
@@ -399,10 +658,61 @@ export function AssetDetail() {
               </dl>
             </div>
           )}
+          {editing && editBuf && (
+            <div className="detail-section" style={{ marginTop: 16 }}>
+              <h2>refs</h2>
+              <label className="edit-field">
+                <span>characters (csv)</span>
+                <input
+                  type="text"
+                  value={editBuf.refsCharactersCsv}
+                  placeholder="kagari, kasumi"
+                  onChange={(e) =>
+                    setEditBuf({
+                      ...editBuf,
+                      refsCharactersCsv: e.target.value,
+                    })
+                  }
+                />
+              </label>
+              <label className="edit-field">
+                <span>emotion</span>
+                <input
+                  type="text"
+                  value={editBuf.refsEmotion}
+                  placeholder="smile"
+                  onChange={(e) =>
+                    setEditBuf({ ...editBuf, refsEmotion: e.target.value })
+                  }
+                />
+              </label>
+              {asset.refs &&
+                Object.keys(asset.refs).some(
+                  (k) => k !== "characters" && k !== "emotion",
+                ) && (
+                  <div className="muted" style={{ fontSize: 11, marginTop: 6 }}>
+                    other refs (location/time/etc.) preserved through save;
+                    edit them in spec.yaml directly.
+                  </div>
+                )}
+            </div>
+          )}
 
           <div className="detail-section" style={{ marginTop: 16 }}>
             <h2>description</h2>
-            <div style={{ whiteSpace: "pre-wrap" }}>{asset.description}</div>
+            {!editing && (
+              <div style={{ whiteSpace: "pre-wrap" }}>{asset.description}</div>
+            )}
+            {editing && editBuf && (
+              <textarea
+                className="edit-textarea-full"
+                rows={6}
+                value={editBuf.description}
+                onChange={(e) =>
+                  setEditBuf({ ...editBuf, description: e.target.value })
+                }
+              />
+            )}
           </div>
 
           <div className="detail-section" style={{ marginTop: 16 }}>
@@ -428,11 +738,23 @@ export function AssetDetail() {
           <div className="detail-section">
             <h2 style={{ display: "flex", justifyContent: "space-between" }}>
               <span>prompt</span>
-              <button className="btn primary" onClick={copyPrompt}>
-                copy
-              </button>
+              {!editing && (
+                <button className="btn primary" onClick={copyPrompt}>
+                  copy
+                </button>
+              )}
             </h2>
-            <div className="prompt-block">{asset.prompt}</div>
+            {!editing && <div className="prompt-block">{asset.prompt}</div>}
+            {editing && editBuf && (
+              <textarea
+                className="edit-textarea-full mono"
+                rows={10}
+                value={editBuf.prompt}
+                onChange={(e) =>
+                  setEditBuf({ ...editBuf, prompt: e.target.value })
+                }
+              />
+            )}
           </div>
 
           <div className="detail-section" style={{ marginTop: 16 }}>

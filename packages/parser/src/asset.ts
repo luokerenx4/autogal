@@ -4,8 +4,29 @@ import type {
   AssetRefs,
   AssetSize,
   AssetSpec,
+  TuiRenderPrefs,
 } from "@autogal/engine";
 import { extractCustom } from "./frontmatter";
+
+// Whitelists for tui_render. Mirrored from packages/studio/src/server/
+// render.ts — the engine layer can't import from studio (one-way
+// dependency: studio depends on engine, not the reverse). Bumping
+// either side requires updating both; the symmetry is documented in
+// each file.
+const TUI_RENDER_SYMBOLS = [
+  "block",
+  "half",
+  "vhalf",
+  "hhalf",
+  "quad",
+  "sextant",
+  "braille",
+  "octant",
+  "ascii",
+  "all",
+] as const;
+const TUI_RENDER_DITHER = ["none", "ordered", "diffusion"] as const;
+const TUI_RENDER_COLORS = ["none", "16", "256", "full"] as const;
 
 export class AssetParseError extends Error {
   constructor(message: string, public source?: string) {
@@ -27,6 +48,7 @@ const KNOWN_KEYS = [
   "refs",
   "size_hint",
   "tags",
+  "tui_render",
 ] as const;
 
 // Parse the contents of a single asset's spec.yaml. `relPath` is the
@@ -87,6 +109,9 @@ export function parseAssetSpec(
     spec.sizeHint = parseSizeHint(obj.size_hint, relPath);
   }
   if (obj.tags !== undefined) spec.tags = parseTags(obj.tags, relPath);
+  if (obj.tui_render !== undefined) {
+    spec.tuiRender = parseTuiRender(obj.tui_render, relPath);
+  }
 
   const custom = extractCustom(obj, KNOWN_KEYS);
   if (custom) spec.custom = custom;
@@ -181,4 +206,83 @@ function parseTags(raw: unknown, source: string): string[] {
     throw new AssetParseError("`tags` must be an array of strings", source);
   }
   return raw as string[];
+}
+
+function parseTuiRender(raw: unknown, source: string): TuiRenderPrefs {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new AssetParseError("`tui_render` must be an object", source);
+  }
+  const obj = raw as Record<string, unknown>;
+  const out: TuiRenderPrefs = {};
+
+  if (obj.symbols !== undefined) {
+    if (
+      typeof obj.symbols !== "string" ||
+      !(TUI_RENDER_SYMBOLS as readonly string[]).includes(obj.symbols)
+    ) {
+      throw new AssetParseError(
+        `\`tui_render.symbols\` must be one of: ${TUI_RENDER_SYMBOLS.join(", ")}`,
+        source,
+      );
+    }
+    out.symbols = obj.symbols;
+  }
+  if (obj.dither !== undefined) {
+    if (
+      typeof obj.dither !== "string" ||
+      !(TUI_RENDER_DITHER as readonly string[]).includes(obj.dither)
+    ) {
+      throw new AssetParseError(
+        `\`tui_render.dither\` must be one of: ${TUI_RENDER_DITHER.join(", ")}`,
+        source,
+      );
+    }
+    out.dither = obj.dither;
+  }
+  if (obj.colors !== undefined) {
+    // YAML reads `256` as a number and `'256'` as a string. Accept
+    // both — normalize to string. The whitelist matches the stringified
+    // form so author-side spec.yaml doesn't have to be quote-pedantic.
+    const colors =
+      typeof obj.colors === "number" ? String(obj.colors) : obj.colors;
+    if (
+      typeof colors !== "string" ||
+      !(TUI_RENDER_COLORS as readonly string[]).includes(colors)
+    ) {
+      throw new AssetParseError(
+        `\`tui_render.colors\` must be one of: ${TUI_RENDER_COLORS.join(", ")}`,
+        source,
+      );
+    }
+    out.colors = colors;
+  }
+  if (obj.cols !== undefined) {
+    if (
+      typeof obj.cols !== "number" ||
+      !Number.isInteger(obj.cols) ||
+      obj.cols < 1 ||
+      obj.cols > 500
+    ) {
+      throw new AssetParseError(
+        "`tui_render.cols` must be an integer 1..500",
+        source,
+      );
+    }
+    out.cols = obj.cols;
+  }
+  if (obj.rows !== undefined) {
+    if (
+      typeof obj.rows !== "number" ||
+      !Number.isInteger(obj.rows) ||
+      obj.rows < 1 ||
+      obj.rows > 500
+    ) {
+      throw new AssetParseError(
+        "`tui_render.rows` must be an integer 1..500",
+        source,
+      );
+    }
+    out.rows = obj.rows;
+  }
+  return out;
 }

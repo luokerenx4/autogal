@@ -1,9 +1,10 @@
 import { readFile, rename, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { AssetSpec } from "@autogal/engine";
+import type { AssetSpec, TuiRenderPrefs } from "@autogal/engine";
 import { loadGame } from "@autogal/cli/loader";
 import { getHealth } from "./health";
 import { parseRenderOptions, renderSourceToTuiTxt } from "./render";
+import { parsePatchBody, specYamlPath, updateSpec } from "./spec-write";
 
 interface Ctx {
   gameDir: string;
@@ -47,6 +48,12 @@ export async function handle(req: Request, ctx: Ctx): Promise<Response> {
       if (m[2] === "source") return postSource(ctx, m[1], req);
       if (m[2] === "render-tui") return postRenderTui(ctx, m[1], req);
     }
+  }
+
+  if (method === "PATCH") {
+    // /api/assets/<asset-path>/spec — edit mutable spec fields
+    const m = pathname.match(/^\/api\/assets\/(.+)\/spec$/);
+    if (m && m[1]) return patchSpec(ctx, m[1], req);
   }
 
   return new Response("not found", { status: 404 });
@@ -97,6 +104,7 @@ function projectAsset(a: AssetSpec) {
     ...(a.refs !== undefined ? { refs: a.refs } : {}),
     ...(a.sizeHint !== undefined ? { sizeHint: a.sizeHint } : {}),
     ...(a.tags !== undefined ? { tags: a.tags } : {}),
+    ...(a.tuiRender !== undefined ? { tuiRender: a.tuiRender } : {}),
     renderings: {
       source: a.renderings.source !== undefined,
       tuiTxt: a.renderings.tuiTxt !== undefined,
@@ -258,6 +266,70 @@ async function postRenderTui(
     });
   } catch (err) {
     return json({ error: `chafa failed: ${(err as Error).message}` }, 500);
+  }
+
+  // Auto-persist the options the author just used. Only fields they
+  // explicitly set go into spec.tui_render — defaults (when the user
+  // left a dropdown on "(default: X)") stay out so the YAML stays
+  // minimal. Best-effort: a write failure here doesn't fail the
+  // whole render, since the chafa output already landed on disk.
+  try {
+    const persistFields: TuiRenderPrefs = {};
+    if (opts.symbols !== undefined) persistFields.symbols = opts.symbols;
+    if (opts.dither !== undefined) persistFields.dither = opts.dither;
+    if (opts.colors !== undefined) persistFields.colors = opts.colors;
+    if (opts.cols !== undefined) persistFields.cols = opts.cols;
+    if (opts.rows !== undefined) persistFields.rows = opts.rows;
+    if (Object.keys(persistFields).length > 0) {
+      await updateSpec(specYamlPath(ctx.gameDir, assetPath), {
+        tuiRender: persistFields,
+      });
+    }
+  } catch (err) {
+    process.stderr.write(
+      `[studio] failed to persist render prefs to spec.yaml: ${(err as Error).message}\n`,
+    );
+  }
+
+  return projectedAssetResponse(ctx, assetPath);
+}
+
+// PATCH /api/assets/<asset-path>/spec
+//
+// Body: { description?, prompt?, placeholder?, styleRef?, refs?,
+//         sizeHint?, tags?, tuiRender? } — all optional. Rejects any
+// other keys (kind, path, custom, renderings) with 400. Writes via
+// the Document API to preserve hand-authored comments and key order.
+async function patchSpec(
+  ctx: Ctx,
+  assetPath: string,
+  req: Request,
+): Promise<Response> {
+  // Confirm the asset exists before touching disk — same warning-only
+  // pathway the other write endpoints use.
+  const game = await loadGame(ctx.gameDir);
+  const spec = (game.assets ?? []).find((a) => a.path === assetPath);
+  if (!spec) return json({ error: "asset not found" }, 404);
+
+  let raw: unknown;
+  try {
+    raw = await req.json();
+  } catch (err) {
+    return json({ error: `invalid JSON body: ${(err as Error).message}` }, 400);
+  }
+  const parsed = parsePatchBody(raw);
+  if ("error" in parsed) return json({ error: parsed.error }, 400);
+
+  if (Object.keys(parsed.fields).length === 0) {
+    // Nothing to do but report success with the current asset state
+    // so the client doesn't need a separate refetch.
+    return projectedAssetResponse(ctx, assetPath);
+  }
+
+  try {
+    await updateSpec(specYamlPath(ctx.gameDir, assetPath), parsed.fields);
+  } catch (err) {
+    return json({ error: `failed to write spec.yaml: ${(err as Error).message}` }, 500);
   }
 
   return projectedAssetResponse(ctx, assetPath);

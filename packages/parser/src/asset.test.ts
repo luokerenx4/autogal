@@ -200,3 +200,91 @@ describe("parseAssetSpec — error surface", () => {
     );
   });
 });
+
+describe("parseAssetSpec — tui_render", () => {
+  const base = [
+    "kind: portrait",
+    "description: x",
+    "prompt: y",
+    "placeholder: z",
+  ].join("\n");
+
+  test("full tui_render block parses into camelCase", () => {
+    const spec = parseAssetSpec(
+      `${base}\ntui_render:\n  symbols: sextant\n  dither: diffusion\n  colors: '256'\n  cols: 48\n  rows: 28\n`,
+      "assets/portraits/k",
+    );
+    expect(spec.tuiRender).toEqual({
+      symbols: "sextant",
+      dither: "diffusion",
+      colors: "256",
+      cols: 48,
+      rows: 28,
+    });
+  });
+
+  test("partial tui_render only carries set fields", () => {
+    const spec = parseAssetSpec(
+      `${base}\ntui_render:\n  symbols: braille\n`,
+      "assets/x/y",
+    );
+    expect(spec.tuiRender).toEqual({ symbols: "braille" });
+  });
+
+  test("colors accepted as unquoted integer in YAML", () => {
+    const spec = parseAssetSpec(
+      `${base}\ntui_render:\n  colors: 256\n`,
+      "assets/x/y",
+    );
+    expect(spec.tuiRender?.colors).toBe("256");
+  });
+
+  test("invalid symbols throws", () => {
+    expect(() =>
+      parseAssetSpec(
+        `${base}\ntui_render:\n  symbols: bogus\n`,
+        "x",
+      ),
+    ).toThrow(/symbols/);
+  });
+
+  test("invalid dither throws", () => {
+    expect(() =>
+      parseAssetSpec(
+        `${base}\ntui_render:\n  dither: weird\n`,
+        "x",
+      ),
+    ).toThrow(/dither/);
+  });
+
+  test("invalid colors throws", () => {
+    expect(() =>
+      parseAssetSpec(
+        `${base}\ntui_render:\n  colors: 'rainbow'\n`,
+        "x",
+      ),
+    ).toThrow(/colors/);
+  });
+
+  test("out-of-range cols throws", () => {
+    expect(() =>
+      parseAssetSpec(
+        `${base}\ntui_render:\n  cols: 9999\n`,
+        "x",
+      ),
+    ).toThrow(/cols/);
+  });
+
+  test("tui_render missing keeps tuiRender undefined", () => {
+    const spec = parseAssetSpec(base, "x");
+    expect(spec.tuiRender).toBeUndefined();
+  });
+
+  test("tui_render not stashed in custom", () => {
+    const spec = parseAssetSpec(
+      `${base}\ntui_render:\n  symbols: quad\n`,
+      "x",
+    );
+    expect(spec.custom).toBeUndefined();
+  });
+});

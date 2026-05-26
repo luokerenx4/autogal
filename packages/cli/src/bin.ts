@@ -9,6 +9,7 @@ import { autoplayCommand } from "./commands/autoplay";
 import { initCommand } from "./commands/init";
 import { screenshotCommand } from "./commands/screenshot";
 import { assetsListCommand, assetsPromptsCommand } from "./commands/assets";
+import { studioCommand } from "./commands/studio";
 
 const HELP = `autogal — a headless RPG Maker for the terminal
 
@@ -63,6 +64,13 @@ COMMANDS
       prompts with markdown-style separators; --missing filters to
       assets without any TUI rendering.
 
+  studio   <game-dir> [--api-port N] [--web-port N] [--no-open]
+      Launch the browser-based authoring workbench. Boots an API
+      server + Vite dev server, opens the browser to the asset
+      gallery. v1 is read-only: browse specs, see thumbnails, copy
+      generation prompts. Write operations (upload PNG, chafa →
+      tui.txt) land in a future iteration.
+
   screenshot <game-dir> [--keys "K1,K2,..."] [--cols N] [--rows N]
              [--wait-ms N] [--out FILE]
       Spawn the TUI inside a PTY, replay a key sequence, and dump the
@@ -110,6 +118,8 @@ async function main(): Promise<void> {
       return runScreenshot(rest);
     case "assets":
       return runAssets(rest);
+    case "studio":
+      return runStudio(rest);
     default:
       process.stderr.write(`Unknown command: ${subcommand}\n\n${HELP}`);
       process.exit(1);
@@ -331,6 +341,28 @@ async function runAssetsPrompts(rest: string[]): Promise<void> {
     ...(positionals[1] !== undefined ? { assetPath: positionals[1] } : {}),
     missing: Boolean(values.missing),
     format: fmt as "text" | "json",
+  });
+}
+
+async function runStudio(args: string[]): Promise<void> {
+  const { values, positionals } = parseArgs({
+    args,
+    options: {
+      "api-port": { type: "string", default: "4174" },
+      "web-port": { type: "string", default: "5173" },
+      "no-open": { type: "boolean", default: false },
+    },
+    allowPositionals: true,
+  });
+  const gameDir = requirePositional(
+    positionals,
+    "autogal studio <game-dir> [--api-port N] [--web-port N] [--no-open]",
+  );
+  await studioCommand({
+    gameDir,
+    apiPort: Number(values["api-port"] ?? "4174"),
+    webPort: Number(values["web-port"] ?? "5173"),
+    open: !values["no-open"],
   });
 }
 

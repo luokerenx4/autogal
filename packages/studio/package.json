@@ -1,0 +1,30 @@
+{
+  "name": "@autogal/studio",
+  "version": "0.0.0",
+  "description": "Browser-based authoring workbench for autogal — drag assets, copy prompts, manage spec.yaml visually.",
+  "type": "module",
+  "main": "src/server/index.ts",
+  "types": "src/server/index.ts",
+  "exports": {
+    ".": "./src/server/index.ts"
+  },
+  "scripts": {
+    "dev": "bun run src/server/index.ts",
+    "vite": "vite",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "@autogal/cli": "workspace:*",
+    "@autogal/engine": "workspace:*",
+    "@autogal/parser": "workspace:*",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.28.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.0",
+    "@types/react-dom": "^18.3.0",
+    "vite": "^5.4.0"
+  },
+  "license": "MIT"
+}

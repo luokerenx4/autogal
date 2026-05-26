@@ -14,7 +14,7 @@
     "test:validate-negative": "bash scripts/test-validate-negative.sh",
     "test": "bun run test:unit && bun run test:fixtures && bun run test:validate-negative",
     "autoplay": "bun packages/cli/src/bin.ts autoplay examples/sengoku-raid --persona extractor -v",
-    "typecheck": "bunx tsc -p packages/engine/tsconfig.json --noEmit && bunx tsc -p packages/parser/tsconfig.json --noEmit && bunx tsc -p packages/cli/tsconfig.json --noEmit"
+    "typecheck": "bunx tsc -p packages/engine/tsconfig.json --noEmit && bunx tsc -p packages/parser/tsconfig.json --noEmit && bunx tsc -p packages/cli/tsconfig.json --noEmit && bunx tsc -p packages/studio/tsconfig.json --noEmit"
   },
   "devDependencies": {
     "@autogal/cli": "workspace:*",

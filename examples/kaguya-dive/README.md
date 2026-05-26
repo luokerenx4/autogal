@@ -32,9 +32,9 @@ bun packages/cli/src/bin.ts play ./examples/kaguya-dive
 
 ## 演示提示
 
-- **不要用 `--persona greedy`**　hub 选项字母排序，greedy 永远选 `call_asahi`，
-  把钱攒满但不潜行 → 必 bad end。Persona 设计问题，非游戏 bug。
-- **演示用** `--persona random` 或人玩。
+- **`--persona greedy` 会偏科**　greedy 现在按 effectsHint 数值和选最高分活动，
+  这游戏里 work (funds+12) 通常分最高，跑出来是个"狂打工攒钱但不潜行"的 bad end。
+  这是 greedy 单维度优化的本质，不是游戏 bug。演示用 `--persona random` 或人玩。
 - **验证 good ending 可达**：`bun packages/cli/src/bin.ts test ./examples/kaguya-dive`
   fixture 注入 day-3 接近通关的 stats，确认 end_good 触发。
 

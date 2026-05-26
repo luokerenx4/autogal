@@ -98,13 +98,10 @@ export async function renderSourceToTui(args: RenderArgs): Promise<RenderResult>
   ) {
     chafaArgs.push("--size", `${args.sizeCols}x${args.sizeRows}`);
   }
-  // Strip cursor moves and resets — chafa sometimes emits a final
-  // ANSI reset that's harmless in a terminal but confuses Ink's
-  // diff renderer. `--polite on` keeps the output to SGR-only
-  // escapes, which is what the TUI's Stage component expects.
-  if (colors !== "none") {
-    chafaArgs.push("--polite", "on");
-  }
+  // chafa's `--format symbols` is already SGR-only by default; the
+  // earlier `--polite on` addition was speculative and turned out to
+  // be a no-op for our usage. Cleaner to trust the defaults than to
+  // carry a flag whose semantics drift between chafa versions.
   chafaArgs.push(args.sourcePath);
 
   const proc = Bun.spawn(["chafa", ...chafaArgs], {

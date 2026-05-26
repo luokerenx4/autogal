@@ -1,0 +1,10 @@
+id: study
+title: 上课 / 听讲座
+description: 工学课、神经接口讲座。稳扎稳打。
+category: study
+slot: any
+cost: 1
+effects:
+  stats: { engineering: 5, neuroscience: 2, stamina: -1 }
+narrations:
+  - 礼堂里全是 PPT 的反光。你把每个公式都抄进义体设计本第三册。

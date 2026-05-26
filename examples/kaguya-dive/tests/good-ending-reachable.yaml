@@ -1,0 +1,74 @@
+name: 注入接近通关的 stats，应触发 GOOD ending
+description: |
+  跳过 12 回合的资源积累 + 所有触发剧本，直接把 stats 注入到 good ending
+  阈值之上，推一次 hub 让 end_condition 命中 end_good。
+  firedTriggers 把 6 个剧情触发器都标记为已触发，避免插队。
+state:
+  baseline:
+    scripts:
+      001_intro:           { completed: true, selfSwitches: { A: false, B: false, C: false, D: false } }
+      evt_friends_first:   { completed: true, selfSwitches: { A: false, B: false, C: false, D: false } }
+      evt_asahi_first:     { completed: true, selfSwitches: { A: false, B: false, C: false, D: false } }
+      evt_x_first_seen:    { completed: true, selfSwitches: { A: false, B: false, C: false, D: false } }
+      evt_friends_suspect: { completed: true, selfSwitches: { A: false, B: false, C: false, D: false } }
+      evt_yachiyo_test:    { completed: true, selfSwitches: { A: false, B: false, C: false, D: false } }
+      evt_body_almost:     { completed: true, selfSwitches: { A: false, B: false, C: false, D: false } }
+    completionOrder:
+      - 001_intro
+      - evt_friends_first
+      - evt_asahi_first
+      - evt_x_first_seen
+      - evt_friends_suspect
+      - evt_yachiyo_test
+      - evt_body_almost
+  runtime:
+    firedTriggers:
+      - friends_first
+      - asahi_first
+      - x_first_seen
+      - friends_suspect
+      - yachiyo_test
+      - body_almost_ready
+  training:
+    day: 3
+    slot: 2
+    stats:
+      engineering:  60
+      neuroscience: 40
+      funds:        10
+      stamina:       5
+      data_neural:  70
+      data_motor:   70
+      data_voice:   70
+      data_memory:  70
+      bond:          7
+      x_intel:      40
+    statMax:
+      engineering: 100
+      neuroscience: 100
+      funds: 100
+      stamina: 10
+      data_neural: 100
+      data_motor: 100
+      data_voice: 100
+      data_memory: 100
+      bond: 10
+      x_intel: 100
+inputs:
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+  - { type: next }
+assertions:
+  - kind: state
+    path: baseline.scripts.end_good.completed
+    eq: true
+  - kind: output
+    type: gameEnd
+    present: true

@@ -1,0 +1,13 @@
+id: call_asahi
+title: 给哥哥打电话
+description: 让朝日转一笔钱。但每年只能开口几次。
+category: social
+slot: any
+cost: 1
+effects:
+  stats: { funds: 25, stamina: -1 }
+  affection: { asahi: -1 }
+narrations:
+  - 朝日秒接电话。
+  - 「打过来了。别说原因。」
+  - 你听见他那边比赛后台的吵闹声。挂电话前他说："吃饱。"

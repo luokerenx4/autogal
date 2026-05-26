@@ -15,12 +15,38 @@ bun run autoplay          # watch a built-in AI persona play through
 ## Make your own
 
 ```bash
-bun packages/cli/src/bin.ts init ./my-game   # scaffold a minimal game
-cd my-game
-autogal play .                                # play it
+bun packages/cli/src/bin.ts init ./my-game    # scaffold a minimal game
+bun packages/cli/src/bin.ts play ./my-game    # play it
 ```
 
 Or in another terminal, **edit `scripts/001_intro.md` while the game is running** — the engine watches for `.md` / `.yaml` changes and reloads the next time a beat resolves. Live authoring with no restart.
+
+## Install (experimental — only when you need it)
+
+The canonical way to run anything in this repo is `bun packages/cli/src/bin.ts <command>` or `bun run autogal <command>` from the repo root. That covers nearly every dev workflow.
+
+The one case it doesn't cover is **running `autogal studio` against a game directory that lives outside this repo** — `studio` is a browser workbench (PR-stage; see `packages/studio/`) and you'll want a global `autogal` command for that. There's no distribution / upgrade story yet, so treat this as a self-serve symlink:
+
+```bash
+# 1. confirm ~/.local/bin is on your PATH (or pick another PATH dir):
+echo "$PATH" | tr ':' '\n' | grep -q "$HOME/.local/bin" && echo OK
+
+# 2. symlink the CLI entrypoint:
+ln -sf "$(pwd)/packages/cli/src/bin.ts" ~/.local/bin/autogal
+
+# 3. verify:
+autogal --help
+```
+
+Caveats:
+- Requires `bun` on PATH — the symlink target is a `.ts` file with `#!/usr/bin/env bun` as the shebang.
+- The symlink is pinned to this clone's absolute path. Move the repo and `autogal` breaks.
+- No upgrade mechanism. Pull the repo to update.
+- `bun link --global` doesn't work cleanly for monorepo workspace packages (1.3.14) — it leaves a broken symlink. Use the manual `ln -sf` above instead.
+
+When/if autogal stabilizes and we ship a real distribution (npm publish or a single-binary release), the install story becomes one line and this section gets folded into the main quick-start.
+
+To uninstall: `rm ~/.local/bin/autogal`.
 
 ## Let an AI play (or write)
 

@@ -2,6 +2,7 @@
 id: evt_x_first_seen
 title: 撞见 X
 characters: [iroha, x]
+cost: 0
 requires:
   switch: { name: __trigger_only, eq: true }
 ---

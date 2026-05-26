@@ -2,6 +2,7 @@
 id: evt_body_almost
 title: 通电前夜
 characters: [iroha, ashihana, mami, asahi]
+cost: 0
 requires:
   switch: { name: __trigger_only, eq: true }
 ---

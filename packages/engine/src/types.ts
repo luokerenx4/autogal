@@ -665,6 +665,13 @@ export interface Script {
   requires?: Condition;
   characters?: string[];
   beats: Beat[];
+  // Calendar cost in slots when this script completes. Default 1: a
+  // played script counts as a "1-slot action" for training-mode
+  // calendar advance. Set to 0 for intros / cutscenes / trigger-launched
+  // event scripts that shouldn't eat a player's decision window. The
+  // training preset reads this via the synthetic Action it constructs at
+  // script-complete.
+  cost?: number;
 }
 
 export interface Action {

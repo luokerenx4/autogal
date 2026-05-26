@@ -38,35 +38,40 @@ training:
     - { id: x_intel,     name: X 线索,  min: 0, max: 100, start: 0 }
   endConditions:
     # 优先级从上到下。secret 最严，good 次之，neutral 再次，bad 兜底。
-    # 阈值按 12 回合内可达性调过：data 60 / eng 40 / bond 7。
+    # 与 12 slot 预算对齐的数学：
+    #   - 剧情脚本 cost: 0（新加的 Script frontmatter 字段） → 不占 slot,
+    #     玩家 12 slot 全用于 hub 决策
+    #   - 每类 data 阈值 30。最优解：N 2×hospital(15) / M 2×blackonyx(14) /
+    #     V 3×idol(10) / Mem 3×core(10) ≈ 10 dive 凑齐，剩 2 slot 给 eng/work/rest
+    #   - GOOD 还要 eng ≥ 30、bond ≥ 5；core dive 顺带涨 bond，study 涨 eng
     - reason: 灵魂之约 · 辉夜以幽灵态留在月读，但她笑了
       when:
         all:
-          - stat: { name: data_memory, min: 60 }
-          - stat: { name: bond, min: 8 }
+          - stat: { name: data_memory, min: 30 }
+          - stat: { name: bond, min: 7 }
           - any:
-              - stat: { name: data_neural, max: 59 }
-              - stat: { name: data_motor,  max: 59 }
-              - stat: { name: data_voice,  max: 59 }
+              - stat: { name: data_neural, max: 29 }
+              - stat: { name: data_motor,  max: 29 }
+              - stat: { name: data_voice,  max: 29 }
       goto: end_secret
     - reason: 通电那一刻她睁开了眼 · GOOD
       when:
         all:
-          - stat: { name: data_neural, min: 60 }
-          - stat: { name: data_motor,  min: 60 }
-          - stat: { name: data_voice,  min: 60 }
-          - stat: { name: data_memory, min: 60 }
-          - stat: { name: engineering, min: 40 }
-          - stat: { name: bond,        min: 6 }
+          - stat: { name: data_neural, min: 30 }
+          - stat: { name: data_motor,  min: 30 }
+          - stat: { name: data_voice,  min: 30 }
+          - stat: { name: data_memory, min: 30 }
+          - stat: { name: engineering, min: 30 }
+          - stat: { name: bond,        min: 5 }
       goto: end_good
     - reason: 身体造出来了，但她不再是原来的她 · NEUTRAL
       when:
         all:
-          - stat: { name: data_neural, min: 60 }
-          - stat: { name: data_motor,  min: 60 }
-          - stat: { name: data_voice,  min: 60 }
-          - stat: { name: data_memory, min: 60 }
-          - stat: { name: engineering, min: 40 }
+          - stat: { name: data_neural, min: 30 }
+          - stat: { name: data_motor,  min: 30 }
+          - stat: { name: data_voice,  min: 30 }
+          - stat: { name: data_memory, min: 30 }
+          - stat: { name: engineering, min: 30 }
       goto: end_neutral
     - reason: 三年到了 · 你看着空荡的实验室 · BAD
       when:

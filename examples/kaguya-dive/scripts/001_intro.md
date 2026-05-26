@@ -2,6 +2,7 @@
 id: 001_intro
 title: 开场 · 一个人的搬家
 characters: [iroha]
+cost: 0
 ---
 
 四月。新公寓。窗外没拉窗帘。

@@ -2,6 +2,7 @@
 id: evt_asahi_first
 title: 哥哥打来的电话
 characters: [iroha, asahi]
+cost: 0
 requires:
   switch: { name: __trigger_only, eq: true }
 ---

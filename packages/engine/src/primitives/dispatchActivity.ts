@@ -41,6 +41,22 @@ export async function* dispatchActivity(
     const actionId = activityId.slice("action:".length);
     const original = ctx.actionMap.get(actionId);
     if (!original) return "ok";
+    // whenIn gate: actions restricted to specific maps were filtered
+    // out of the hub menu by buildMapHubSnapshot, but a caller can
+    // still dispatch them by id (CLI step, AI player, scripted test).
+    // Without this check, whenIn is a UI hint not a real constraint.
+    // Surface the rejection as a narration so the call doesn't fail
+    // silently and the player understands what blocked them.
+    if (
+      original.whenIn !== undefined &&
+      (ctx.state.baseline.currentMapId === null ||
+        !original.whenIn.includes(ctx.state.baseline.currentMapId))
+    ) {
+      ctx.state.runtime.pendingNarrations.push(
+        `[${original.title}] 不在合适的地点（需要：${original.whenIn.join(" / ")}，当前：${ctx.state.baseline.currentMapId ?? "无"}）`,
+      );
+      return "ok";
+    }
     const available =
       original.requires === undefined ||
       evaluateCondition(original.requires, ctx.state).ok;

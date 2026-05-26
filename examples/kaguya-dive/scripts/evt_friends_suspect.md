@@ -2,6 +2,7 @@
 id: evt_friends_suspect
 title: 真实知道了
 characters: [iroha, mami]
+cost: 0
 requires:
   switch: { name: __trigger_only, eq: true }
 ---

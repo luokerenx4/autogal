@@ -363,17 +363,17 @@ const triggers: Trigger[] = [
     },
   },
   // ——— 第三年（剧情高潮）———
-  // 通电前夜：4 类数据各自过 40。给一波 stat 增益作为奖励，并把"通电前夜"
-  // 这一刻郑重表达出来。
+  // 通电前夜：4 类数据各自过 20（约 GOOD 阈值 30 的 2/3）。给一波 stat
+  // 增益作为奖励，并把"通电前夜"这一刻郑重表达出来。
   {
     id: "body_almost_ready",
     once: true,
     when: {
       all: [
-        { stat: { name: "data_neural", min: 40 } },
-        { stat: { name: "data_motor",  min: 40 } },
-        { stat: { name: "data_voice",  min: 40 } },
-        { stat: { name: "data_memory", min: 40 } },
+        { stat: { name: "data_neural", min: 20 } },
+        { stat: { name: "data_motor",  min: 20 } },
+        { stat: { name: "data_voice",  min: 20 } },
+        { stat: { name: "data_memory", min: 20 } },
       ],
     },
     do: (ctx) => {

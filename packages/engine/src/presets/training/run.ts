@@ -42,6 +42,21 @@ export async function* trainingRun(
   while (true) {
     yield* drainNarrations(ctx);
 
+    // Explicitly re-check triggers at the top of every loop iteration,
+    // BEFORE deciding whether to yield a hub or run a script. Without
+    // this, triggers gated on `scriptCompleted(X)` (or any condition that
+    // becomes true at script end via markScriptCompleted — which doesn't
+    // route through mutateState) only get re-evaluated when the NEXT
+    // step()'s session-start checkTriggers runs. That means the player
+    // sees a "clean" hub, picks an action, and their dispatch gets
+    // silently swallowed because the trigger fires first in the next
+    // step and reassigns currentScriptId. Re-checking here ensures the
+    // hub we yield is post-trigger — any inserted script runs before
+    // the player ever sees the menu.
+    if (ctx.state.baseline.currentScriptId === null) {
+      checkTriggers(ctx);
+    }
+
     // End conditions check — only when no script is mid-flight, so an
     // in-progress ending script doesn't get clobbered.
     if (ctx.state.baseline.currentScriptId === null) {
@@ -77,12 +92,15 @@ export async function* trainingRun(
         ctx.state.baseline.currentScriptId = null;
         ctx.state.baseline.beatIndex = 0;
         fireOnScriptComplete(ctx, completedId);
-        // Scripts count as 1 slot — fire onActionComplete with synthetic
-        // action so the training Module's calendar advance picks it up.
+        // Scripts default to 1-slot cost via the synthetic action that
+        // the training preset's calendar-advance hook consumes. Scripts
+        // can override via frontmatter `cost: N` — most usefully `cost: 0`
+        // for intros / cutscenes that shouldn't eat a player's decision
+        // window.
         const completedAction: Action = {
           id: completedId,
           title: script.title,
-          cost: 1,
+          cost: script.cost ?? 1,
         };
         fireOnActionComplete(ctx, completedAction, undefined);
       } else {

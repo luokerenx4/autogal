@@ -1,7 +1,14 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import type { AssetRow } from "../api";
-import { fetchAsset, fetchTuiTxt, sourceImageUrl } from "../api";
+import type { AssetRow, HealthState } from "../api";
+import {
+  fetchAsset,
+  fetchHealth,
+  fetchTuiTxt,
+  renderTui,
+  sourceImageUrl,
+  uploadSource,
+} from "../api";
 
 // Asset detail. Two-column layout:
 //   left  — spec metadata (kind, refs, size_hint, tags, placeholder)
@@ -20,6 +27,15 @@ export function AssetDetail() {
   const [err, setErr] = useState<string | null>(null);
   const [tuiTxt, setTuiTxt] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [health, setHealth] = useState<HealthState | null>(null);
+  const [busy, setBusy] = useState<"upload" | "render" | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // After an upload or render, the asset's renderings flip on the
+  // server — refetch + re-pull the preview so the UI mirrors disk.
+  // Reused by both upload and render handlers + the source.png
+  // preview cache-busts on the new query string.
+  const [cacheKey, setCacheKey] = useState(0);
 
   useEffect(() => {
     setAsset(null);
@@ -35,7 +51,18 @@ export function AssetDetail() {
         }
       })
       .catch((e) => setErr(e.message));
-  }, [assetPath]);
+  }, [assetPath, cacheKey]);
+
+  // Health is global; fetch once on mount and reuse for the whole
+  // session. The user installing chafa mid-session would need to
+  // refresh — acceptable for v2.
+  useEffect(() => {
+    fetchHealth()
+      .then(setHealth)
+      .catch(() => {
+        /* health is advisory; failures fall back to "chafa unknown" */
+      });
+  }, []);
 
   if (err) return <Layout backTo="/"><div className="empty">⚠ {err}</div></Layout>;
   if (!asset) return <Layout backTo="/"><div className="empty">loading…</div></Layout>;
@@ -56,6 +83,62 @@ export function AssetDetail() {
       showToast(setToast, "copy failed");
     }
   };
+
+  // Upload handler shared by the file picker and drag-drop pathways.
+  // Both end up here with a single Blob. v2 enforces PNG client-side
+  // for a friendlier error message; the server enforces it too.
+  const handleUpload = async (file: File) => {
+    if (!file.type.startsWith("image/png")) {
+      showToast(setToast, "PNG only — got " + (file.type || "unknown"));
+      return;
+    }
+    setBusy("upload");
+    try {
+      await uploadSource(assetPath, file);
+      setCacheKey((k) => k + 1);
+      showToast(setToast, "source.png uploaded");
+    } catch (e) {
+      showToast(setToast, (e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+  const onPickFile: React.ChangeEventHandler<HTMLInputElement> = (e) => {
+    const f = e.target.files?.[0];
+    if (f) void handleUpload(f);
+    // Reset so picking the same file twice still fires onChange.
+    e.target.value = "";
+  };
+  const onDrop: React.DragEventHandler<HTMLDivElement> = (e) => {
+    e.preventDefault();
+    const f = e.dataTransfer.files?.[0];
+    if (f) void handleUpload(f);
+  };
+
+  const handleRender = async () => {
+    setBusy("render");
+    try {
+      await renderTui(assetPath);
+      setCacheKey((k) => k + 1);
+      showToast(setToast, "tui.txt rendered");
+    } catch (e) {
+      // 503 (no chafa) gets a more actionable hint than the raw
+      // server message — the user shouldn't have to read JSON.
+      const status = (e as Error & { status?: number }).status;
+      if (status === 503) {
+        showToast(setToast, "chafa not installed — try `brew install chafa`");
+      } else if (status === 412) {
+        showToast(setToast, "upload a source.png first");
+      } else {
+        showToast(setToast, (e as Error).message);
+      }
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const chafaPresent = health?.chafa.present ?? false;
+  const canRender = asset.renderings.source && chafaPresent && busy === null;
 
   return (
     <Layout backTo="/">
@@ -175,24 +258,87 @@ export function AssetDetail() {
             <div className="prompt-block">{asset.prompt}</div>
           </div>
 
-          {asset.renderings.source && (
-            <div className="detail-section" style={{ marginTop: 16 }}>
-              <h2>source.png</h2>
-              <div className="preview-img">
+          <div className="detail-section" style={{ marginTop: 16 }}>
+            <h2 style={{ display: "flex", justifyContent: "space-between" }}>
+              <span>source.png</span>
+              <button
+                className="btn"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={busy !== null}
+              >
+                {asset.renderings.source ? "replace" : "upload"}
+              </button>
+            </h2>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/png"
+              onChange={onPickFile}
+              style={{ display: "none" }}
+            />
+            <div
+              className={
+                "preview-img droppable" + (busy === "upload" ? " busy" : "")
+              }
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={onDrop}
+            >
+              {asset.renderings.source ? (
                 <img
-                  src={sourceImageUrl(asset.path)}
+                  // Cache-bust on cacheKey so a re-upload of the same
+                  // path doesn't show the stale browser-cached image.
+                  src={`${sourceImageUrl(asset.path)}?v=${cacheKey}`}
                   alt={asset.placeholder}
                 />
-              </div>
+              ) : (
+                <div className="empty" style={{ padding: 32 }}>
+                  drop a PNG here or click <em>upload</em>
+                </div>
+              )}
+              {busy === "upload" && (
+                <div className="overlay">uploading…</div>
+              )}
             </div>
-          )}
+          </div>
 
-          {asset.renderings.tuiTxt && tuiTxt !== null && (
-            <div className="detail-section" style={{ marginTop: 16 }}>
-              <h2>tui.txt preview</h2>
+          <div className="detail-section" style={{ marginTop: 16 }}>
+            <h2 style={{ display: "flex", justifyContent: "space-between" }}>
+              <span>tui.txt</span>
+              <button
+                className="btn primary"
+                onClick={handleRender}
+                disabled={!canRender}
+                title={
+                  !asset.renderings.source
+                    ? "upload source.png first"
+                    : !chafaPresent
+                      ? "chafa not installed — brew install chafa"
+                      : busy === "render"
+                        ? "rendering…"
+                        : "run chafa to regenerate"
+                }
+              >
+                {busy === "render"
+                  ? "rendering…"
+                  : asset.renderings.tuiTxt
+                    ? "re-render"
+                    : "render (chafa)"}
+              </button>
+            </h2>
+            {!chafaPresent && (
+              <div className="muted" style={{ fontSize: 12, marginBottom: 8 }}>
+                chafa not detected on PATH. Install with{" "}
+                <code>brew install chafa</code> (macOS) and restart studio.
+              </div>
+            )}
+            {asset.renderings.tuiTxt && tuiTxt !== null ? (
               <div className="tui-preview">{tuiTxt}</div>
-            </div>
-          )}
+            ) : (
+              <div className="empty" style={{ padding: 16 }}>
+                no tui.txt yet
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

@@ -104,14 +104,47 @@ export async function uploadSource(
   return r.json();
 }
 
+// Mirrors the server's whitelist (server/render.ts). When the server
+// gains a new symbols option, bump this and the UI dropdown picks it
+// up automatically via SYMBOLS_LABELS.
+export type SymbolSet =
+  | "block"
+  | "half"
+  | "vhalf"
+  | "hhalf"
+  | "quad"
+  | "sextant"
+  | "braille"
+  | "octant"
+  | "ascii"
+  | "all";
+export type DitherMode = "none" | "ordered" | "diffusion";
+
+export interface RenderOptions {
+  symbols?: SymbolSet;
+  cols?: number;
+  rows?: number;
+  dither?: DitherMode;
+}
+
 // Invoke server-side chafa to produce tui.txt from source.png.
 // Surfaces server status codes verbatim so the UI can branch:
 //   503 → chafa not installed (show install hint)
 //   412 → no source.png (prompt to upload first)
 //   500 → chafa failed (show stderr-derived message)
-export async function renderTui(assetPath: string): Promise<AssetRow> {
+export async function renderTui(
+  assetPath: string,
+  options: RenderOptions = {},
+): Promise<AssetRow> {
+  const hasOptions = Object.keys(options).length > 0;
   const r = await fetch(`/api/assets/${assetPath}/render-tui`, {
     method: "POST",
+    ...(hasOptions
+      ? {
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(options),
+        }
+      : {}),
   });
   if (!r.ok) {
     const body = await r.json().catch(() => ({ error: r.statusText }));

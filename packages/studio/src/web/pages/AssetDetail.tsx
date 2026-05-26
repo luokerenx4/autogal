@@ -1,6 +1,12 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import type { AssetRow, HealthState } from "../api";
+import type {
+  AssetRow,
+  DitherMode,
+  HealthState,
+  RenderOptions,
+  SymbolSet,
+} from "../api";
 import {
   fetchAsset,
   fetchHealth,
@@ -9,6 +15,26 @@ import {
   sourceImageUrl,
   uploadSource,
 } from "../api";
+
+// Server's whitelist (mirrored here for the dropdown). The label
+// hints at density so the author can predict the tradeoff without
+// running every option.
+const SYMBOL_OPTIONS: { value: SymbolSet; label: string }[] = [
+  { value: "block", label: "block  (1×2, terminal-safe)" },
+  { value: "half", label: "half  (1×2 / 2×1, terminal-safe)" },
+  { value: "quad", label: "quad  (2×2)" },
+  { value: "sextant", label: "sextant  (2×3, modern fonts)" },
+  { value: "braille", label: "braille  (2×4, dot style)" },
+  { value: "octant", label: "octant  (2×4, Unicode 16)" },
+  { value: "ascii", label: "ascii  (no Unicode)" },
+  { value: "all", label: "all  (chafa picks)" },
+];
+
+const DITHER_OPTIONS: { value: DitherMode; label: string }[] = [
+  { value: "none", label: "none  (sharp)" },
+  { value: "ordered", label: "ordered  (Bayer pattern)" },
+  { value: "diffusion", label: "diffusion  (Floyd-Steinberg)" },
+];
 
 // Asset detail. Two-column layout:
 //   left  — spec metadata (kind, refs, size_hint, tags, placeholder)
@@ -30,6 +56,16 @@ export function AssetDetail() {
   const [health, setHealth] = useState<HealthState | null>(null);
   const [busy, setBusy] = useState<"upload" | "render" | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Render options form state. Defaults are "use chafa's own / spec's
+  // hint" — only fields the user explicitly touched go into the POST
+  // body. Persisted in component state only; refreshing the page
+  // resets to defaults (intentional for v2-experiment-mode use).
+  const [symbols, setSymbols] = useState<SymbolSet | "">("");
+  const [dither, setDither] = useState<DitherMode | "">("");
+  const [overrideSize, setOverrideSize] = useState(false);
+  const [cols, setCols] = useState<string>("");
+  const [rows, setRows] = useState<string>("");
 
   // After an upload or render, the asset's renderings flip on the
   // server — refetch + re-pull the preview so the UI mirrors disk.
@@ -116,9 +152,22 @@ export function AssetDetail() {
   };
 
   const handleRender = async () => {
+    // Compose options from the form: include each field only if the
+    // user touched it. Empty options sends an empty body (server
+    // preserves backward-compatible defaults — block / spec.sizeHint).
+    const options: RenderOptions = {};
+    if (symbols !== "") options.symbols = symbols;
+    if (dither !== "") options.dither = dither;
+    if (overrideSize) {
+      const c = parseInt(cols, 10);
+      const r = parseInt(rows, 10);
+      if (Number.isFinite(c) && c > 0) options.cols = c;
+      if (Number.isFinite(r) && r > 0) options.rows = r;
+    }
+
     setBusy("render");
     try {
-      await renderTui(assetPath);
+      await renderTui(assetPath, options);
       setCacheKey((k) => k + 1);
       showToast(setToast, "tui.txt rendered");
     } catch (e) {
@@ -331,6 +380,98 @@ export function AssetDetail() {
                 <code>brew install chafa</code> (macOS) and restart studio.
               </div>
             )}
+
+            <details className="render-opts" open>
+              <summary>render options</summary>
+              <div className="render-opts-grid">
+                <label>
+                  <span>symbols</span>
+                  <select
+                    value={symbols}
+                    onChange={(e) =>
+                      setSymbols(e.target.value as SymbolSet | "")
+                    }
+                  >
+                    <option value="">(default: block)</option>
+                    {SYMBOL_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <span>dither</span>
+                  <select
+                    value={dither}
+                    onChange={(e) =>
+                      setDither(e.target.value as DitherMode | "")
+                    }
+                  >
+                    <option value="">(default: none)</option>
+                    {DITHER_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="size-toggle">
+                  <span>
+                    <input
+                      type="checkbox"
+                      checked={overrideSize}
+                      onChange={(e) => {
+                        setOverrideSize(e.target.checked);
+                        if (e.target.checked && cols === "" && rows === "") {
+                          // Seed from spec hint when toggling on, so
+                          // tweaking is editing-not-typing-from-scratch.
+                          setCols(
+                            asset.sizeHint?.tui?.cols
+                              ? String(asset.sizeHint.tui.cols)
+                              : "",
+                          );
+                          setRows(
+                            asset.sizeHint?.tui?.rows
+                              ? String(asset.sizeHint.tui.rows)
+                              : "",
+                          );
+                        }
+                      }}
+                    />{" "}
+                    override size
+                  </span>
+                  {overrideSize && (
+                    <span className="size-inputs">
+                      <input
+                        type="number"
+                        min={1}
+                        max={500}
+                        value={cols}
+                        onChange={(e) => setCols(e.target.value)}
+                        placeholder="cols"
+                      />
+                      <span>×</span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={500}
+                        value={rows}
+                        onChange={(e) => setRows(e.target.value)}
+                        placeholder="rows"
+                      />
+                    </span>
+                  )}
+                </label>
+              </div>
+              {asset.sizeHint?.tui && !overrideSize && (
+                <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>
+                  using spec hint: {asset.sizeHint.tui.cols} ×{" "}
+                  {asset.sizeHint.tui.rows}
+                </div>
+              )}
+            </details>
+
             {asset.renderings.tuiTxt && tuiTxt !== null ? (
               <div className="tui-preview">{tuiTxt}</div>
             ) : (

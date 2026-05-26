@@ -3,7 +3,7 @@ import path from "node:path";
 import type { AssetSpec } from "@autogal/engine";
 import { loadGame } from "@autogal/cli/loader";
 import { getHealth } from "./health";
-import { renderSourceToTuiTxt } from "./render";
+import { parseRenderOptions, renderSourceToTuiTxt } from "./render";
 
 interface Ctx {
   gameDir: string;
@@ -45,7 +45,7 @@ export async function handle(req: Request, ctx: Ctx): Promise<Response> {
     const m = pathname.match(/^\/api\/assets\/(.+)\/(source|render-tui)$/);
     if (m && m[1] && m[2]) {
       if (m[2] === "source") return postSource(ctx, m[1], req);
-      if (m[2] === "render-tui") return postRenderTui(ctx, m[1]);
+      if (m[2] === "render-tui") return postRenderTui(ctx, m[1], req);
     }
   }
 
@@ -193,16 +193,34 @@ async function postSource(
 
 // POST /api/assets/<asset-path>/render-tui
 //
-// Synchronous render: shells out to chafa, writes <asset-dir>/tui.txt
-// atomically. v2 contract: source.png must exist; spec.sizeHint.tui
-// (when present) drives chafa's --size flag.
+// Body: { symbols?, cols?, rows?, dither? } — all optional. Empty
+// body preserves v2-original behavior (block / spec.sizeHint / no
+// dither). Caller-supplied cols/rows override spec.sizeHint.
 async function postRenderTui(
   ctx: Ctx,
   assetPath: string,
+  req: Request,
 ): Promise<Response> {
   const game = await loadGame(ctx.gameDir);
   const spec = (game.assets ?? []).find((a) => a.path === assetPath);
   if (!spec) return json({ error: "asset not found" }, 404);
+
+  // Parse + validate options. Empty body OK (the no-op case);
+  // malformed JSON → 400 with the parse error verbatim.
+  let parsedOptions: ReturnType<typeof parseRenderOptions> = { options: {} };
+  if ((req.headers.get("content-length") ?? "0") !== "0") {
+    let raw: unknown;
+    try {
+      raw = await req.json();
+    } catch (err) {
+      return json({ error: `invalid JSON body: ${(err as Error).message}` }, 400);
+    }
+    parsedOptions = parseRenderOptions(raw);
+  }
+  if ("error" in parsedOptions) {
+    return json({ error: parsedOptions.error }, 400);
+  }
+  const opts = parsedOptions.options;
 
   const health = await getHealth();
   if (!health.chafa.present) {
@@ -230,8 +248,12 @@ async function postRenderTui(
     await renderSourceToTuiTxt({
       sourcePath: spec.renderings.source,
       outDir: dir,
-      sizeCols: spec.sizeHint?.tui?.cols,
-      sizeRows: spec.sizeHint?.tui?.rows,
+      // Caller cols/rows win; fall back to spec hint; finally chafa
+      // picks its own (terminal-derived) if both are absent.
+      sizeCols: opts.cols ?? spec.sizeHint?.tui?.cols,
+      sizeRows: opts.rows ?? spec.sizeHint?.tui?.rows,
+      ...(opts.symbols !== undefined ? { symbols: opts.symbols } : {}),
+      ...(opts.dither !== undefined ? { dither: opts.dither } : {}),
     });
   } catch (err) {
     return json({ error: `chafa failed: ${(err as Error).message}` }, 500);

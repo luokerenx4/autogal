@@ -11,6 +11,7 @@ state:
       evt_friends_first:    { completed: true, selfSwitches: { A: false, B: false, C: false, D: false } }
       evt_asahi_first:      { completed: true, selfSwitches: { A: false, B: false, C: false, D: false } }
       evt_goal_hint:        { completed: true, selfSwitches: { A: false, B: false, C: false, D: false } }
+      evt_doge_morning:     { completed: true, selfSwitches: { A: false, B: false, C: false, D: false } }
       evt_chart_notice:     { completed: true, selfSwitches: { A: false, B: false, C: false, D: false } }
       evt_x_first_seen:     { completed: true, selfSwitches: { A: false, B: false, C: false, D: false } }
       evt_friends_suspect:  { completed: true, selfSwitches: { A: false, B: false, C: false, D: false } }
@@ -24,6 +25,7 @@ state:
       - evt_friends_first
       - evt_asahi_first
       - evt_goal_hint
+      - evt_doge_morning
       - evt_chart_notice
       - evt_x_first_seen
       - evt_friends_suspect
@@ -37,6 +39,7 @@ state:
       - friends_first
       - asahi_first
       - goal_hint
+      - doge_morning
       - chart_notice
       - x_first_seen
       - friends_suspect
@@ -46,8 +49,8 @@ state:
       - body_almost_ready
       - x_handoff
   training:
-    day: 3
-    slot: 2
+    day: 80
+    slot: 0
     stats:
       engineering:  60
       neuroscience: 40

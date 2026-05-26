@@ -52,9 +52,9 @@ requires:
 
 @ashihana 嗯。
 
-@ashihana 我知道你说的是假话。
+她没接你的话，只是把拿铁握得紧了一点。
 
-@ashihana 但你愿意现在说，我就当真的。
+@ashihana ……那我先信着。
 
 [end]
 

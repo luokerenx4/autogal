@@ -16,24 +16,85 @@ import {
   uploadSource,
 } from "../api";
 
-// Server's whitelist (mirrored here for the dropdown). The label
-// hints at density so the author can predict the tradeoff without
-// running every option.
-const SYMBOL_OPTIONS: { value: SymbolSet; label: string }[] = [
-  { value: "block", label: "block  (1×2, terminal-safe)" },
-  { value: "half", label: "half  (1×2 / 2×1, terminal-safe)" },
-  { value: "quad", label: "quad  (2×2)" },
-  { value: "sextant", label: "sextant  (2×3, modern fonts)" },
-  { value: "braille", label: "braille  (2×4, dot style)" },
-  { value: "octant", label: "octant  (2×4, Unicode 16)" },
-  { value: "ascii", label: "ascii  (no Unicode)" },
-  { value: "all", label: "all  (chafa picks)" },
+// Server's whitelist (mirrored here for the dropdown). Each entry
+// carries a one-line `hint` shown next to the dropdown when that
+// option is selected — gives the author actionable trade-off info
+// without forcing them to A/B every option.
+//
+// "density" column = effective pixels per character cell. Higher
+// density = more visual info, but needs a font shipping those
+// Unicode ranges. Most modern monospace fonts (SF Mono, Menlo,
+// Fira Code, JetBrains Mono, any Nerd Font) cover through sextant;
+// octant is Unicode 16 and rolling out gradually.
+interface SymbolOpt {
+  value: SymbolSet;
+  label: string;
+  hint: string;
+}
+const SYMBOL_OPTIONS: SymbolOpt[] = [
+  {
+    value: "block",
+    label: "block",
+    hint: "▀▄█ half-blocks. 1×2 density. Works everywhere; loses detail on portraits.",
+  },
+  {
+    value: "half",
+    label: "half",
+    hint: "▀▄ + ▌▐. Same density as block; slightly richer pattern set.",
+  },
+  {
+    value: "quad",
+    label: "quad",
+    hint: "▖▗▘▙ quadrants. 2×2 density. Good middle ground; broad font support.",
+  },
+  {
+    value: "sextant",
+    label: "sextant",
+    hint: "🬀–🬻 sextants. 2×3 density — 3× more detail than block. Needs SF Mono / Fira / etc.",
+  },
+  {
+    value: "braille",
+    label: "braille",
+    hint: "⠁⠂⠃ Braille dots. 2×4 density, pointillist look. Best for line art / text-y subjects.",
+  },
+  {
+    value: "octant",
+    label: "octant",
+    hint: "𜺨–𜻿 octants. 2×4 density. Unicode 16; only newest fonts render it correctly.",
+  },
+  {
+    value: "ascii",
+    label: "ascii",
+    hint: "Plain ASCII only (no Unicode). Lowest quality, max compatibility (logs / email).",
+  },
+  {
+    value: "all",
+    label: "all",
+    hint: "chafa picks from every supported glyph. Highest perceived quality; output varies.",
+  },
 ];
 
-const DITHER_OPTIONS: { value: DitherMode; label: string }[] = [
-  { value: "none", label: "none  (sharp)" },
-  { value: "ordered", label: "ordered  (Bayer pattern)" },
-  { value: "diffusion", label: "diffusion  (Floyd-Steinberg)" },
+interface DitherOpt {
+  value: DitherMode;
+  label: string;
+  hint: string;
+}
+const DITHER_OPTIONS: DitherOpt[] = [
+  {
+    value: "none",
+    label: "none",
+    hint: "No dithering. Crisp edges, posterized flats. Best for line art, logos, pixel art.",
+  },
+  {
+    value: "ordered",
+    label: "ordered",
+    hint: "Bayer pattern. Adds a uniform texture to flat regions; predictable, looks 'engineered'.",
+  },
+  {
+    value: "diffusion",
+    label: "diffusion",
+    hint: "Floyd-Steinberg error diffusion. Smoothest gradients; best for photos / faces.",
+  },
 ];
 
 // Asset detail. Two-column layout:
@@ -383,6 +444,7 @@ export function AssetDetail() {
 
             <details className="render-opts" open>
               <summary>render options</summary>
+
               <div className="render-opts-grid">
                 <label>
                   <span>symbols</span>
@@ -400,6 +462,12 @@ export function AssetDetail() {
                     ))}
                   </select>
                 </label>
+                <div className="opt-hint">
+                  {symbols === ""
+                    ? SYMBOL_OPTIONS[0]!.hint
+                    : SYMBOL_OPTIONS.find((o) => o.value === symbols)?.hint}
+                </div>
+
                 <label>
                   <span>dither</span>
                   <select
@@ -416,6 +484,12 @@ export function AssetDetail() {
                     ))}
                   </select>
                 </label>
+                <div className="opt-hint">
+                  {dither === ""
+                    ? DITHER_OPTIONS[0]!.hint
+                    : DITHER_OPTIONS.find((o) => o.value === dither)?.hint}
+                </div>
+
                 <label className="size-toggle">
                   <span>
                     <input
@@ -463,13 +537,21 @@ export function AssetDetail() {
                     </span>
                   )}
                 </label>
-              </div>
-              {asset.sizeHint?.tui && !overrideSize && (
-                <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>
-                  using spec hint: {asset.sizeHint.tui.cols} ×{" "}
-                  {asset.sizeHint.tui.rows}
+                <div className="opt-hint">
+                  {overrideSize
+                    ? "Bigger = more detail but eats stage area. Portraits: 40×24 ≈ half-screen. BGs: 80×30 ≈ full-stage."
+                    : asset.sizeHint?.tui
+                      ? `Using spec hint: ${asset.sizeHint.tui.cols}×${asset.sizeHint.tui.rows}. Tick to override per-render.`
+                      : "No spec hint set. chafa will pick its own (terminal-sized — likely too big to commit). Tick to set explicitly."}
                 </div>
-              )}
+              </div>
+
+              <div className="render-opts-tip">
+                <strong>Quick recipe:</strong> portraits → <code>sextant</code>{" "}
+                + <code>diffusion</code>; bg / scenery →{" "}
+                <code>sextant</code> + <code>ordered</code>; line-art or
+                logos → <code>quad</code> + <code>none</code>.
+              </div>
             </details>
 
             {asset.renderings.tuiTxt && tuiTxt !== null ? (

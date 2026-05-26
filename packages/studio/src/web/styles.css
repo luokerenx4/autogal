@@ -406,6 +406,30 @@ code, pre, .mono {
   gap: 6px;
   margin-left: 8px;
 }
+.render-opts-grid .opt-hint {
+  /* Sits under each control. Slight indent matches the label's
+   * first-column width so the hint reads as belonging to the
+   * control above it, not floating. */
+  margin-left: 92px;
+  margin-top: -4px;
+  margin-bottom: 4px;
+  font-size: 11px;
+  color: var(--text-faint);
+  line-height: 1.45;
+}
+.render-opts-tip {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+.render-opts-tip code {
+  background: var(--panel);
+  padding: 1px 4px;
+  border-radius: 2px;
+}
 
 .tui-preview {
   background: #000;

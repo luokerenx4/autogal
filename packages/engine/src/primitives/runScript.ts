@@ -116,13 +116,14 @@ export async function* runScript(
       }
       case "choice": {
         const baseRendered: RenderedChoice[] = beat.options.map((opt) => {
-          const available =
-            opt.requires === undefined ||
-            evaluateCondition(opt.requires, state);
+          const r =
+            opt.requires === undefined
+              ? { ok: true }
+              : evaluateCondition(opt.requires, state);
           return {
             text: opt.text,
-            available,
-            lockedReason: available ? undefined : "条件未满足",
+            available: r.ok,
+            ...(r.ok ? {} : { lockedReason: r.reason }),
           };
         });
         const rendered = fireOnChoicePresented(

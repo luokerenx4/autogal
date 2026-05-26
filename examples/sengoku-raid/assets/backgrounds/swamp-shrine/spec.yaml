@@ -1,0 +1,17 @@
+kind: bg
+description: |
+  黒沼地の奥、潰れた古社。屋根は崩れ、注連縄も切れている。
+  鳥居は半ば泥に呑まれ、苔と地衣が石段を覆っている。静寂。
+prompt: |
+  A collapsed wooden shinto shrine deep in a fog-bound marsh.
+  Half-sunken torii gate, broken sacred rope dangling, moss-covered
+  stone steps. Heian-era Japan, late autumn. Mood: abandoned,
+  reverent, waiting.
+placeholder: "[黒沼地・潰れた社] 朽ちた鳥居と苔の石段、静寂"
+refs:
+  location: kuro-swamp
+  time: 夜
+size_hint:
+  tui: { cols: 80, rows: 24 }
+  web: { aspect: "16:9" }
+tags: [chapter-1, raid-zone, extract]

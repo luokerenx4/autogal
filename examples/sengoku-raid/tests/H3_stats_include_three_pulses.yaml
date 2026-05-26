@@ -1,0 +1,22 @@
+name: hub stats 包含 pulse_pure / pulse_oni / pulse_mundane 三脈
+description: |
+  After intro completes (so the engine is back in hub), buildStatSnapshots
+  should emit the three pulse rows even when their values are zero —
+  these gate endings and the player needs to see them tracking up. WU3.
+state:
+  baseline:
+    completedScripts: [000_intro]
+  sengoku-raid:
+    mode: hub
+    raid: null
+inputs: []
+assertions:
+  - kind: stat
+    id: pulse_pure
+    value: 0
+  - kind: stat
+    id: pulse_oni
+    value: 0
+  - kind: stat
+    id: pulse_mundane
+    value: 0

@@ -4,7 +4,9 @@ import type { ComposedState, Input } from "@autogal/engine";
 export type Assertion =
   | ReasonAssertion
   | StateAssertion
-  | OutputAssertion;
+  | OutputAssertion
+  | ActivityAssertion
+  | StatAssertion;
 
 export interface ReasonAssertion {
   kind: "reason";
@@ -27,6 +29,30 @@ export interface OutputAssertion {
   present: boolean;
   speaker?: string;
   textIncludes?: string;
+}
+
+// Inspect the most recent hubMenu Output for a specific activity by id.
+// If no hubMenu was ever yielded the assertion fails with a clear
+// message. Use `available` / `lockedReasonIncludes` to verify the
+// gating + reason plumbing; omit `present` if the activity should
+// just exist regardless of available state.
+export interface ActivityAssertion {
+  kind: "activity";
+  id: string;
+  present?: boolean;
+  available?: boolean;
+  lockedReasonIncludes?: string;
+  titleIncludes?: string;
+}
+
+// Inspect the most recent hubMenu Output's stats[] for a specific
+// row by id. Use this to verify modules surfaced their custom stats
+// (pulse_*, companion_hp, etc.) without diving into snapshot shape.
+export interface StatAssertion {
+  kind: "stat";
+  id: string;
+  present?: boolean;
+  value?: number;
 }
 
 export interface Fixture {

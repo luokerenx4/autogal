@@ -1,0 +1,24 @@
+name: companion 在场时 stats 出现 companion_hp 行
+description: |
+  Pre-seed kagari companion in party. The hub stat strip should expose
+  her HP so the player doesn't have to grep combat narration to know
+  the tank is bleeding. WU3.
+state:
+  baseline:
+    completedScripts: [000_intro, encounter_kagari_first]
+    characters:
+      kagari: { affection: 6, custom: {} }
+    switches:
+      companion_kagari: true
+      befriended_kagari: true
+  sengoku-raid:
+    mode: hub
+    raid: null
+    metCharacters: [kagari]
+    companion: kagari
+    companionHp: 8
+inputs: []
+assertions:
+  - kind: stat
+    id: companion_hp
+    value: 8

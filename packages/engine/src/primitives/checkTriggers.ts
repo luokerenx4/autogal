@@ -25,7 +25,7 @@ export function checkTriggers(ctx: PresetContext): void {
   const toFire: Trigger[] = [];
 
   for (const trig of ctx.triggerRegistry) {
-    const isActive = evaluateCondition(trig.when, ctx.state);
+    const isActive = evaluateCondition(trig.when, ctx.state).ok;
     if (isActive) {
       newActive.push(trig.id);
       if (wasActive.has(trig.id)) continue; // not a rising edge

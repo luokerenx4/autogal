@@ -34,7 +34,74 @@ function checkAssertion(result: LoopResult, a: Assertion): string | null {
       return checkState(result, a);
     case "output":
       return checkOutput(result.trace.map((t) => t.output), a);
+    case "activity":
+      return checkActivity(result.trace.map((t) => t.output), a);
+    case "stat":
+      return checkStat(result.trace.map((t) => t.output), a);
   }
+}
+
+function lastHubSnapshot(outputs: Output[]) {
+  for (let i = outputs.length - 1; i >= 0; i--) {
+    const o = outputs[i];
+    if (o && o.type === "hubMenu") return o.snapshot;
+  }
+  return null;
+}
+
+function checkActivity(
+  outputs: Output[],
+  a: Extract<Assertion, { kind: "activity" }>,
+): string | null {
+  const snap = lastHubSnapshot(outputs);
+  if (!snap) return `activity ${a.id}: no hubMenu output in trace`;
+  const act = snap.activities.find((x) => x.id === a.id);
+  const present = a.present ?? true;
+  if (!act) {
+    return present
+      ? `activity ${a.id}: not found in hubMenu (activities: ${snap.activities.map((x) => x.id).join(", ")})`
+      : null;
+  }
+  if (!present) {
+    return `activity ${a.id}: expected absent but present`;
+  }
+  if (a.available !== undefined && act.available !== a.available) {
+    return `activity ${a.id}: expected available=${a.available}, got ${act.available} (lockedReason=${act.lockedReason ?? "—"})`;
+  }
+  if (a.lockedReasonIncludes !== undefined) {
+    const r = act.lockedReason ?? "";
+    if (!r.includes(a.lockedReasonIncludes)) {
+      return `activity ${a.id}: expected lockedReason to include "${a.lockedReasonIncludes}", got "${r}"`;
+    }
+  }
+  if (a.titleIncludes !== undefined) {
+    if (!act.title.includes(a.titleIncludes)) {
+      return `activity ${a.id}: expected title to include "${a.titleIncludes}", got "${act.title}"`;
+    }
+  }
+  return null;
+}
+
+function checkStat(
+  outputs: Output[],
+  a: Extract<Assertion, { kind: "stat" }>,
+): string | null {
+  const snap = lastHubSnapshot(outputs);
+  if (!snap) return `stat ${a.id}: no hubMenu output in trace`;
+  const row = snap.stats.find((x) => x.id === a.id);
+  const present = a.present ?? true;
+  if (!row) {
+    return present
+      ? `stat ${a.id}: not found in hubMenu.stats (ids: ${snap.stats.map((x) => x.id).join(", ")})`
+      : null;
+  }
+  if (!present) {
+    return `stat ${a.id}: expected absent but present`;
+  }
+  if (a.value !== undefined && row.value !== a.value) {
+    return `stat ${a.id}: expected value=${a.value}, got ${row.value}`;
+  }
+  return null;
 }
 
 function checkState(

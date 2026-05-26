@@ -8,6 +8,7 @@ spawn_zone_id: bridge_foot
 zones:
   - id: bridge_foot
     name: 橋の袂
+    bg: assets/backgrounds/sumida-bridge
     connections:
       - { dir: 河岸沿い, target: reed_marsh }
       - { dir: 上流, target: ferry_landing }
@@ -32,6 +33,7 @@ zones:
 
   - id: ferry_landing
     name: 渡し場
+    bg: assets/backgrounds/sumida-ferry
     is_extract: true
     connections:
       - { dir: 戻る, target: bridge_foot }

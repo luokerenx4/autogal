@@ -1,0 +1,17 @@
+kind: bg
+description: |
+  砲響山の麓。焼け石の唸りが地の底から響き、靴底の革が
+  じりじりと焦げる。樹は灰色に枯れ、空気が薄く揺れている。
+prompt: |
+  Foothills of an active volcano, scorched basalt scree underfoot,
+  dead grey trees, heat-shimmer in the air. The ground hums.
+  Late afternoon, sulfurous haze. Mood: oppressive, geothermal,
+  every step ill-advised.
+placeholder: "[砲響山・麓] 焼け石の唸り、枯れた灰色の樹、熱気の揺らぎ"
+refs:
+  location: mt-houkyou
+  time: 昼
+size_hint:
+  tui: { cols: 80, rows: 24 }
+  web: { aspect: "16:9" }
+tags: [chapter-1, raid-zone]

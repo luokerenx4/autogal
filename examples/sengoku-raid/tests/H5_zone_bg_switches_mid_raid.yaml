@@ -1,0 +1,24 @@
+name: 進入有 bg 的中段 zone 时 visualState.bg 跟着切
+description: |
+  Depart sumida_river (spawn = bridge_foot, all-null encounter) then move
+  to ferry_landing (extract zone, all-null encounter, has its own bg).
+  Validates that moveHandler applies zone.bg in addition to startRaid.
+state:
+  baseline:
+    completedScripts: [000_intro]
+  sengoku-raid:
+    mode: hub
+    raid: null
+maxSteps: 40
+inputs:
+  - { type: doActivity, id: "depart:sumida_river" }
+  - { type: next }
+  - { type: doActivity, id: "move:ferry_landing" }
+  - { type: next }
+assertions:
+  - kind: state
+    path: baseline.visuals.bg
+    eq: assets/backgrounds/sumida-ferry
+  - kind: state
+    path: sengoku-raid.raid.currentZoneId
+    eq: ferry_landing

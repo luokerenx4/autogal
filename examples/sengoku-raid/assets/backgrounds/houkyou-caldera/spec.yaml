@@ -1,0 +1,17 @@
+kind: bg
+description: |
+  砲響山の火口の底。熱風で景色がねじれ、岩は溶岩に近い
+  暗赤色で脈打っている。空気が血の鉄味で、視界は遠く歪む。
+prompt: |
+  Bottom of a volcanic caldera at twilight. Heat-shimmer warping
+  the entire view. Veined dark-red basalt walls pulsing with
+  geothermal glow. Air thick with iron tang. Mood: arena of a boss
+  fight, no retreat, the place itself the enemy.
+placeholder: "[砲響山・火口] 熱風で歪む景、暗赤色の脈打つ岩"
+refs:
+  location: mt-houkyou
+  time: 黄昏
+size_hint:
+  tui: { cols: 80, rows: 24 }
+  web: { aspect: "16:9" }
+tags: [chapter-1, raid-zone, boss]

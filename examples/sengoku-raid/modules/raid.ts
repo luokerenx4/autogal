@@ -44,6 +44,7 @@ import type {
   Output,
   PresetContext,
   StateDelta,
+  StatSnapshot,
   Trigger,
 } from "@autogal/engine";
 
@@ -131,6 +132,7 @@ interface ZoneInstance {
   lootTable: { itemId: string | null; min: number; max: number; weight: number }[];
   connections: { dir: string; target: string }[];
   isExtract: boolean;
+  bg?: string;
   pendingLoot: Record<string, number>;
 }
 
@@ -253,7 +255,7 @@ function buildSnapshot(activities: HubActivity[], ctx: Ctx): Output {
 
 function buildStatSnapshots(ctx: Ctx) {
   const ryo = ctx.state.baseline.inventory.ryo ?? 0;
-  return [
+  const stats: StatSnapshot[] = [
     {
       id: "hp",
       name: "体力",
@@ -293,6 +295,62 @@ function buildStatSnapshots(ctx: Ctx) {
     { id: "intellect", name: "学識", value: playerStat(ctx, "intellect"), min: 0, max: 99 },
     { id: "ryo", name: "両", value: ryo, min: 0, max: 99999 },
   ];
+
+  // 三脈 — always shown; value 0 reads as "未流したことがない". These are
+  // the variables that gate the endings (pure rite / 鬼ヶ門 / 凡道), so
+  // putting them in the visible stat strip lets the player track where
+  // their build is heading without grepping state JSON.
+  const v = ctx.state.baseline.variables;
+  stats.push({
+    id: "pulse_pure",
+    name: "脈絡: 浄",
+    value: ((v.pulse_pure ?? 0) as number),
+    min: 0,
+    max: 99,
+  });
+  stats.push({
+    id: "pulse_oni",
+    name: "脈絡: 鬼",
+    value: ((v.pulse_oni ?? 0) as number),
+    min: 0,
+    max: 99,
+    thresholds: [
+      { min: 0, label: "清", color: "green" as const },
+      { min: 5, label: "傾", color: "yellow" as const },
+      { min: 10, label: "堕", color: "red" as const },
+    ],
+  });
+  stats.push({
+    id: "pulse_mundane",
+    name: "脈絡: 凡",
+    value: ((v.pulse_mundane ?? 0) as number),
+    min: 0,
+    max: 99,
+  });
+
+  // Companion HP — surfaced only while a companion is in party. The
+  // module already tracks companionHp on m, but it wasn't exposed to
+  // the snapshot; without this row the player can't tell their tank
+  // is bleeding out short of reading combat narration.
+  const m = moduleState(ctx);
+  if (m.companion) {
+    const charName =
+      ctx.game.characters.find((c) => c.id === m.companion)?.name ?? m.companion;
+    stats.push({
+      id: "companion_hp",
+      name: `同伴 ${charName}`,
+      value: m.companionHp,
+      min: 0,
+      max: 10,
+      thresholds: [
+        { min: 0, label: "倒", color: "red" as const },
+        { min: 4, label: "傷", color: "yellow" as const },
+        { min: 7, label: "万全", color: "green" as const },
+      ],
+    });
+  }
+
+  return stats;
 }
 
 function buildAffectionSnapshots(ctx: Ctx) {
@@ -333,24 +391,25 @@ function buildHubMenu(ctx: Ctx): Output {
       available: ryo >= 50,
       lockedReason: ryo < 50 ? "両が足りない" : undefined,
     });
-    // Surface eligible bond scripts. Engine evaluates the script's
-    // `requires:` block when it builds them in the hub menu; we just
-    // forward the unfilled ones for this character.
+    // Surface bond scripts. Unlike zone_haunt / ending which we hide
+    // until eligible (surprise content), bond_* scripts are surfaced
+    // even when locked — with lockedReason — so the player can see
+    // "送り物をもう一度すれば開放" instead of wondering whether the
+    // scene exists at all.
     for (const script of ctx.game.scripts) {
       if (!script.id.startsWith(`bond_${charId}_`)) continue;
       if (ctx.state.baseline.scripts[script.id]?.completed === true) continue;
-      // Check the script's requires manually since we're not going
-      // through the engine's hub builder (which would do this for us).
       const reqs = script.requires;
-      const eligible = reqs === undefined || evaluateCondition(reqs, ctx.state);
-      if (!eligible) continue;
+      const r =
+        reqs === undefined ? { ok: true } : evaluateCondition(reqs, ctx.state);
       activities.push({
         id: `script:${script.id}`,
         kind: "script",
         title: `${char.name} — ${script.title}`,
         category: "social",
         cost: 0,
-        available: true,
+        available: r.ok,
+        ...(r.ok ? {} : { lockedReason: r.reason }),
       });
     }
   }
@@ -364,7 +423,7 @@ function buildHubMenu(ctx: Ctx): Output {
     if (!script.id.startsWith("zone_haunt_")) continue;
     if (ctx.state.baseline.scripts[script.id]?.completed === true) continue;
     const reqs = script.requires;
-    const eligible = reqs === undefined || evaluateCondition(reqs, ctx.state);
+    const eligible = reqs === undefined || evaluateCondition(reqs, ctx.state).ok;
     if (!eligible) continue;
     activities.push({
       id: `script:${script.id}`,
@@ -383,7 +442,7 @@ function buildHubMenu(ctx: Ctx): Output {
     if (!script.id.startsWith("ending_")) continue;
     if (ctx.state.baseline.scripts[script.id]?.completed === true) continue;
     const reqs = script.requires;
-    const eligible = reqs === undefined || evaluateCondition(reqs, ctx.state);
+    const eligible = reqs === undefined || evaluateCondition(reqs, ctx.state).ok;
     if (!eligible) continue;
     activities.push({
       id: `script:${script.id}`,
@@ -784,12 +843,15 @@ function buildRaidMenu(ctx: Ctx): Output {
     for (const conn of zone.connections) {
       const target = m.raid.zones[conn.target];
       const visitedNote = target?.visited ? "（既訪）" : "";
+      // Hint extract-capable zones in the move title so the player
+      // doesn't have to walk in to discover they can leave from there.
+      const extractNote = target?.isExtract ? "（撤退可）" : "";
       activities.push({
         id: `move:${conn.target}`,
         kind: "action",
         actionKind: "move",
         payload: { zoneId: conn.target },
-        title: `${conn.dir}へ進む — ${target?.name ?? conn.target}${visitedNote}`,
+        title: `${conn.dir}へ進む — ${target?.name ?? conn.target}${visitedNote}${extractNote}`,
         category: "raid",
         cost: 0,
         available: true,
@@ -927,6 +989,7 @@ function startRaid(ctx: Ctx, mapId: string): void {
       lootTable: z.lootTable ?? [],
       connections: z.connections,
       isExtract: !!z.isExtract,
+      ...(z.bg ? { bg: z.bg } : {}),
       pendingLoot: {},
     };
   }
@@ -945,6 +1008,7 @@ function startRaid(ctx: Ctx, mapId: string): void {
   const spawn = zones[map.spawnZoneId]!;
   spawn.visited = true;
   spawn.pendingLoot = rollLoot(ctx, spawn);
+  if (spawn.bg) ctx.state.baseline.visuals.bg = spawn.bg;
   // Spawn has trivial encounter table (only `null`) — encounter stays null.
 
   const flavor =
@@ -1597,6 +1661,7 @@ const moveHandler: ActionHandler = (ctx) => {
   m.raid.currentZoneId = target;
   m.raid.turnsTaken += 1;
   const zone = m.raid.zones[target]!;
+  if (zone.bg) ctx.state.baseline.visuals.bg = zone.bg;
 
   // 篝同行者 passive: each new zone, spectral -1. Kasumi/mio don't
   // alter movement (kasumi's passive lands in doFlee; mio's in a

@@ -1,0 +1,25 @@
+name: move 选项 title 在目标 zone 是 extract 时标"撤退可"
+description: |
+  At bridge_foot (sumida spawn), move:ferry_landing's title should include
+  "撤退可" because ferry_landing.isExtract=true. The reed_marsh adjacent
+  has no extract, so its move title stays plain.
+state:
+  baseline:
+    completedScripts: [000_intro]
+  sengoku-raid:
+    mode: hub
+    raid: null
+maxSteps: 20
+inputs:
+  - { type: doActivity, id: "depart:sumida_river" }
+  - { type: next }
+assertions:
+  - kind: activity
+    id: "move:ferry_landing"
+    titleIncludes: "撤退可"
+  - kind: activity
+    id: "move:reed_marsh"
+    titleIncludes: "葦の藪"
+  # reed_marsh title should NOT contain 撤退可 — sanity. (Not strictly
+  # enforced — titleIncludes can't express negative — but the positive
+  # case above is sufficient for this PR.)

@@ -10,7 +10,7 @@ export function checkEndConditions(
 ): EndConditionSpec | null {
   if (!ctx.game.training) return null;
   for (const ec of ctx.game.training.endConditions) {
-    if (evaluateCondition(ec.when, ctx.state)) return ec;
+    if (evaluateCondition(ec.when, ctx.state).ok) return ec;
   }
   return null;
 }

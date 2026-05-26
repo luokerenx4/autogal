@@ -172,7 +172,7 @@ export class Engine {
       .filter(
         (s) =>
           this.state.baseline.scripts[s.id]?.completed !== true &&
-          (s.requires === undefined || evaluateCondition(s.requires, this.state)),
+          (s.requires === undefined || evaluateCondition(s.requires, this.state).ok),
       )
       .map((s) => ({ id: s.id, title: s.title }));
   }

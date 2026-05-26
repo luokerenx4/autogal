@@ -40,12 +40,27 @@ export function parseScript(content: string, source?: string): Script {
   }
   const finalBeats = seedBeats.length > 0 ? [...seedBeats, ...beats] : beats;
 
+  // cost: calendar slots consumed when this script completes. Default
+  // 1 (set by the run loop when undefined); 0 hides intro/cutscene
+  // scripts from the slot budget. Negative and non-finite rejected.
+  let cost: number | undefined;
+  if (meta.cost !== undefined) {
+    if (typeof meta.cost !== "number" || !Number.isFinite(meta.cost) || meta.cost < 0) {
+      throw new ScriptParseError(
+        "`cost` must be a non-negative finite number",
+        source,
+      );
+    }
+    cost = meta.cost;
+  }
+
   return {
     id,
     title,
     ...(requires !== undefined ? { requires } : {}),
     ...(characters !== undefined ? { characters } : {}),
     beats: finalBeats,
+    ...(cost !== undefined ? { cost } : {}),
   };
 }
 

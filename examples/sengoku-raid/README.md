@@ -4,7 +4,9 @@
 
 **autogal の旗艦サンプル**：本ゲームは引擎の主要 surface を**8割以上**実際に消費する — `Module` の 15 hook のうち 13 個、Condition AST 14 種のうち 12 種、`once: true` trigger、composite `all/any/not`、`selfSwitch`、`weapon.custom`、string variable、3 composite hook（reducer / first-wins / observer）。AI 作家がこのゲームを読めば、対応する引擎特性の「自然な使い方」が手に入る。
 
-**Headless RPGMaker 形態**：游戏 loop 在 `preset/run.ts`（ejected）；地图 / 角色 / 道具 / 武器 / 技能 / 敌人 是 typed databases；戦闘 + 状態機 + module hook 都在 `modules/raid.ts`。**引擎 0 修改**。
+**Headless RPGMaker 形態**：游戏 loop 在 `preset/run.ts`（ejected）；地图 / 角色 / 道具 / 武器 / 技能 / 敌人 是 typed databases（6 種すべて使用）；戦闘 + raid 状態機 + module hook 都在 `modules/raid.ts`。**引擎 0 修改**。
+
+「在 hub」「在 raid」是从 `state.baseline.currentMapId` 推出来的——`edo_castle`（大名府）是 hub map；带 `chain:` 標籤的 map 是 raid 中。沒有独立的 mode flag，所有"我在哪儿"都走引擎的一等 currentMapId。
 
 ## 玩
 
@@ -55,21 +57,27 @@ autogal test .                                  # fixture 回帰（31 個）
 
 ## 地図
 
-| ID | 名 | 難度 | 撤離点 | 主敵 | 解錠 |
-|---|---|---|---|---|---|
-| `kuro_swamp` | 黒沼地 | 1 | 潰れた社 / 奥の杜 | 下級の鬼 | 開幕から |
-| `sumida_river` | 隅田河 | 2 | 渡し場 / 軒下の闇 | 下級の鬼 + 戦鬼 | 開幕から |
-| `mt_houkyou` | 砲響山 | 3 | 焼け落ちた寺 / 火口 | 戦鬼 + 鬼神 (boss) | 開幕から |
-| `hell_gate` | 地獄門 | 5 | 映し井戸 | 鬼神 × n | pulse_oni≥8 AND power≥12 AND chinkonho AND mizukagami |
+20 張の flat map：1 張の hub（`edo_castle`）+ 19 張の raid map（4 つの chain にグループ化）。
 
-`hell_gate` の解錠 — `mapUnlocked()` の composite gate を読めば、引擎の "composite condition gating" の使い所が分かる。
+| Chain | 表示名 | 難度 | 入口 map | 撤退可 map | 主敵 | 解錠 |
+|---|---|---|---|---|---|---|
+| `kuro_swamp`   | 黒沼地 | 1 | `kuro_swamp_edge` | `kuro_swamp_shrine` / `kuro_swamp_deep_grove` | 下級の鬼 | 開幕から |
+| `sumida_river` | 隅田河 | 2 | `sumida_river_bridge_foot` | `sumida_river_ferry_landing` / `sumida_river_under_eaves` | 下級の鬼 + 戦鬼 | 開幕から |
+| `mt_houkyou`   | 砲響山 | 3 | `mt_houkyou_foothills` | `mt_houkyou_burnt_temple` / `mt_houkyou_caldera` | 戦鬼 + 鬼神 (boss) | 開幕から |
+| `hell_gate`    | 地獄門 | 5 | `hell_gate_mouth` | `hell_gate_mirror_pool` | 鬼神 × n | pulse_oni≥8 AND power≥12 AND chinkonho AND mizukagami |
+
+各 map は `maps/<chain>_<zone>.yaml`：自分の `bg` / `connections` / `encounter_table` / `loot_table` / `is_extract` / 場合により `character_spawns` を持つ。引擎の `enterMap` primitive がトランジションを駆動（`currentMapId` + `visuals.bg` 同期）。
+
+「`hell_gate` chain を depart 可能か」は `raid.ts` の `chainUnlocked()` の composite gate で評価。引擎の "composite condition gating" の使い所はここを読めば分かる。
+
+連接（connections）は同じ chain 内の map 間にだけ張る。chain を跨ぐ移動は raid module の `depart:<chain>` action（`startRaid` → `enterMap(chain entry map)`）と extract action（`endRaidExtract` → `enterMap("edo_castle")`）でのみ起こる。
 
 ## 角色 + 技能
 
 | 角色 | 邂逅 | 邦絆技能 | 同行 passive |
 |---|---|---|---|
-| 篝 | kuro_swamp の crossroads / ruined_hut | 鎮魂法（hub-only、spectral -20）| zone 移動毎 spectral -1 |
-| 霞 | mt_houkyou の stone_paths / lava_vent | 早駆け（flee 無傷成功）| 同行中は flee 常時成功 |
+| 篝 | `kuro_swamp_crossroads` / `kuro_swamp_ruined_hut`（`character_spawns` chance=1.0）| 鎮魂法（hub-only、spectral -20）| map 移動毎 spectral -1 |
+| 霞 | `mt_houkyou_stone_paths` / `mt_houkyou_lava_vent` | 早駆け（flee 無傷成功）| 同行中は flee 常時成功 |
 | 澪 | 第二の密書で登場（朝廷監察役）| 水鏡（mizukagami、scry）| —— |
 
 邦絆ループ：邂逅 → 親密度 ≥2 で `bond_<id>_01` → ≥4 で `bond_<id>_02`（grant skill）→ raid に誘う（switch `companion_<id>`）→ 生還で `befriended_<id>` 立つ → ≥6 + befriended で `bond_<id>_03`（companion 同道）→ 三人とも befriended で `three_flowers_alliance` trigger。
@@ -77,23 +85,25 @@ autogal test .                                  # fixture 回帰（31 個）
 ## Loop
 
 ```
-HUB                                  RAID
-───                                   ────
-depart:<map>             ───→        spawn zone
-↑                                     │
-│   sell_all_loot                     │ move:<zone>
-│   upgrade_pure/oni/mundane          │     ├── encounter rolled → combat
-│   infoshop_basic/loot/yaodao/hidden │     │     ├── HP<30% → 聞く/逃がす/妖刀の声
-│   script:intel_briefing             │     │     └── HP=0  → 脈絡選択（imbue）
-│   bond / script:bond_*              │     ├── empty → search / move
-│   invite:<companion>                │     └── extract zone → extract
-│   rest                              │
-│   use_chinkonho                     │
-│   script:ending_*  (game over)      │
-│                                      │
-│   ←── extract success ←── extract activity
-│   ←── failure ←── HP=0 / spectral=100 / companion HP=0
+edo_castle (hub map)                      <chain>_<entry> ... (raid maps)
+───                                       ────
+depart:<chain>           ───→            chain の entry map に enterMap
+↑                                         │
+│   sell_all_loot                         │ move:<chain>_<map>  (engine moveToMap + module observer)
+│   upgrade_pure/oni/mundane              │     ├── encounter rolled → combat
+│   infoshop_basic/loot/yaodao/hidden     │     │     ├── HP<30% → 聞く/逃がす/妖刀の声
+│   script:intel_briefing                 │     │     └── HP=0  → 脈絡選択（imbue）
+│   bond / script:bond_*                  │     ├── empty → search / move
+│   invite:<companion>                    │     └── is_extract → extract
+│   rest                                  │
+│   use_chinkonho                         │
+│   script:ending_*  (game over)          │
+│                                          │
+│   ←── extract success → enterMap(edo_castle)
+│   ←── failure ←── HP=0 / spectral=100 / companion HP=0 → enterMap(edo_castle)
 ```
+
+`buildHubMenu` は `currentMapId === "edo_castle"` の時、`buildRaidMenu` は `m.raid !== null` の時に走る — どちらも `raid.ts` の `onHubBuild` がディスパッチ。pre-flat-map era の `mode: "hub" | "raid"` flag は削除済み。"在哪儿"の単一真実は `state.baseline.currentMapId`。
 
 ## Hook usage matrix（旗艦覆盖）
 
@@ -113,9 +123,9 @@ depart:<map>             ───→        spawn zone
 | Trigger composite `when` | letter_02（var+characterStat）、three_flowers（switch×3）、pulse_intro（all+any） | triggers 配列 |
 | `selfSwitch` | 鬼解放 → zone_haunt_<enemy> A flip → lore script unlock | negotiateReleaseHandler |
 | `weapon.custom` (nested) | pulse_paths schema document | weapons/ancestor_yaodao.md |
-| `weaponPower` condition | hell_gate mapUnlocked composite | raid.ts mapUnlocked |
+| `weaponPower` condition | hell_gate chain unlock composite | raid.ts chainUnlocked |
 | `inventory` condition | infoshop_hidden requires frag | infoshopHandler |
-| `knowsSkill` condition | hell_gate mapUnlocked | raid.ts mapUnlocked |
+| `knowsSkill` condition | hell_gate mapUnlocked | raid.ts chainUnlocked |
 | Fenced choice with effects | letter_03_choice で chose_court_* 三択 | letter_03_choice.md |
 | Composite script `requires:` | ending_* scripts、bond_*_03 scripts | 各 .md frontmatter |
 | `string` variable | intel_active、last_directive | game.yaml variables |
@@ -139,8 +149,8 @@ F1–F2  收尾 — onStateMutated achievement log、onLabelEnter
 
 | Persona | 策略 | 用処 |
 |---|---|---|
-| `extractor` | extract zone を見たら撤退。遇敵 flee | "戦わなくても遊べる" 検証 |
-| `delver` | 必ず戦う。全 zone 踏破してから撤退 | boss 到達 + pulse 累積 検証 |
+| `extractor` | `is_extract` map に着いたら撤退。遇敵 flee | "戦わなくても遊べる" 検証 |
+| `delver` | 必ず戦う。chain 内 map を全部踏破してから撤退 | boss 到達 + pulse 累積 検証 |
 
 ## 開発で見つけた engine / parser bug（this branch で fix）
 

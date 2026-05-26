@@ -75,7 +75,7 @@ Both modes go through the same engine, but they wrap it differently:
 
 ## Standard resources (the database)
 
-The engine owns five typed resource schemas. Each has: a `*Def` type, a directory the loader scans, a slot in `BaselineState`, optional `StateDelta` integration, optional `Condition` operators, and primitives for read/write.
+The engine owns six typed resource schemas. Each has: a `*Def` type, a directory the loader scans, a slot in `BaselineState`, optional `StateDelta` integration, optional `Condition` operators, and primitives for read/write.
 
 | Resource     | Def type      | Game directory  | Runtime state                                              | Condition operators           | Bundled action handler |
 | ------------ | ------------- | --------------- | ---------------------------------------------------------- | ----------------------------- | ---------------------- |
@@ -84,6 +84,7 @@ The engine owns five typed resource schemas. Each has: a `*Def` type, a director
 | Enemy        | `EnemyDef`    | `enemies/`      | (read-only; modules consume)                               | —                             | (modules)              |
 | Weapon       | `WeaponDef`   | `weapons/`      | `baseline.weapons[id] = { power }` + `equippedWeaponId`    | `weaponPower`                 | —                      |
 | Skill        | `SkillDef`    | `skills/`       | `baseline.knownSkills: string[]` (deduped)                 | `knowsSkill`                  | `kind: useSkill`       |
+| Map          | `MapDef`      | `maps/`         | `baseline.currentMapId: string \| null` (where the player is) | (`Action.whenIn` map filter)  | `kind: moveToMap`      |
 
 Invariants enforced by `applyDelta`:
 - `inventory[id]` is deleted when it reaches ≤ 0 (no zero-count keys).
@@ -94,6 +95,57 @@ Resources are append-only at load time: the engine never mutates `ItemDef`/`Enem
 
 Every Def also carries an optional `custom?: Record<string, unknown>` populated at parse time from any frontmatter key the parser doesn't recognize (via `extractCustom()` in `packages/parser/src/frontmatter.ts`). Game modules read game-specific metadata via `item.custom.sell_value` or `enemy.custom.attack_power`; the engine doesn't interpret it. This keeps the engine's `Def` shape minimal (only fields every game needs) while letting individual games attach arbitrary numbers, strings, and tags directly in the .md source-of-truth file instead of mirroring them in module-side lookup tables.
 
+## Maps (the location axis)
+
+A map is a **container for events** — actions, scripts, encounter tables, connections to other maps — scoped to "where the player is right now." This is the RPGMaker map model: enter a map, the hub shows that map's actions/connections; move to another map, the hub re-scopes. The engine owns `state.baseline.currentMapId` as a first-class location axis the same way it owns `currentScriptId`; modules that need "where am I?" read it instead of inventing private slots.
+
+Movement happens map-to-map. There is **no coordinate axis inside a map**; "where I am" is just `currentMapId`. The connection graph between maps is the world's geometry. Maps that conceptually belong to the same expedition or scene group share a `chain: string` label — engine doesn't interpret it; modules read it for sorting, gating, or "depart on raid → enter the chain's entry map".
+
+```yaml
+# maps/town.yaml — a flat map (the only shape)
+id: town
+name: 街
+description: 涩谷·西早稲田。
+bg: assets/backgrounds/town
+on_enter: arrive_town          # optional script id to launch on entry
+connections:
+  - { dir: 校园, target: lab }
+  - { dir: 回家, target: cyber }
+actions:                       # optional map-scoped actions
+  - id: work
+    title: 打工
+    cost: 1
+encounter_table:               # optional — modules roll on entry
+  - { enemy: null, weight: 1 }
+loot_table:                    # optional
+  - { item: ryo, min: 8, max: 16, weight: 50 }
+character_spawns:              # optional — modules consume
+  - { character: asahi, chance: 0.3, encounter_script: meet_asahi }
+chain: shibuya                 # optional grouping (no engine semantics)
+```
+
+### How a map scopes the hub
+
+Two hub-building paths exist; both honor `currentMapId`:
+
+- **`buildMapHubSnapshot(ctx)` / `collectMapActivities(ctx)`** — engine helpers under `primitives/buildMapHub.ts`. Emit `move:<target>` synthesized activities for each `MapDef.connections[]`, then surface the current map's `actions[]` (filtered by `requires`), then `game.actions[]` filtered by `Action.whenIn` (omitted = visible everywhere; listed = only on those maps).
+- **Training preset hub** — same filtering layered on top of slot / scripts. Games using `training:` config get map-scoping for free.
+
+A game module that owns its own `onHubBuild` can call `collectMapActivities` and layer on game-specific entries (companion HP, depart-to-chain buttons, etc.).
+
+### `enterMap` and `moveToMap`
+
+Two engine-owned entrypoints for transitioning:
+
+- **`enterMap(state, game, mapId)`** — primitive any preset/module can call. Validates the map exists, sets `currentMapId`, syncs `baseline.visuals.bg` to `map.bg` when present, and (if `map.onEnter` is set and no script is active) queues that script into `currentScriptId`.
+- **`kind: "moveToMap"`** — bundled action handler in the baseline module. Reads `payload.to` and calls `enterMap`. This is what the engine-synthesized `move:<target>` activities dispatch through.
+
+Games with side-effects-on-move (raid turn count, companion passives, encounter rolls) provide their own action handler and observe via `onActionComplete` — the engine's `moveToMap` is the simple-game default, not a mandatory channel.
+
+### Modules that want map context
+
+Read `state.baseline.currentMapId` directly. Read the static `MapDef` via `ctx.mapMap.get(id)` or `game.maps?.find(...)`. Treat current-map as a normal observable axis the way you'd treat `day` / `slot` in training mode — including in trigger `when:` clauses (compose via `switch`/`variable` mirrors if you need to gate on it).
+
 ## Engine primitives
 
 `packages/engine/src/primitives/` exposes the building blocks the preset loop and modules call. Each takes `PresetContext` and is side-effect-free except where named otherwise.
@@ -103,6 +155,8 @@ Every Def also carries an optional `custom?: Record<string, unknown>` populated 
 - `dispatchActivity(ctx, id)` — route a `doActivity` to a script or an action; action goes through registered handler.
 - `applyActionResult(ctx, result)` — apply handler's `ActionResult` (deltas + narrations + scriptStart).
 - `mutateState(ctx, delta, source)` — `applyDelta` + `fireOnStateMutated` + `checkTriggers`. The one true write path.
+- `enterMap(state, game, mapId)` — transition the player into a map (writes `currentMapId`, syncs visuals, queues `onEnter` script).
+- `buildMapHubSnapshot(ctx)` / `collectMapActivities(ctx)` — scope hub activities by current map + connections + `whenIn`.
 - `checkEndConditions(ctx)` — evaluate `game.training.endConditions` in order.
 - `checkTriggers(ctx)` — rising-edge evaluation across all registered triggers.
 - `fireOnXxx(ctx, ...)` — 15 hook dispatchers (see "Hooks").
@@ -206,15 +260,19 @@ State is plain JSON. No class instances, no functions, no `Date`s, no `Map`s. Su
 ```ts
 interface GameState {
   baseline: {
-    characters: Record<string, { affection: number; custom: Record<string, unknown> }>;
-    flags: Record<string, unknown>;
-    completedScripts: string[];
+    characters: Record<string, { stats: Record<string, number>; custom: Record<string, unknown> }>;
+    switches: Record<string, boolean>;             // declared in game.yaml `switches:`
+    variables: Record<string, string | number>;    // declared in game.yaml `variables:`
+    scripts: Record<string, ScriptState>;          // { completed, selfSwitches: A/B/C/D }
+    completionOrder: string[];                     // append-only audit log
     currentScriptId: string | null;
     beatIndex: number;
-    inventory: Record<string, number>;
+    inventory: Record<string, number>;             // key absent ⇔ count 0
+    currentMapId: string | null;                   // where the player is
     weapons: Record<string, { power: number }>;
     equippedWeaponId: string | null;
     knownSkills: string[];
+    visuals: { bg: string | null; portraits: Record<string, string | null>; cg: string | null };
   };
   training?: {
     day: number;
@@ -226,6 +284,8 @@ interface GameState {
     pendingNarrations: string[];
     activeTriggers: string[];
     firedTriggers: string[];
+    firedScriptStarts: string[];
+    lastHubActivities: HubActivity[];
   };
   // Module-private namespaces, keyed by module id:
   [moduleId: string]: unknown;
@@ -265,8 +325,9 @@ my-game/
   enemies/*.md
   weapons/*.md
   skills/*.md
+  maps/*.yaml            # locations the player can be in (connections, actions, encounter tables)
   scripts/*.md           # one beat-list per file
-  actions/*.yaml         # hub-bound activities
+  actions/*.yaml         # hub-bound activities (use `whenIn:` to scope to specific maps)
   modules/*.ts           # optional: custom mechanics
   preset/*.ts            # optional: ejected loop
   tests/*.yaml           # optional: headless fixtures
@@ -301,6 +362,8 @@ Used as regression tests (CI runs all of them on every PR) and as executable spe
 - How to render anything — frontend's job.
 - Where save files live — host's job.
 - Whether the player is human or LLM — both look identical from inside the loop.
+- What a map's encounter / loot tables mean (the engine stores them; modules roll on them).
+- Whether the player should be allowed to depart on a raid right now (modules gate via `requires` / their own logic) — the engine knows only `currentMapId` and the connection graph.
 
 Keeping the engine ignorant of all of this is what lets games swap mechanics without forking the engine.
 

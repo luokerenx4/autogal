@@ -19,6 +19,14 @@ import { fireOnNarrationDrain } from "./hooks";
 // drain the narration AND swallow the dispatch, leaving the caller
 // wondering why their action didn't fire. Strict re-yield surfaces
 // the input-order mistake immediately.
+//
+// Every yielded narration carries pendingCount (the queue length
+// INCLUDING the one being yielded), so AI players and UI renderers can
+// detect "more narrations are queued — keep sending next" without
+// inferring it from re-yields. Without this signal the re-yield
+// behavior is correct but invisible: a doActivity gets bounced and the
+// caller can't tell why. With it, callers can preflight: if
+// pendingCount > 0 and you wanted to dispatch, send next first.
 export async function* drainNarrations(
   ctx: PresetContext,
 ): AsyncGenerator<Output, void, Input> {
@@ -29,6 +37,7 @@ export async function* drainNarrations(
       type: "narration",
       text,
       visualState: ctx.state.baseline.visuals,
+      pendingCount: q.length,
     };
     if (input.type === "quit") return;
     if (input.type !== "next") continue;

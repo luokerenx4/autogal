@@ -1,0 +1,12 @@
+id: lab
+title: 跑实验
+description: 焊电路 / 测神经接口 / 调皮肤导电层。涨工学+神经，烧钱，烧心力。
+category: study
+slot: any
+cost: 1
+requires:
+  stat: { name: funds, min: 5 }
+effects:
+  stats: { engineering: 6, neuroscience: 5, funds: -5, stamina: -2 }
+narrations:
+  - 凌晨四点，电烙铁在你手里第六次发烫。指端神经丝刚刚响应了一次脉冲。

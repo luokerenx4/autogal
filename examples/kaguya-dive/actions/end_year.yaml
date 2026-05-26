@@ -1,0 +1,9 @@
+id: end_year
+title: 跨年 · 让这一年过去
+description: 仅冬季可选。结束本年，时间向前推一年。
+category: rest
+slot: night
+cost: 1
+kind: sleep
+narrations:
+  - 元旦零点。窗外烟花。你把今年的笔记合上，扔进义体设计本里。

@@ -1,0 +1,10 @@
+id: rest
+title: 休息
+description: 回心力。仅此而已。
+category: rest
+slot: any
+cost: 1
+effects:
+  stats: { stamina: 6 }
+narrations:
+  - 你睡到中午。醒来时枕头湿了一小片。

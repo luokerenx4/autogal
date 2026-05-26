@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import type { AssetSpec } from "@autogal/engine";
+import { getColorLevel } from "./terminalCaps";
 
 // Selection result for one TUI-bound asset rendering. `kind` discriminates
 // how the component should display the `content`:
@@ -27,17 +28,26 @@ export function clearRenderingCache(): void {
 }
 
 // Pick the best available rendering for a given spec. Priority:
-//   tui.ans  → richest (color)
-//   tui.txt  → plain ASCII / unicode art
+//   tui.ans  → richest (color), but ONLY when the terminal supports
+//              color at all. NO_COLOR / TERM=dumb / FORCE_COLOR=0
+//              terminals skip .ans entirely — its SGR escapes would
+//              render as visible garbage.
+//   tui.txt  → plain ASCII / unicode art; safe everywhere.
 //   placeholder text  → spec.placeholder, ALWAYS available (required
-//                       field in spec.yaml)
+//                       field in spec.yaml).
+//
+// 256-color terminals still take .ans because chafa's truecolor SGR
+// degrades gracefully — the terminal picks the nearest palette entry
+// per cell, the geometry stays correct. Only the truly color-less
+// case (NO_COLOR / dumb) gets the hard fallback to .txt.
 //
 // File-read errors fall through to the next tier — a broken or
 // permission-denied file shouldn't crash the game; player sees the
 // placeholder instead.
 export function selectRendering(spec: AssetSpec | undefined): Rendering {
   if (!spec) return { kind: "missing" };
-  if (spec.renderings.tuiAns) {
+  const colorLevel = getColorLevel();
+  if (spec.renderings.tuiAns && colorLevel !== "none") {
     const content = readCached(spec.renderings.tuiAns);
     if (content !== null) return { kind: "ans", content };
   }

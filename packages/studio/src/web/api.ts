@@ -66,3 +66,103 @@ export async function fetchTuiTxt(assetPath: string): Promise<string> {
   if (!r.ok) throw new Error(`tui-txt missing`);
   return r.text();
 }
+
+export async function fetchTuiAns(assetPath: string): Promise<string> {
+  const r = await fetch(`/files/tui-ans/${assetPath}`);
+  if (!r.ok) throw new Error(`tui-ans missing`);
+  return r.text();
+}
+
+export interface ToolCheck {
+  present: boolean;
+  version?: string;
+  path?: string;
+}
+
+export interface HealthState {
+  chafa: ToolCheck;
+}
+
+export async function fetchHealth(): Promise<HealthState> {
+  const r = await fetch("/api/health");
+  if (!r.ok) throw new Error(`/api/health: ${r.status}`);
+  return r.json();
+}
+
+// Upload a PNG to the asset's source.png slot. The server accepts
+// multipart "file" or raw image/* — we use multipart so a future
+// helper that posts a Blob from canvas (e.g. paste from clipboard)
+// works without changing the contract. Returns the updated AssetRow.
+export async function uploadSource(
+  assetPath: string,
+  file: Blob,
+): Promise<AssetRow> {
+  const form = new FormData();
+  form.append("file", file);
+  const r = await fetch(`/api/assets/${assetPath}/source`, {
+    method: "POST",
+    body: form,
+  });
+  if (!r.ok) {
+    const body = await r.text();
+    throw new Error(`upload failed (${r.status}): ${body}`);
+  }
+  return r.json();
+}
+
+// Mirrors the server's whitelist (server/render.ts). When the server
+// gains a new symbols option, bump this and the UI dropdown picks it
+// up automatically via SYMBOLS_LABELS.
+export type SymbolSet =
+  | "block"
+  | "half"
+  | "vhalf"
+  | "hhalf"
+  | "quad"
+  | "sextant"
+  | "braille"
+  | "octant"
+  | "ascii"
+  | "all";
+export type DitherMode = "none" | "ordered" | "diffusion";
+export type ColorMode = "none" | "16" | "256" | "full";
+
+export interface RenderOptions {
+  symbols?: SymbolSet;
+  cols?: number;
+  rows?: number;
+  dither?: DitherMode;
+  colors?: ColorMode;
+}
+
+// Invoke server-side chafa to produce tui.txt from source.png.
+// Surfaces server status codes verbatim so the UI can branch:
+//   503 → chafa not installed (show install hint)
+//   412 → no source.png (prompt to upload first)
+//   500 → chafa failed (show stderr-derived message)
+export async function renderTui(
+  assetPath: string,
+  options: RenderOptions = {},
+): Promise<AssetRow> {
+  const hasOptions = Object.keys(options).length > 0;
+  const r = await fetch(`/api/assets/${assetPath}/render-tui`, {
+    method: "POST",
+    ...(hasOptions
+      ? {
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(options),
+        }
+      : {}),
+  });
+  if (!r.ok) {
+    const body = await r.json().catch(() => ({ error: r.statusText }));
+    const e = new Error(
+      typeof body === "object" && body && "error" in body
+        ? String((body as { error: string }).error)
+        : r.statusText,
+    );
+    (e as Error & { status?: number }).status = r.status;
+    throw e;
+  }
+  return r.json();
+}

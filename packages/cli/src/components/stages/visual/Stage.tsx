@@ -15,11 +15,14 @@ interface Props {
 //     centered. Backgrounds and portraits are hidden — same convention
 //     as RPG Maker / Ren'Py.
 //
-//   Default mode: a small bg banner at the top (placeholder text or
-//     pre-rendered tui.txt content, rendered dim) + portrait slots
-//     stacked horizontally below it. Portrait content lives in a
-//     bordered box on the right; future left/right slots will sit
-//     beside it.
+//   Default mode: bg + portrait. When the bg is just a placeholder
+//     text, it renders as a one-line banner at the top and the
+//     portrait sits below in the remaining space. When the bg has a
+//     real rendering (tui.txt / tui.ans), it becomes a sized
+//     backdrop — width/height come from spec.sizeHint.tui — and the
+//     portrait sits beside it (row layout). This avoids the
+//     "80x24 colored bg fills the entire stage and the dialogue box
+//     gets squashed against the bottom" failure mode.
 //
 // Empty stage (no bg, no portraits, no cg) renders as a thin "stage
 // empty" hint in dim text so the layout doesn't collapse — useful
@@ -46,6 +49,32 @@ export function Stage({ visuals, assetMap }: Props) {
     return <Box flexGrow={1} />;
   }
 
+  const bgRendering = bgSpec ? selectRendering(bgSpec) : undefined;
+  const bgIsReal =
+    bgRendering !== undefined &&
+    (bgRendering.kind === "ans" || bgRendering.kind === "txt");
+
+  // Real bg → row layout (bg backdrop on the left, portrait right of
+  // it). Placeholder bg → column layout (banner line on top, portrait
+  // centered below). Different shapes because a real 80×24 bg sized
+  // as a banner would steal half the stage; rendering it as a
+  // sized backdrop next to the portrait keeps both visible.
+  if (bgIsReal) {
+    return (
+      <Box flexGrow={1} flexDirection="row" paddingX={2} paddingY={1}>
+        <BgBackdrop spec={bgSpec} path={visuals.bg!} />
+        {visuals.portraits.center ? (
+          <Box marginLeft={2}>
+            <PortraitPanel
+              spec={centerSpec}
+              path={visuals.portraits.center}
+            />
+          </Box>
+        ) : null}
+      </Box>
+    );
+  }
+
   return (
     <Box flexGrow={1} flexDirection="column" paddingX={2} paddingY={1}>
       {visuals.bg ? (
@@ -60,10 +89,10 @@ export function Stage({ visuals, assetMap }: Props) {
   );
 }
 
-// One-line dim banner. When a tui rendering exists, prefer it (still
-// dimmed so it reads as backdrop, not foreground); otherwise show the
-// placeholder text. Truncation is left to ink's natural wrapping —
-// authors who care about width set size_hint.tui.cols in the spec.
+// One-line dim banner — used ONLY when the bg has no committed
+// rendering yet (placeholder mode). Renders the spec's placeholder
+// text in italic dim — visually subordinate so it reads as "scene
+// label" not as the dominant content.
 function BgBanner({
   spec,
   path,
@@ -80,6 +109,48 @@ function BgBanner({
         </Text>
       ) : null}
       <RenderingText rendering={rendering} dim />
+    </Box>
+  );
+}
+
+// Sized backdrop — used when bg has a real tui.txt or tui.ans.
+// Width and height come from spec.sizeHint.tui (defaulting to a
+// galgame-ish 80×24 when unset) so the rendering can't blow up
+// the stage layout if the author authored a huge tui.ans.
+//
+// Critically: does NOT wrap the content in <Text dimColor>. For .ans
+// content the SGR escapes already carry chafa's truecolor palette;
+// layering ink's dim SGR on top corrupts the chafa output and
+// produces the smeared/striped look the user reported on first use.
+// .txt content stays un-dimmed too — it's the foreground "image"
+// now, not a placeholder.
+function BgBackdrop({
+  spec,
+  path,
+}: {
+  spec: AssetSpec | undefined;
+  path: string;
+}) {
+  const rendering = selectRendering(spec);
+  const cols = spec?.sizeHint?.tui?.cols ?? 80;
+  const rows = spec?.sizeHint?.tui?.rows ?? 24;
+  const dev = process.env.AUTOGAL_DEV === "1";
+  return (
+    <Box flexDirection="column" width={cols} height={rows} flexShrink={0}>
+      {dev ? (
+        <Text dimColor color="yellow">
+          [bg: {path}]
+        </Text>
+      ) : null}
+      {rendering.kind === "ans" || rendering.kind === "txt" ? (
+        // wrap="truncate-end" prevents ink from re-wrapping long
+        // chafa rows when the parent terminal is narrower than the
+        // spec; the bg just gets clipped on the right rather than
+        // reflowing into a glitchy stripe pattern.
+        <Text wrap="truncate-end">{rendering.content}</Text>
+      ) : (
+        <RenderingText rendering={rendering} />
+      )}
     </Box>
   );
 }

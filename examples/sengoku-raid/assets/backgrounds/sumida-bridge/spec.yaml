@@ -1,0 +1,17 @@
+kind: bg
+description: |
+  隅田河の橋の袂。葦の藪が腰の高さまで伸び、汽水の臭いが
+  鼻を打つ。橋板は黒く濡れ、欄干の朱は剥げている。明け方。
+prompt: |
+  Foot of a weathered wooden bridge over the Sumida river at dawn,
+  early Edo period. Tall reeds along the bank, brackish-water smell
+  almost visible. Faded red lacquer on the railing. Mood: liminal,
+  cold, slightly hostile.
+placeholder: "[隅田河・橋の袂] 朱の剥げた欄干と腰丈の葦藪、明け方"
+refs:
+  location: sumida-river
+  time: 明け方
+size_hint:
+  tui: { cols: 80, rows: 24 }
+  web: { aspect: "16:9" }
+tags: [chapter-1, raid-zone]

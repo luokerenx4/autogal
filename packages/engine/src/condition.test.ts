@@ -30,7 +30,7 @@ describe("evaluateCondition — affection", () => {
       evaluateCondition(
         { affection: { character: "alice", min: 2 } },
         state,
-      ),
+      ).ok,
     ).toBe(true);
   });
 
@@ -40,7 +40,7 @@ describe("evaluateCondition — affection", () => {
       evaluateCondition(
         { affection: { character: "alice", min: 1 } },
         state,
-      ),
+      ).ok,
     ).toBe(false);
   });
 
@@ -50,7 +50,7 @@ describe("evaluateCondition — affection", () => {
       evaluateCondition(
         { affection: { character: "alice", max: 5 } },
         state,
-      ),
+      ).ok,
     ).toBe(true);
   });
 
@@ -61,13 +61,13 @@ describe("evaluateCondition — affection", () => {
       evaluateCondition(
         { affection: { character: "alice", eq: 4 } },
         state,
-      ),
+      ).ok,
     ).toBe(true);
     expect(
       evaluateCondition(
         { affection: { character: "alice", eq: 3 } },
         state,
-      ),
+      ).ok,
     ).toBe(false);
   });
 
@@ -77,7 +77,7 @@ describe("evaluateCondition — affection", () => {
       evaluateCondition(
         { affection: { character: "ghost", min: 0 } },
         state,
-      ),
+      ).ok,
     ).toBe(false);
   });
 });
@@ -87,7 +87,7 @@ describe("evaluateCondition — variable", () => {
     const state = makeState();
     applyDelta(state, { variables: { route: "alice" } });
     expect(
-      evaluateCondition({ variable: { name: "route", eq: "alice" } }, state),
+      evaluateCondition({ variable: { name: "route", eq: "alice" } }, state).ok,
     ).toBe(true);
   });
 
@@ -95,7 +95,7 @@ describe("evaluateCondition — variable", () => {
     const state = makeState();
     applyDelta(state, { variables: { route: "alice" } });
     expect(
-      evaluateCondition({ variable: { name: "route", eq: "bea" } }, state),
+      evaluateCondition({ variable: { name: "route", eq: "bea" } }, state).ok,
     ).toBe(false);
   });
 
@@ -103,10 +103,10 @@ describe("evaluateCondition — variable", () => {
     const state = makeState();
     applyDelta(state, { variables: { gold: 50 } });
     expect(
-      evaluateCondition({ variable: { name: "gold", min: 25 } }, state),
+      evaluateCondition({ variable: { name: "gold", min: 25 } }, state).ok,
     ).toBe(true);
     expect(
-      evaluateCondition({ variable: { name: "gold", max: 25 } }, state),
+      evaluateCondition({ variable: { name: "gold", max: 25 } }, state).ok,
     ).toBe(false);
   });
 
@@ -114,14 +114,14 @@ describe("evaluateCondition — variable", () => {
     const state = makeState();
     applyDelta(state, { variables: { route: "alice" } });
     expect(
-      evaluateCondition({ variable: { name: "route", min: 1 } }, state),
+      evaluateCondition({ variable: { name: "route", min: 1 } }, state).ok,
     ).toBe(false);
   });
 
   test("missing variable with min/max returns false (silent era-residue)", () => {
     const state = makeState();
     expect(
-      evaluateCondition({ variable: { name: "absent", min: 1 } }, state),
+      evaluateCondition({ variable: { name: "absent", min: 1 } }, state).ok,
     ).toBe(false);
   });
 });
@@ -131,10 +131,10 @@ describe("evaluateCondition — switch", () => {
     const state = makeState();
     applyDelta(state, { switches: { unlocked: true } });
     expect(
-      evaluateCondition({ switch: { name: "unlocked", eq: true } }, state),
+      evaluateCondition({ switch: { name: "unlocked", eq: true } }, state).ok,
     ).toBe(true);
     expect(
-      evaluateCondition({ switch: { name: "unlocked", eq: false } }, state),
+      evaluateCondition({ switch: { name: "unlocked", eq: false } }, state).ok,
     ).toBe(false);
   });
 
@@ -142,14 +142,14 @@ describe("evaluateCondition — switch", () => {
     const state = makeState();
     applyDelta(state, { switches: { unlocked: true } });
     expect(
-      evaluateCondition({ switch: { name: "unlocked" } }, state),
+      evaluateCondition({ switch: { name: "unlocked" } }, state).ok,
     ).toBe(true);
   });
 
   test("missing switch reads as false", () => {
     const state = makeState();
     expect(
-      evaluateCondition({ switch: { name: "absent" } }, state),
+      evaluateCondition({ switch: { name: "absent" } }, state).ok,
     ).toBe(false);
   });
 });
@@ -159,14 +159,14 @@ describe("evaluateCondition — scriptCompleted", () => {
     const state = makeState();
     state.baseline.scripts["001_intro"] = { completed: true, selfSwitches: { A: false, B: false, C: false, D: false } };
     expect(
-      evaluateCondition({ scriptCompleted: "001_intro" }, state),
+      evaluateCondition({ scriptCompleted: "001_intro" }, state).ok,
     ).toBe(true);
   });
 
   test("returns false when not completed", () => {
     const state = makeState();
     expect(
-      evaluateCondition({ scriptCompleted: "001_intro" }, state),
+      evaluateCondition({ scriptCompleted: "001_intro" }, state).ok,
     ).toBe(false);
   });
 });
@@ -193,7 +193,7 @@ describe("evaluateCondition — composite (all/any/not)", () => {
           ],
         },
         state,
-      ),
+      ).ok,
     ).toBe(true);
   });
 
@@ -208,7 +208,7 @@ describe("evaluateCondition — composite (all/any/not)", () => {
           ],
         },
         state,
-      ),
+      ).ok,
     ).toBe(false);
   });
 
@@ -223,7 +223,7 @@ describe("evaluateCondition — composite (all/any/not)", () => {
           ],
         },
         state,
-      ),
+      ).ok,
     ).toBe(true);
   });
 
@@ -238,7 +238,7 @@ describe("evaluateCondition — composite (all/any/not)", () => {
           ],
         },
         state,
-      ),
+      ).ok,
     ).toBe(false);
   });
 
@@ -248,7 +248,7 @@ describe("evaluateCondition — composite (all/any/not)", () => {
       evaluateCondition(
         { not: { scriptCompleted: "missing_script" } },
         state,
-      ),
+      ).ok,
     ).toBe(true);
   });
 
@@ -260,7 +260,7 @@ describe("evaluateCondition — composite (all/any/not)", () => {
         { not: { scriptCompleted: "missing" } },
       ],
     };
-    expect(evaluateCondition(cond, state)).toBe(true);
+    expect(evaluateCondition(cond, state).ok).toBe(true);
   });
 });
 
@@ -268,32 +268,32 @@ describe("evaluateCondition — training stats", () => {
   test("stat min/max checks training.stats", () => {
     const state = createInitialState(trainingGame());
     expect(
-      evaluateCondition({ stat: { name: "spectral", min: 5 } }, state),
+      evaluateCondition({ stat: { name: "spectral", min: 5 } }, state).ok,
     ).toBe(true);
     expect(
-      evaluateCondition({ stat: { name: "spectral", max: 4 } }, state),
+      evaluateCondition({ stat: { name: "spectral", max: 4 } }, state).ok,
     ).toBe(false);
   });
 
   test("missing stat returns false", () => {
     const state = createInitialState(trainingGame());
     expect(
-      evaluateCondition({ stat: { name: "missing_stat", min: 0 } }, state),
+      evaluateCondition({ stat: { name: "missing_stat", min: 0 } }, state).ok,
     ).toBe(false);
   });
 
   test("stat against non-training state returns false", () => {
     const state = makeState();
     expect(
-      evaluateCondition({ stat: { name: "any", min: 0 } }, state),
+      evaluateCondition({ stat: { name: "any", min: 0 } }, state).ok,
     ).toBe(false);
   });
 
   test("day and slot read training calendar", () => {
     const state = createInitialState(trainingGame());
-    expect(evaluateCondition({ day: { eq: 1 } }, state)).toBe(true);
-    expect(evaluateCondition({ day: { min: 2 } }, state)).toBe(false);
-    expect(evaluateCondition({ slot: { eq: 0 } }, state)).toBe(true);
+    expect(evaluateCondition({ day: { eq: 1 } }, state).ok).toBe(true);
+    expect(evaluateCondition({ day: { min: 2 } }, state).ok).toBe(false);
+    expect(evaluateCondition({ slot: { eq: 0 } }, state).ok).toBe(true);
   });
 });
 
@@ -302,17 +302,17 @@ describe("evaluateCondition — inventory / weaponPower / knowsSkill", () => {
     const state = makeState();
     applyDelta(state, { inventory: { potion: 3 } });
     expect(
-      evaluateCondition({ inventory: { itemId: "potion", min: 2 } }, state),
+      evaluateCondition({ inventory: { itemId: "potion", min: 2 } }, state).ok,
     ).toBe(true);
     expect(
-      evaluateCondition({ inventory: { itemId: "potion", min: 5 } }, state),
+      evaluateCondition({ inventory: { itemId: "potion", min: 5 } }, state).ok,
     ).toBe(false);
   });
 
   test("inventory absent counts as 0", () => {
     const state = makeState();
     expect(
-      evaluateCondition({ inventory: { itemId: "potion", max: 0 } }, state),
+      evaluateCondition({ inventory: { itemId: "potion", max: 0 } }, state).ok,
     ).toBe(true);
   });
 
@@ -328,7 +328,7 @@ describe("evaluateCondition — inventory / weaponPower / knowsSkill", () => {
       evaluateCondition(
         { weaponPower: { weaponId: "yaodao", min: 10 } },
         state,
-      ),
+      ).ok,
     ).toBe(true);
   });
 
@@ -338,15 +338,15 @@ describe("evaluateCondition — inventory / weaponPower / knowsSkill", () => {
       evaluateCondition(
         { weaponPower: { weaponId: "phantom", min: 0 } },
         state,
-      ),
+      ).ok,
     ).toBe(false);
   });
 
   test("knowsSkill returns true once learned", () => {
     const state = makeState();
-    expect(evaluateCondition({ knowsSkill: "purify" }, state)).toBe(false);
+    expect(evaluateCondition({ knowsSkill: "purify" }, state).ok).toBe(false);
     applyDelta(state, { skills: { learn: ["purify"] } });
-    expect(evaluateCondition({ knowsSkill: "purify" }, state)).toBe(true);
+    expect(evaluateCondition({ knowsSkill: "purify" }, state).ok).toBe(true);
   });
 });
 
@@ -357,7 +357,7 @@ describe("evaluateCondition — selfSwitch", () => {
       evaluateCondition(
         { selfSwitch: { scriptId: "q", name: "A" } },
         state,
-      ),
+      ).ok,
     ).toBe(false);
   });
 
@@ -368,19 +368,19 @@ describe("evaluateCondition — selfSwitch", () => {
       evaluateCondition(
         { selfSwitch: { scriptId: "q", name: "A" } },
         state,
-      ),
+      ).ok,
     ).toBe(true);
     expect(
       evaluateCondition(
         { selfSwitch: { scriptId: "q", name: "A", eq: true } },
         state,
-      ),
+      ).ok,
     ).toBe(true);
     expect(
       evaluateCondition(
         { selfSwitch: { scriptId: "q", name: "A", eq: false } },
         state,
-      ),
+      ).ok,
     ).toBe(false);
   });
 
@@ -391,7 +391,7 @@ describe("evaluateCondition — selfSwitch", () => {
       evaluateCondition(
         { selfSwitch: { scriptId: "q2", name: "A" } },
         state,
-      ),
+      ).ok,
     ).toBe(false);
   });
 });
@@ -402,6 +402,6 @@ describe("evaluateCondition — unhandled shape returns false", () => {
     expect(() =>
       evaluateCondition({} as Condition, state),
     ).not.toThrow();
-    expect(evaluateCondition({} as Condition, state)).toBe(false);
+    expect(evaluateCondition({} as Condition, state).ok).toBe(false);
   });
 });

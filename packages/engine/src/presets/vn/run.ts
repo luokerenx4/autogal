@@ -96,7 +96,7 @@ function listAvailableScripts(ctx: PresetContext): ScriptInfo[] {
       (s) =>
         ctx.state.baseline.scripts[s.id]?.completed !== true &&
         (s.requires === undefined ||
-          evaluateCondition(s.requires, ctx.state)),
+          evaluateCondition(s.requires, ctx.state).ok),
     )
     .map((s) => ({ id: s.id, title: s.title }));
 }

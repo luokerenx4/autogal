@@ -1,0 +1,17 @@
+kind: bg
+description: |
+  隅田河の渡し場。古い船板が積まれ、川面に映る灯が揺れる。
+  水草の匂いと、遠く対岸の松林の影。風が頬を切る。
+prompt: |
+  A small wooden ferry landing on a wide river at night.
+  Stacks of weathered boat planks. Distant pine grove on the
+  opposite bank. Lantern light shimmering on water. Cold sharp
+  wind. Mood: in-between, threshold, last-stop-before-shore.
+placeholder: "[隅田河・渡し場] 古い船板と水面の灯、対岸の松林"
+refs:
+  location: sumida-river
+  time: 夜
+size_hint:
+  tui: { cols: 80, rows: 24 }
+  web: { aspect: "16:9" }
+tags: [chapter-1, raid-zone, extract]

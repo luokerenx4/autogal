@@ -8,6 +8,7 @@ spawn_zone_id: edge
 zones:
   - id: edge
     name: 沼の縁
+    bg: assets/backgrounds/swamp-edge
     connections:
       - { dir: 奥, target: crossroads }
     encounter_table:
@@ -32,6 +33,7 @@ zones:
 
   - id: shrine
     name: 潰れた社
+    bg: assets/backgrounds/swamp-shrine
     is_extract: true
     connections:
       - { dir: 戻る, target: crossroads }

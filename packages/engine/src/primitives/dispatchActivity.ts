@@ -43,7 +43,7 @@ export async function* dispatchActivity(
     if (!original) return "ok";
     const available =
       original.requires === undefined ||
-      evaluateCondition(original.requires, ctx.state);
+      evaluateCondition(original.requires, ctx.state).ok;
     if (!available) return "ok";
     const dispatched = fireOnActionDispatch(ctx, original);
     if (dispatched === "cancel") return "ok";

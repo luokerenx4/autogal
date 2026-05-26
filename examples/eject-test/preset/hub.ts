@@ -21,9 +21,9 @@ export function buildHubSnapshot(state: ComposedState, game: Game): Output {
 
   for (const s of game.scripts) {
     if (state.baseline.scripts[s.id]?.completed === true) continue;
-    const available =
-      s.requires === undefined || evaluateCondition(s.requires, state);
-    if (!available) continue;
+    const r =
+      s.requires === undefined ? { ok: true } : evaluateCondition(s.requires, state);
+    if (!r.ok) continue;
     if (isExplicitlyEnding(game, s.id)) continue;
     activities.push({
       id: `script:${s.id}`,
@@ -37,8 +37,8 @@ export function buildHubSnapshot(state: ComposedState, game: Game): Output {
   for (const a of game.actions ?? []) {
     if (a.slot === "day" && isNight) continue;
     if (a.slot === "night" && !isNight) continue;
-    const available =
-      a.requires === undefined || evaluateCondition(a.requires, state);
+    const r =
+      a.requires === undefined ? { ok: true } : evaluateCondition(a.requires, state);
     activities.push({
       id: `action:${a.id}`,
       kind: "action",
@@ -47,8 +47,8 @@ export function buildHubSnapshot(state: ComposedState, game: Game): Output {
       category: a.category,
       cost: a.cost,
       effectsHint: formatEffectsHint(a.effects),
-      available,
-      lockedReason: available ? undefined : "条件未满足",
+      available: r.ok,
+      ...(r.ok ? {} : { lockedReason: r.reason }),
     });
   }
 

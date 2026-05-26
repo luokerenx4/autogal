@@ -8,6 +8,7 @@ spawn_zone_id: foothills
 zones:
   - id: foothills
     name: 麓
+    bg: assets/backgrounds/houkyou-foothills
     connections:
       - { dir: 登る, target: stone_paths }
     encounter_table:
@@ -57,6 +58,7 @@ zones:
 
   - id: caldera
     name: 火口
+    bg: assets/backgrounds/houkyou-caldera
     is_extract: true
     connections:
       - { dir: 戻る, target: lava_vent }

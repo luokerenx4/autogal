@@ -114,6 +114,7 @@ function parseZone(
 
   const zone: MapZoneDef = { id, name, connections };
   if (obj.is_extract === true) zone.isExtract = true;
+  if (typeof obj.bg === "string" && obj.bg.length > 0) zone.bg = obj.bg;
 
   if (obj.encounter_table !== undefined) {
     if (!Array.isArray(obj.encounter_table)) {

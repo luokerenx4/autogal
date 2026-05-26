@@ -27,6 +27,44 @@ interface Props {
 // Empty stage (no bg, no portraits, no cg) renders as a thin "stage
 // empty" hint in dim text so the layout doesn't collapse — useful
 // during early authoring before any spec.yaml exists.
+// Slot positions, in render order from left to right. "Known" slots
+// get fixed horizontal positions; unknown slot names (the engine
+// accepts arbitrary keys, so a game could use `back` / `foreground`
+// / `narrator` / whatever) render after right, in declaration order.
+// This keeps the engine's open-shape contract while giving the
+// galgame-standard three slots a predictable layout.
+const KNOWN_SLOTS = ["left", "center", "right"] as const;
+type KnownSlot = (typeof KNOWN_SLOTS)[number];
+
+interface PortraitEntry {
+  slot: string;
+  path: string;
+  spec: AssetSpec | undefined;
+}
+
+function collectPortraits(
+  visuals: VisualState,
+  assetMap: Map<string, AssetSpec>,
+): PortraitEntry[] {
+  const entries: PortraitEntry[] = [];
+  // Known slots first, in canonical order, so left always renders
+  // before center which always renders before right — independent of
+  // the order portraits were set on the state.
+  for (const slot of KNOWN_SLOTS) {
+    const p = visuals.portraits[slot];
+    if (p) entries.push({ slot, path: p, spec: assetMap.get(p) });
+  }
+  // Then any other named slots, in object-key order. Acceptable for
+  // v3: authors using uncommon slot names get a deterministic but
+  // unopinionated layout.
+  for (const [slot, p] of Object.entries(visuals.portraits)) {
+    if (!p) continue;
+    if ((KNOWN_SLOTS as readonly string[]).includes(slot)) continue;
+    entries.push({ slot, path: p, spec: assetMap.get(p) });
+  }
+  return entries;
+}
+
 export function Stage({ visuals, assetMap }: Props) {
   if (visuals.cg) {
     const spec = assetMap.get(visuals.cg);
@@ -38,12 +76,8 @@ export function Stage({ visuals, assetMap }: Props) {
   }
 
   const bgSpec = visuals.bg ? assetMap.get(visuals.bg) : undefined;
-  const centerSpec = visuals.portraits.center
-    ? assetMap.get(visuals.portraits.center)
-    : undefined;
-  const isEmpty =
-    !visuals.bg &&
-    Object.values(visuals.portraits).every((p) => !p);
+  const portraits = collectPortraits(visuals, assetMap);
+  const isEmpty = !visuals.bg && portraits.length === 0;
 
   if (isEmpty) {
     return <Box flexGrow={1} />;
@@ -54,23 +88,34 @@ export function Stage({ visuals, assetMap }: Props) {
     bgRendering !== undefined &&
     (bgRendering.kind === "ans" || bgRendering.kind === "txt");
 
-  // Real bg → row layout (bg backdrop on the left, portrait right of
-  // it). Placeholder bg → column layout (banner line on top, portrait
-  // centered below). Different shapes because a real 80×24 bg sized
-  // as a banner would steal half the stage; rendering it as a
-  // sized backdrop next to the portrait keeps both visible.
+  // Real bg → row layout. The bg backdrop sits in the middle (its
+  // sized box dominates the visual weight); portraits flank it.
+  // `left` slots render before the backdrop, `center` and `right`
+  // (and any unknown slots) render after. This gives the classical
+  // galgame look where the bg is "the room" and characters appear
+  // beside or in front of it.
+  //
+  // Placeholder bg → column layout: one-line banner on top, portrait
+  // stack below in left/center/right declaration order. Different
+  // shapes because a real 80×24 bg sized as a banner would steal
+  // half the stage; rendering it as a sized backdrop next to
+  // portraits keeps both visible.
   if (bgIsReal) {
+    const leftPortraits = portraits.filter((p) => p.slot === "left");
+    const otherPortraits = portraits.filter((p) => p.slot !== "left");
     return (
       <Box flexGrow={1} flexDirection="row" paddingX={2} paddingY={1}>
-        <BgBackdrop spec={bgSpec} path={visuals.bg!} />
-        {visuals.portraits.center ? (
-          <Box marginLeft={2}>
-            <PortraitPanel
-              spec={centerSpec}
-              path={visuals.portraits.center}
-            />
+        {leftPortraits.map((p) => (
+          <Box key={p.slot} marginRight={2}>
+            <PortraitPanel spec={p.spec} path={p.path} slot={p.slot} />
           </Box>
-        ) : null}
+        ))}
+        <BgBackdrop spec={bgSpec} path={visuals.bg!} />
+        {otherPortraits.map((p) => (
+          <Box key={p.slot} marginLeft={2}>
+            <PortraitPanel spec={p.spec} path={p.path} slot={p.slot} />
+          </Box>
+        ))}
       </Box>
     );
   }
@@ -80,10 +125,17 @@ export function Stage({ visuals, assetMap }: Props) {
       {visuals.bg ? (
         <BgBanner spec={bgSpec} path={visuals.bg} />
       ) : null}
-      <Box flexGrow={1} flexDirection="row" justifyContent="flex-end" marginTop={1}>
-        {visuals.portraits.center ? (
-          <PortraitPanel spec={centerSpec} path={visuals.portraits.center} />
-        ) : null}
+      <Box
+        flexGrow={1}
+        flexDirection="row"
+        justifyContent="flex-end"
+        marginTop={1}
+      >
+        {portraits.map((p, i) => (
+          <Box key={p.slot} marginLeft={i === 0 ? 0 : 2}>
+            <PortraitPanel spec={p.spec} path={p.path} slot={p.slot} />
+          </Box>
+        ))}
       </Box>
     </Box>
   );
@@ -162,9 +214,11 @@ function BgBackdrop({
 function PortraitPanel({
   spec,
   path,
+  slot,
 }: {
   spec: AssetSpec | undefined;
   path: string;
+  slot: string;
 }) {
   const rendering = selectRendering(spec);
   const cols = spec?.sizeHint?.tui?.cols ?? 32;
@@ -180,7 +234,7 @@ function PortraitPanel({
     >
       {dev ? (
         <Text dimColor color="yellow">
-          [portrait: {path}]
+          [portrait {slot}: {path}]
         </Text>
       ) : null}
       <RenderingText rendering={rendering} />

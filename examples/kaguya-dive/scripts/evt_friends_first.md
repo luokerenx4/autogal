@@ -2,6 +2,7 @@
 id: evt_friends_first
 title: 闺蜜上线
 characters: [iroha, ashihana, mami]
+cost: 0
 requires:
   switch: { name: __trigger_only, eq: true }
 ---

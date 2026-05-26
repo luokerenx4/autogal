@@ -2,6 +2,7 @@
 id: evt_yachiyo_test
 title: 八千代在出口
 characters: [iroha, yachiyo]
+cost: 0
 requires:
   switch: { name: __trigger_only, eq: true }
 ---

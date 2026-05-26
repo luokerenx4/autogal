@@ -1045,7 +1045,19 @@ export interface HubSnapshot {
 }
 
 export type Output =
-  | { type: "narration"; text: string; visualState?: VisualState }
+  | {
+      type: "narration";
+      text: string;
+      visualState?: VisualState;
+      // Number of narrations remaining in the pending queue, INCLUDING
+      // the one being yielded right now. 1 means "this is the last
+      // one"; 5 means "this one plus four more queued". Lets AI players
+      // and UI renderers know to keep advancing with `next` rather
+      // than submitting other input — drainNarrations re-yields the
+      // same narration on non-next input, which used to be a silent
+      // footgun. Absent on engines built before this field landed.
+      pendingCount?: number;
+    }
   | {
       type: "dialogue";
       speakerId: string;

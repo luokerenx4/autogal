@@ -102,4 +102,52 @@ describe("drainNarrations — input-type protocol", () => {
     const { outputs } = await drive(drainNarrations(ctx), []);
     expect(outputs).toEqual([]);
   });
+
+  test("each yielded narration carries pendingCount = queue length incl. self", async () => {
+    // AI players / UI renderers detect "more narrations queued" via
+    // this field instead of inferring from re-yields. The count
+    // decrements as narrations drain.
+    const ctx = makeCtx(makeGame({ characters: [makeCharacter("a")] }));
+    ctx.state.runtime.pendingNarrations.push("a", "b", "c");
+    const { outputs } = await drive(drainNarrations(ctx), [
+      { type: "next" },
+      { type: "next" },
+      { type: "next" },
+    ]);
+    expect(
+      outputs.map((o) => ({
+        text: (o as { text: string }).text,
+        pendingCount: (o as { pendingCount?: number }).pendingCount,
+      })),
+    ).toEqual([
+      { text: "a", pendingCount: 3 },
+      { text: "b", pendingCount: 2 },
+      { text: "c", pendingCount: 1 },
+    ]);
+  });
+
+  test("pendingCount on re-yield reflects the unchanged queue", async () => {
+    // If a non-next input causes a re-yield, the queue didn't shrink —
+    // pendingCount should also stay constant so the caller's preflight
+    // check ("send next first") is correct.
+    const ctx = makeCtx(makeGame({ characters: [makeCharacter("a")] }));
+    ctx.state.runtime.pendingNarrations.push("a", "b");
+    const { outputs } = await drive(drainNarrations(ctx), [
+      { type: "doActivity", id: "x" }, // re-yield "a"
+      { type: "doActivity", id: "x" }, // re-yield "a"
+      { type: "next" }, // drain "a", yield "b"
+      { type: "next" }, // drain "b", end
+    ]);
+    expect(
+      outputs.map((o) => ({
+        text: (o as { text: string }).text,
+        pendingCount: (o as { pendingCount?: number }).pendingCount,
+      })),
+    ).toEqual([
+      { text: "a", pendingCount: 2 },
+      { text: "a", pendingCount: 2 },
+      { text: "a", pendingCount: 2 },
+      { text: "b", pendingCount: 1 },
+    ]);
+  });
 });

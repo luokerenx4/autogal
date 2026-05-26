@@ -1,16 +1,22 @@
-// moon-dive: 月读潜行 module — EXE 风的 jack-in 子玩法骨架。
+// moon-dive: 月读潜行 module — EXE 风的 jack-in 子玩法骨架 + 隐性热度战。
 //
 // 责任:
-//   - 一个 actionHandler (kind: dive) 处理所有 5 个 dive_* action,
+//   - 一个 actionHandler (kind: dive) 处理所有 6 个 dive_* action,
 //     按 action.id 分派到对应节点的掉落表。每次潜行 RNG 决定本次见闻。
 //   - 私有状态 state["moon-dive"]: 每个节点的访问次数 + 是否已撞见 X / 八千代。
-//   - 两个 once-only 触发器: 首次撞见 X、八千代试探场景。
+//   - 一组 once-only 触发器: 闺蜜、哥哥、目标提示、X、八千代试探、八千代删自己、
+//     芦花的一瞬、X 移交、通电前夜。
 //     都通过直接写 ctx.state.baseline.currentScriptId 来"插播"剧本——
 //     训练 preset 的 run loop 下一轮会优先跑掉 current script，然后再回 hub。
+//   - **隐性热度战**: onActionComplete 后每个 cost ≥ 1 的动作让 heat 衰减 2；
+//     如果 heat < 40 触发"注意力虹吸"——随机一项已收集的 data_* -1。
+//     这就是八千代"消极删自己数据"的玩法层面体现。彩叶 jacked in 时不知道
+//     是八千代在主动放手，只看见数据在掉。
 //
 // 为什么不放在 yaml 里:
 //   actions/*.yaml 的 effects 是确定的；潜行的核心趣味是 RNG。
 //   而且 parser 会丢掉非标字段 (nodeId 之类)，所以分派必须靠 action.id。
+//   热度衰减/虹吸是计算逻辑，不是单次 action 的 effects 能表达的。
 
 import type {
   ActionContext,
@@ -373,6 +379,56 @@ const triggers: Trigger[] = [
       return {};
     },
   },
+  // 顶流榜异动：八千代第一次承认看见 X，但她说"没事"。
+  // 触发：哥哥首电话后 + heat 已经掉到 ≤ 45（玩家忽视过 stream 至少一次）。
+  // 设计意图：让"装作没事"那场戏自然嵌进玩家自己造成的形势变化里。
+  {
+    id: "chart_notice",
+    once: true,
+    when: {
+      all: [
+        { scriptCompleted: "evt_asahi_first" },
+        { stat: { name: "heat", max: 45 } },
+      ],
+    },
+    do: (ctx) => {
+      queueScript(ctx, "evt_chart_notice");
+      return {};
+    },
+  },
+  // 撞破八千代删自己数据：彩叶足够深 + 已经见过八千代一面。
+  // memory ≥ 15 是个软门槛——她已经积累出"可以被删的东西"。
+  {
+    id: "kaguya_truth",
+    once: true,
+    when: {
+      all: [
+        { scriptCompleted: "evt_yachiyo_test" },
+        { stat: { name: "data_memory", min: 15 } },
+      ],
+    },
+    do: (ctx) => {
+      queueScript(ctx, "evt_kaguya_truth");
+      return {};
+    },
+  },
+  // 芦花的一瞬：仅对真的把芦花放在心上的玩家开放（好感 ≥ 8）。
+  // 不到位的玩家完全错过这条暗线，这是对他们道德的镜像 — 不是 bug。
+  {
+    id: "ashihana_glimpse",
+    once: true,
+    when: {
+      all: [
+        { day: { min: 2 } },
+        { affection: { character: "ashihana", min: 8 } },
+        { scriptCompleted: "evt_friends_suspect" },
+      ],
+    },
+    do: (ctx) => {
+      queueScript(ctx, "evt_ashihana_glimpse");
+      return {};
+    },
+  },
   // ——— 第三年（剧情高潮）———
   // 通电前夜：4 类数据各自过 20（约 GOOD 阈值 30 的 2/3）。给一波 stat
   // 增益作为奖励，并把"通电前夜"这一刻郑重表达出来。
@@ -395,7 +451,65 @@ const triggers: Trigger[] = [
       };
     },
   },
+  // X 移交（TRUE-end 的入口）：所有硬指标 + 撞破真相 + 顶住热度战。
+  // 全跑到这一步意味着玩家：
+  //   - 收齐了 4 类数据（4 × 30）→ 有义体的物理基础
+  //   - bond ≥ 7 → 八千代真心想留下来
+  //   - heat ≥ 50 → 顶住了注意力虹吸
+  //   - 撞破了八千代消极删数据这件事 → 在最后一夜的选择里能说出"我要现在的你"
+  // 触发后 evt_x_handoff 在结尾给玩家最后一个二选一；end_true 由 endConditions
+  // 通过 scriptCompleted 检测兜底。
+  {
+    id: "x_handoff",
+    once: true,
+    when: {
+      all: [
+        { scriptCompleted: "evt_kaguya_truth" },
+        { stat: { name: "data_neural", min: 30 } },
+        { stat: { name: "data_motor",  min: 30 } },
+        { stat: { name: "data_voice",  min: 30 } },
+        { stat: { name: "data_memory", min: 30 } },
+        { stat: { name: "bond",        min: 7 } },
+        { stat: { name: "heat",        min: 50 } },
+      ],
+    },
+    do: (ctx) => {
+      queueScript(ctx, "evt_x_handoff");
+      return {};
+    },
+  },
 ];
+
+// ----------------------------------------------------------------------------
+// Heat decay + 注意力虹吸 (data drift). Fires after every cost ≥ 1 action.
+// ----------------------------------------------------------------------------
+
+const HEAT_DECAY_PER_SLOT = 2;
+const DRIFT_THRESHOLD = 40;
+const DATA_KEYS = [
+  "data_neural",
+  "data_motor",
+  "data_voice",
+  "data_memory",
+] as const;
+
+function applyHeatDecay(ctx: PresetContext): void {
+  const t = ctx.state.training;
+  if (!t) return;
+  const cur = t.stats.heat ?? 50;
+  const next = Math.max(0, cur - HEAT_DECAY_PER_SLOT);
+  t.stats.heat = next;
+
+  // 注意力虹吸：热度跌破阈值 → 已收集的数据开始漂走。
+  // 八千代消极删数据的世界外表达——彩叶看见数据掉，但不知道是谁在删。
+  if (next < DRIFT_THRESHOLD) {
+    const eligible = DATA_KEYS.filter((k) => (t.stats[k] ?? 0) > 0);
+    if (eligible.length === 0) return;
+    const idx = Math.floor(ctx.rng() * eligible.length);
+    const pick = eligible[idx]!;
+    t.stats[pick] = Math.max(0, (t.stats[pick] ?? 0) - 1);
+  }
+}
 
 // ----------------------------------------------------------------------------
 // Module
@@ -431,7 +545,13 @@ const moonDive: Module = {
   // case), onActionComplete fires when a hub action finishes (the more
   // common "trigger fired during a script, deferred, now hub-time" case).
   onScriptComplete: (ctx) => drainPending(ctx),
-  onActionComplete: (ctx) => drainPending(ctx),
+  // onActionComplete also drives the heat war: every cost ≥ 1 action
+  // advances the calendar AND decays heat. move:* and cost:0 scripted
+  // beats don't trigger decay.
+  onActionComplete: (ctx, action) => {
+    drainPending(ctx);
+    if (action.cost > 0) applyHeatDecay(ctx);
+  },
 };
 
 export default moonDive;

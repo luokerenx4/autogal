@@ -2,7 +2,8 @@ name: 注入接近通关的 stats，应触发 GOOD ending
 description: |
   跳过 12 回合的资源积累 + 所有触发剧本，直接把 stats 注入到 good ending
   阈值之上，推一次 hub 让 end_condition 命中 end_good。
-  firedTriggers 把 6 个剧情触发器都标记为已触发，避免插队。
+  firedTriggers 把所有剧情触发器都标记为已触发，避免插队。
+  注意：故意不完成 evt_kaguya_truth / evt_x_handoff，否则会被 TRUE 优先级抢走。
 state:
   baseline:
     scripts:
@@ -10,28 +11,36 @@ state:
       evt_friends_first:   { completed: true, selfSwitches: { A: false, B: false, C: false, D: false } }
       evt_asahi_first:     { completed: true, selfSwitches: { A: false, B: false, C: false, D: false } }
       evt_goal_hint:       { completed: true, selfSwitches: { A: false, B: false, C: false, D: false } }
+      evt_chart_notice:    { completed: true, selfSwitches: { A: false, B: false, C: false, D: false } }
       evt_x_first_seen:    { completed: true, selfSwitches: { A: false, B: false, C: false, D: false } }
       evt_friends_suspect: { completed: true, selfSwitches: { A: false, B: false, C: false, D: false } }
       evt_yachiyo_test:    { completed: true, selfSwitches: { A: false, B: false, C: false, D: false } }
+      evt_ashihana_glimpse: { completed: true, selfSwitches: { A: false, B: false, C: false, D: false } }
       evt_body_almost:     { completed: true, selfSwitches: { A: false, B: false, C: false, D: false } }
     completionOrder:
       - 001_intro
       - evt_friends_first
       - evt_asahi_first
       - evt_goal_hint
+      - evt_chart_notice
       - evt_x_first_seen
       - evt_friends_suspect
       - evt_yachiyo_test
+      - evt_ashihana_glimpse
       - evt_body_almost
   runtime:
     firedTriggers:
       - friends_first
       - asahi_first
       - goal_hint
+      - chart_notice
       - x_first_seen
       - friends_suspect
       - yachiyo_test
+      - kaguya_truth
+      - ashihana_glimpse
       - body_almost_ready
+      - x_handoff
   training:
     day: 3
     slot: 2
@@ -46,6 +55,7 @@ state:
       data_memory:  70
       bond:          7
       x_intel:      40
+      heat:         60
     statMax:
       engineering: 100
       neuroscience: 100
@@ -57,6 +67,7 @@ state:
       data_memory: 100
       bond: 10
       x_intel: 100
+      heat: 100
 inputs:
   - { type: next }
   - { type: next }

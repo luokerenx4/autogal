@@ -12,7 +12,9 @@ import type {
   Output,
   RenderedChoice,
   ScriptInfo,
+  VisualState,
 } from "@autogal/engine";
+import { emptyVisualState } from "@autogal/engine";
 
 // `cursor` on selectable stages: the row the player has currently
 // highlighted. Owned by the TUI, not the engine — Up/Down move it,
@@ -51,6 +53,11 @@ export type BacklogEntry =
 export interface ScreenModel {
   stage: Stage;
   backlog: BacklogEntry[];
+  // Current visual stack (bg / portraits / cg). Persists across
+  // stage transitions — when the engine moves from dialogue to choice
+  // the bg stays put. Updated whenever an Output carries a
+  // visualState; orthogonal to `stage`.
+  visuals: VisualState;
 }
 
 export const BACKLOG_CAP = 200;
@@ -58,12 +65,14 @@ export const BACKLOG_CAP = 200;
 export const initialModel: ScreenModel = {
   stage: { kind: "loading" },
   backlog: [],
+  visuals: emptyVisualState(),
 };
 
 export function makeErrorModel(err: Error): ScreenModel {
   return {
     stage: { kind: "error", message: err.message, stack: err.stack },
     backlog: [],
+    visuals: emptyVisualState(),
   };
 }
 
@@ -74,11 +83,23 @@ export function makeErrorModel(err: Error): ScreenModel {
 // outputs (choice / hubMenu / scriptComplete / gameEnd) replace the
 // stage outright and don't write to backlog.
 export function applyOutput(model: ScreenModel, output: Output): ScreenModel {
+  // Snapshot incoming visualState — the engine yields the same live
+  // object on every step, so without a copy the model would share a
+  // reference and downstream consumers (memoization, React props
+  // equality) would treat unchanged frames as changed and vice versa.
+  const visuals = output.visualState
+    ? {
+        bg: output.visualState.bg,
+        portraits: { ...output.visualState.portraits },
+        cg: output.visualState.cg,
+      }
+    : model.visuals;
   switch (output.type) {
     case "narration":
       return {
         stage: { kind: "narration", text: output.text },
         backlog: demote(model.stage, model.backlog),
+        visuals,
       };
     case "dialogue":
       return {
@@ -89,6 +110,7 @@ export function applyOutput(model: ScreenModel, output: Output): ScreenModel {
           text: output.text,
         },
         backlog: demote(model.stage, model.backlog),
+        visuals,
       };
     case "choice":
       return {
@@ -102,6 +124,7 @@ export function applyOutput(model: ScreenModel, output: Output): ScreenModel {
           ...(output.view !== undefined ? { view: output.view } : {}),
         },
         backlog: demote(model.stage, model.backlog),
+        visuals,
       };
     case "hubMenu":
       return {
@@ -114,6 +137,7 @@ export function applyOutput(model: ScreenModel, output: Output): ScreenModel {
           ),
         },
         backlog: demote(model.stage, model.backlog),
+        visuals,
       };
     case "scriptComplete":
       return {
@@ -124,6 +148,7 @@ export function applyOutput(model: ScreenModel, output: Output): ScreenModel {
           cursor: 0,
         },
         backlog: demote(model.stage, model.backlog),
+        visuals,
       };
     case "gameEnd":
       return {
@@ -132,11 +157,13 @@ export function applyOutput(model: ScreenModel, output: Output): ScreenModel {
           ...(output.reason !== undefined ? { reason: output.reason } : {}),
         },
         backlog: demote(model.stage, model.backlog),
+        visuals,
       };
     case "clear":
       return {
         stage: model.stage,
         backlog: capBacklog([...model.backlog, { kind: "sceneBreak" }]),
+        visuals,
       };
   }
 }

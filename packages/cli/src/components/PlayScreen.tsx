@@ -4,7 +4,13 @@ import { useInkInstance } from "../ink-instance";
 import { watch } from "node:fs";
 import { sep } from "node:path";
 import { Engine } from "@autogal/engine";
-import type { ComposedState, Game, Input, Output } from "@autogal/engine";
+import type {
+  AssetSpec,
+  ComposedState,
+  Game,
+  Input,
+  Output,
+} from "@autogal/engine";
 import { loadGame } from "../loader";
 import { appendLog, loadSession, saveSession } from "../session";
 import {
@@ -16,6 +22,7 @@ import {
   type UiAction,
 } from "../screen-model";
 import { dispatchStageInput, footerHintFor } from "../stage-input";
+import { clearRenderingCache } from "./stages/visual/assetRender";
 import { BacklogOverlay } from "./BacklogOverlay";
 import { GameLayout } from "./GameLayout";
 import { StatusBar } from "./StatusBar";
@@ -119,6 +126,11 @@ export function PlayScreen({
     if (processingRef.current) return;
     processingRef.current = true;
     try {
+      // Drop cached tui.txt / tui.ans contents — the watcher fired on
+      // a file change, and the changed file might be a rendering. The
+      // cheap thing to do is invalidate everything; the cache repopulates
+      // lazily on the next Stage render.
+      clearRenderingCache();
       const currentState = engine.getState();
       let newGame: Game;
       try {
@@ -303,6 +315,15 @@ export function PlayScreen({
     );
   }
 
+  // Build the asset-path → AssetSpec map fresh from the current game
+  // ref. Cheap (handful of entries); rebuilding on every render lets
+  // hot-reload swap the game without a stale closure. Stage components
+  // consume this read-only to look up placeholder text and rendering
+  // file paths.
+  const assetMap = new Map(
+    (game.assets ?? []).map((a) => [a.path, a] as const),
+  );
+
   // `key={repaintTick}` forces a full unmount+remount of GameLayout
   // after the stage-transition useEffect bumps repaintTick. Combined
   // with the preceding inkInstance.clear(), this guarantees ink emits a
@@ -310,7 +331,7 @@ export function PlayScreen({
   // buffer) — the fix for macOS Terminal's partial-refresh artifacts.
   return (
     <GameLayout key={repaintTick} header={header} footer={footer}>
-      {renderStage(model)}
+      {renderStage(model, assetMap)}
     </GameLayout>
   );
 }
@@ -321,7 +342,10 @@ function hasBacklog(model: ScreenModel): boolean {
   return model.backlog.length > 0;
 }
 
-function renderStage(model: ScreenModel): React.ReactNode {
+function renderStage(
+  model: ScreenModel,
+  assetMap: Map<string, AssetSpec>,
+): React.ReactNode {
   const s = model.stage;
   switch (s.kind) {
     case "loading":
@@ -329,9 +353,22 @@ function renderStage(model: ScreenModel): React.ReactNode {
     case "error":
       return <ErrorStage message={s.message} {...(s.stack ? { stack: s.stack } : {})} />;
     case "narration":
-      return <NarrationStage text={s.text} />;
+      return (
+        <NarrationStage
+          text={s.text}
+          visuals={model.visuals}
+          assetMap={assetMap}
+        />
+      );
     case "dialogue":
-      return <DialogueStage speakerName={s.speakerName} text={s.text} />;
+      return (
+        <DialogueStage
+          speakerName={s.speakerName}
+          text={s.text}
+          visuals={model.visuals}
+          assetMap={assetMap}
+        />
+      );
     case "choice":
       return (
         <ChoiceStage

@@ -8,7 +8,7 @@ import { testCommand } from "./commands/test";
 import { autoplayCommand } from "./commands/autoplay";
 import { initCommand } from "./commands/init";
 import { screenshotCommand } from "./commands/screenshot";
-import { assetsListCommand } from "./commands/assets";
+import { assetsListCommand, assetsPromptsCommand } from "./commands/assets";
 
 const HELP = `autogal — a headless RPG Maker for the terminal
 
@@ -55,6 +55,13 @@ COMMANDS
       present and the spec's placeholder text. --missing narrows to
       assets without any TUI rendering — the worklist for the next
       round of art generation.
+
+  assets   <game-dir> prompts [<asset-path>] [--missing] [--format text|json]
+      Print the generation prompt(s) for asset specs so authors can
+      pipe them into an image generator. With <asset-path>, prints
+      just that asset's prompt (pipe-friendly). Without, prints all
+      prompts with markdown-style separators; --missing filters to
+      assets without any TUI rendering.
 
   screenshot <game-dir> [--keys "K1,K2,..."] [--cols N] [--rows N]
              [--wait-ms N] [--out FILE]
@@ -261,12 +268,17 @@ async function runScreenshot(args: string[]): Promise<void> {
 
 async function runAssets(args: string[]): Promise<void> {
   const [sub, ...rest] = args;
-  if (sub !== "list") {
-    process.stderr.write(
-      "Usage: autogal assets list <game-dir> [--missing] [--format table|json]\n",
-    );
-    process.exit(2);
-  }
+  if (sub === "list") return runAssetsList(rest);
+  if (sub === "prompts") return runAssetsPrompts(rest);
+  process.stderr.write(
+    "Usage:\n" +
+      "  autogal assets list    <game-dir> [--missing] [--format table|json]\n" +
+      "  autogal assets prompts <game-dir> [<asset-path>] [--missing] [--format text|json]\n",
+  );
+  process.exit(2);
+}
+
+async function runAssetsList(rest: string[]): Promise<void> {
   const { values, positionals } = parseArgs({
     args: rest,
     options: {
@@ -288,6 +300,37 @@ async function runAssets(args: string[]): Promise<void> {
     gameDir,
     missing: Boolean(values.missing),
     format: fmt as "table" | "json",
+  });
+}
+
+async function runAssetsPrompts(rest: string[]): Promise<void> {
+  const { values, positionals } = parseArgs({
+    args: rest,
+    options: {
+      missing: { type: "boolean", default: false },
+      format: { type: "string", default: "text" },
+    },
+    allowPositionals: true,
+  });
+  // Two positional forms:
+  //   <game-dir>                          → all prompts
+  //   <game-dir> <asset-path>             → single asset's prompt
+  if (positionals.length < 1 || positionals.length > 2 || !positionals[0]) {
+    process.stderr.write(
+      "Usage: autogal assets prompts <game-dir> [<asset-path>] [--missing] [--format text|json]\n",
+    );
+    process.exit(2);
+  }
+  const fmt = values.format ?? "text";
+  if (fmt !== "text" && fmt !== "json") {
+    process.stderr.write(`--format must be 'text' or 'json' (got ${fmt})\n`);
+    process.exit(2);
+  }
+  await assetsPromptsCommand({
+    gameDir: positionals[0],
+    ...(positionals[1] !== undefined ? { assetPath: positionals[1] } : {}),
+    missing: Boolean(values.missing),
+    format: fmt as "text" | "json",
   });
 }
 

@@ -317,6 +317,17 @@ const triggers: Trigger[] = [
       return {};
     },
   },
+  // 目标提示：哥哥电话挂完后，彩叶在笔记本上写下三年要达成的硬指标。
+  // 把 endConditions 在剧情里露给玩家——避免靠翻 game.yaml 才知道要冲哪。
+  {
+    id: "goal_hint",
+    once: true,
+    when: { scriptCompleted: "evt_asahi_first" },
+    do: (ctx) => {
+      queueScript(ctx, "evt_goal_hint");
+      return {};
+    },
+  },
   // ——— 第二年 ———
   // X 浮出水面：x_intel 攒到 15。
   {

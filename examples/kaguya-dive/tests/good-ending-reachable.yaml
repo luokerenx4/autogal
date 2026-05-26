@@ -9,6 +9,7 @@ state:
       001_intro:           { completed: true, selfSwitches: { A: false, B: false, C: false, D: false } }
       evt_friends_first:   { completed: true, selfSwitches: { A: false, B: false, C: false, D: false } }
       evt_asahi_first:     { completed: true, selfSwitches: { A: false, B: false, C: false, D: false } }
+      evt_goal_hint:       { completed: true, selfSwitches: { A: false, B: false, C: false, D: false } }
       evt_x_first_seen:    { completed: true, selfSwitches: { A: false, B: false, C: false, D: false } }
       evt_friends_suspect: { completed: true, selfSwitches: { A: false, B: false, C: false, D: false } }
       evt_yachiyo_test:    { completed: true, selfSwitches: { A: false, B: false, C: false, D: false } }
@@ -17,6 +18,7 @@ state:
       - 001_intro
       - evt_friends_first
       - evt_asahi_first
+      - evt_goal_hint
       - evt_x_first_seen
       - evt_friends_suspect
       - evt_yachiyo_test
@@ -25,6 +27,7 @@ state:
     firedTriggers:
       - friends_first
       - asahi_first
+      - goal_hint
       - x_first_seen
       - friends_suspect
       - yachiyo_test

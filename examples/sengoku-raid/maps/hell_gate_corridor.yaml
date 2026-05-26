@@ -1,0 +1,13 @@
+id: hell_gate_corridor
+name: 業の廊
+chain: hell_gate
+difficulty: 5
+connections:
+  - { dir: 奥, target: hell_gate_mirror_pool }
+  - { dir: 戻る, target: hell_gate_mouth }
+encounter_table:
+  - { enemy: kijin, weight: 60 }
+  - { enemy: oni_warrior, weight: 40 }
+loot_table:
+  - { item: cursed_blade_fragment, min: 1, max: 2, weight: 70 }
+  - { item: oni_horn, min: 2, max: 4, weight: 30 }

@@ -1,0 +1,12 @@
+id: kuro_swamp_shrine
+name: 潰れた社
+chain: kuro_swamp
+difficulty: 1
+bg: assets/backgrounds/swamp-shrine
+is_extract: true
+connections:
+  - { dir: 戻る, target: kuro_swamp_crossroads }
+encounter_table:
+  - { enemy: null, weight: 1 }
+loot_table:
+  - { item: soul_shard, min: 1, max: 1, weight: 100 }

@@ -9,25 +9,23 @@ description: |
   at deep_grove, still in combat mode, still with full HP, and the
   enemy's HP hasn't moved. The pendingNarrations queue accumulated
   three refusal lines.
-
 state:
   baseline:
-    completedScripts: [000_intro]
+    completedScripts:
+      - 000_intro
     weapons:
-      ancestor_yaodao: { power: 6 }
+      ancestor_yaodao:
+        power: 6
+    currentMapId: kuro_swamp_deep_grove
   sengoku-raid:
-    mode: raid
     metCharacters: []
     raid:
-      mapId: kuro_swamp
-      mapName: 黒沼地
-      currentZoneId: deep_grove
+      chain: kuro_swamp
+      entryMapId: kuro_swamp_edge
       turnsTaken: 1
       pendingLoot: {}
-      zones:
-        deep_grove:
-          id: deep_grove
-          name: 奥の杜
+      visited:
+        kuro_swamp_deep_grove:
           visited: true
           searched: false
           encounter:
@@ -35,37 +33,25 @@ state:
             enemyHp: 8
             enemyHpMax: 8
           encounterCleared: false
-          encounterTable:
-            - { enemyId: oni_lesser, weight: 100 }
-          lootTable:
-            - { itemId: soul_shard, min: 2, max: 2, weight: 100 }
-          connections:
-            - { dir: 戻る, target: crossroads }
-          isExtract: true
           pendingLoot:
             soul_shard: 2
 inputs:
-  - { type: doActivity, id: "move:crossroads" }
-  - { type: doActivity, id: "search" }
-  - { type: doActivity, id: "extract" }
+  - type: doActivity
+    id: move:kuro_swamp_crossroads
+  - type: doActivity
+    id: search
+  - type: doActivity
+    id: extract
 assertions:
-  # Encounter still active and unmodified
   - kind: state
-    path: sengoku-raid.raid.zones.deep_grove.encounter.enemyHp
+    path: sengoku-raid.raid.visited.kuro_swamp_deep_grove.encounter.enemyHp
     eq: 8
-  # Still at deep_grove
   - kind: state
-    path: sengoku-raid.raid.currentZoneId
-    eq: deep_grove
-  # Still in raid mode (didn't extract)
+    path: baseline.currentMapId
+    eq: kuro_swamp_deep_grove
   - kind: state
-    path: sengoku-raid.mode
-    eq: raid
-  # Zone wasn't searched
-  - kind: state
-    path: sengoku-raid.raid.zones.deep_grove.searched
+    path: sengoku-raid.raid.visited.kuro_swamp_deep_grove.searched
     eq: false
-  # HP unchanged
   - kind: state
     path: baseline.characters.player.stats.hp
     eq: 30

@@ -398,6 +398,13 @@ const moonDive: Module = {
   actionHandlers: { dive: diveHandler },
   triggers,
   onSessionStart: (ctx) => {
+    // Establish the starting map. The hub builder scopes available
+    // actions to the current map; without this the player would see no
+    // actions at all on a fresh game. `town` is the everyday starting
+    // location; lab/cyber are reachable via connections.
+    if (ctx.state.baseline.currentMapId === null) {
+      ctx.state.baseline.currentMapId = "town";
+    }
     // Auto-queue the intro on first run, same pattern as sengoku-raid.
     if (
       ctx.state.baseline.scripts["001_intro"]?.completed !== true &&

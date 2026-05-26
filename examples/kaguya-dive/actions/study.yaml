@@ -4,6 +4,7 @@ description: 工学课、神经接口讲座。稳扎稳打。
 category: study
 slot: any
 cost: 1
+whenIn: [lab]
 effects:
   stats: { engineering: 5, neuroscience: 2, stamina: -1 }
 narrations:

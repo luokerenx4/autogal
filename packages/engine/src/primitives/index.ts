@@ -5,6 +5,8 @@ export { applyActionResult } from "./applyActionResult";
 export { runScript } from "./runScript";
 export { dispatchActivity } from "./dispatchActivity";
 export { mutateState } from "./mutateState";
+export { enterMap, EnterMapError } from "./enterMap";
+export { buildMapHubSnapshot, collectMapActivities } from "./buildMapHub";
 export { giveItem, consumeItem, hasItem } from "./inventory";
 export {
   getEquippedWeapon,

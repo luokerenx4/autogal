@@ -5,16 +5,22 @@ description: |
   rebate, weapon power up.
 state:
   baseline:
-    completedScripts: [000_intro]
+    completedScripts:
+      - 000_intro
     weapons:
-      ancestor_yaodao: { power: 6 }
+      ancestor_yaodao:
+        power: 6
     characters:
       player:
-        stats: { hp: 30, mental: 8, spectral: 25, intellect: 5 }
+        stats:
+          hp: 30
+          mental: 8
+          spectral: 25
+          intellect: 5
     variables:
       pulse_pure: 0
+    currentMapId: kuro_swamp_crossroads
   sengoku-raid:
-    mode: raid
     metCharacters: []
     companion: null
     companionHp: 0
@@ -22,27 +28,21 @@ state:
       enemyId: oni_lesser
       absorb: 4
     raid:
-      mapId: kuro_swamp
-      mapName: 黒沼地
-      currentZoneId: crossroads
+      chain: kuro_swamp
+      entryMapId: kuro_swamp_edge
       turnsTaken: 2
       pendingLoot: {}
-      zones:
-        crossroads:
-          id: crossroads
-          name: 三叉路
+      visited:
+        kuro_swamp_crossroads:
           visited: true
           searched: false
           encounter: null
           encounterCleared: true
-          encounterTable: []
-          lootTable: []
-          connections: [{ dir: 東, target: shrine }]
-          isExtract: false
           pendingLoot: {}
 inputs:
-  - { type: doActivity, id: "imbue:pure" }
-  - { type: next }
+  - type: doActivity
+    id: imbue:pure
+  - type: next
 assertions:
   - kind: state
     path: baseline.variables.pulse_pure

@@ -14,6 +14,7 @@ import type {
   WeaponState,
 } from "../types";
 import { emptyVisualState } from "../types";
+import { enterMap } from "../primitives/enterMap";
 
 export const BASELINE_NAMESPACE = "baseline";
 
@@ -182,12 +183,25 @@ export function createBaselineState(
     currentScriptId: null,
     beatIndex: 0,
     inventory: {},
+    currentMapId: null,
     weapons: weaponMap,
     equippedWeaponId,
     knownSkills: [],
     visuals: emptyVisualState(),
   };
 }
+
+// Built-in handler for the engine-synthesized "move" activity that
+// `buildMapHubSnapshot` / `collectMapActivities` emit for each
+// MapConnection. Payload shape: { to: <mapId> }. Delegates to the
+// enterMap primitive — same code path as a module/preset calling
+// enterMap directly.
+const moveToMapHandler: ActionHandler = ({ state, action, game }) => {
+  const to = (action.payload as { to?: unknown } | undefined)?.to;
+  if (typeof to !== "string") return {};
+  enterMap(state, game, to);
+  return {};
+};
 
 export const baselineModule: Module = {
   id: BASELINE_NAMESPACE,
@@ -200,10 +214,11 @@ export const baselineModule: Module = {
       game.variables ?? [],
     );
   },
-  provides: ["useItem", "useSkill"],
+  provides: ["useItem", "useSkill", "moveToMap"],
   actionHandlers: {
     useItem: useItemHandler,
     useSkill: useSkillHandler,
+    moveToMap: moveToMapHandler,
   },
 };
 

@@ -4,6 +4,7 @@ description: 回心力。仅此而已。
 category: rest
 slot: any
 cost: 1
+whenIn: [town]
 effects:
   stats: { stamina: 6 }
 narrations:

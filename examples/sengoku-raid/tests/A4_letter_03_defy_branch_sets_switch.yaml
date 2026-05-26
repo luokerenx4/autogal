@@ -7,68 +7,71 @@ description: |
   is set and the other two stay false.
 state:
   baseline:
-    completedScripts: [000_intro, letter_01_suspicion, letter_02_rival]
+    completedScripts:
+      - 000_intro
+      - letter_01_suspicion
+      - letter_02_rival
     weapons:
-      ancestor_yaodao: { power: 12 }
+      ancestor_yaodao:
+        power: 12
     characters:
       player:
-        stats: { hp: 30, mental: 8, spectral: 30, intellect: 8 }
+        stats:
+          hp: 30
+          mental: 8
+          spectral: 30
+          intellect: 8
     variables:
       raidsCompleted: 11
       raidsFailed: 0
       shogun_chapter: 2
+    currentMapId: kuro_swamp_shrine
   runtime:
-    firedTriggers: [letter_01_dispatch, letter_02_dispatch]
+    firedTriggers:
+      - letter_01_dispatch
+      - letter_02_dispatch
   sengoku-raid:
-    mode: raid
-    metCharacters: [kagari, mio]
+    metCharacters:
+      - kagari
+      - mio
     raid:
-      mapId: kuro_swamp
-      mapName: 黒沼地
-      currentZoneId: shrine
+      chain: kuro_swamp
+      entryMapId: kuro_swamp_edge
       turnsTaken: 1
       pendingLoot: {}
-      zones:
-        shrine:
-          id: shrine
-          name: 潰れた社
+      visited:
+        kuro_swamp_shrine:
           visited: true
           searched: true
           encounter: null
           encounterCleared: false
-          encounterTable: []
-          lootTable: []
-          connections: [{ dir: 戻る, target: crossroads }]
-          isExtract: true
           pendingLoot: {}
 maxSteps: 200
 inputs:
-  - { type: doActivity, id: "extract" }
-  # extract narration + letter header + body beats up to the fenced choice.
-  # letter_03 has about 14 leading beats then the fenced choice.
-  - { type: next }
-  - { type: next }
-  - { type: next }
-  - { type: next }
-  - { type: next }
-  - { type: next }
-  - { type: next }
-  - { type: next }
-  - { type: next }
-  - { type: next }
-  - { type: next }
-  - { type: next }
-  - { type: next }
-  - { type: next }
-  - { type: next }
-  - { type: next }
-  # Choice — option 1 = 公儀に刀を抜く
-  - { type: choose, index: 1 }
-  # Drain end_defy narrations
-  - { type: next }
-  - { type: next }
-  - { type: next }
-  - { type: next }
+  - type: doActivity
+    id: extract
+  - type: next
+  - type: next
+  - type: next
+  - type: next
+  - type: next
+  - type: next
+  - type: next
+  - type: next
+  - type: next
+  - type: next
+  - type: next
+  - type: next
+  - type: next
+  - type: next
+  - type: next
+  - type: next
+  - type: choose
+    index: 1
+  - type: next
+  - type: next
+  - type: next
+  - type: next
 assertions:
   - kind: state
     path: baseline.switches.chose_court_defy

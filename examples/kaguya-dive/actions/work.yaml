@@ -4,6 +4,7 @@ description: 24h 便利店收银。回血，回钱，不回心。
 category: work
 slot: any
 cost: 1
+whenIn: [town]
 effects:
   stats: { funds: 12, stamina: -1 }
 narrations:

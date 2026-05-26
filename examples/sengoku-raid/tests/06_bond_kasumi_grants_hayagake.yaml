@@ -4,29 +4,33 @@ description: |
   affection=4, dispatches bond_kasumi_02, asserts hayagake skill is
   granted. Then demonstrates the skill: even seeded into a raid with
   an active encounter, flee succeeds with no damage (hayagake branch).
-
 state:
   baseline:
-    completedScripts: [000_intro, encounter_kasumi_first]
+    completedScripts:
+      - 000_intro
+      - encounter_kasumi_first
     characters:
-      kasumi: { affection: 4, custom: {} }
+      kasumi:
+        affection: 4
+        custom: {}
   sengoku-raid:
-    mode: hub
     raid: null
-    metCharacters: [kasumi]
+    metCharacters:
+      - kasumi
 inputs:
-  - { type: doActivity, id: "script:bond_kasumi_02" }
-  - { type: next }
-  - { type: next }
-  - { type: next }
-  - { type: next }
-  - { type: next }
-  - { type: next }
-  - { type: next }
-  - { type: next }
-  - { type: next }
-  - { type: next }
-  - { type: next }
+  - type: doActivity
+    id: script:bond_kasumi_02
+  - type: next
+  - type: next
+  - type: next
+  - type: next
+  - type: next
+  - type: next
+  - type: next
+  - type: next
+  - type: next
+  - type: next
+  - type: next
 assertions:
   - kind: state
     path: baseline.knownSkills

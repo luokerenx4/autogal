@@ -7,20 +7,25 @@ description: |
   module-private achievementLog.
 state:
   baseline:
-    completedScripts: [000_intro]
+    completedScripts:
+      - 000_intro
     inventory:
       ryo: 200
       oni_horn: 1
       cursed_blade_fragment: 1
     weapons:
-      ancestor_yaodao: { power: 6 }
+      ancestor_yaodao:
+        power: 6
     characters:
       player:
-        stats: { hp: 30, mental: 8, spectral: 49, intellect: 5 }
+        stats:
+          hp: 30
+          mental: 8
+          spectral: 49
+          intellect: 5
     variables:
       pulse_oni: 0
   sengoku-raid:
-    mode: hub
     metCharacters: []
     companion: null
     companionHp: 0
@@ -28,12 +33,13 @@ state:
     achievementLog: []
     raid: null
 inputs:
-  - { type: doActivity, id: "upgrade_oni" }
-  - { type: next }
+  - type: doActivity
+    id: upgrade_oni
+  - type: next
 assertions:
   - kind: state
     path: baseline.characters.player.stats.spectral
     eq: 54
   - kind: state
     path: sengoku-raid.achievementLog
-    includes: "鬼に近づく — 霊体化 50"
+    includes: 鬼に近づく — 霊体化 50

@@ -20,7 +20,7 @@ inputs:
   - { type: doActivity, id: "depart:kuro_swamp" }
   - { type: next }          # raid-start narration
   # We're at edge. Move to crossroads → spawn fires → script launches.
-  - { type: doActivity, id: "move:crossroads" }
+  - { type: doActivity, id: "move:kuro_swamp_crossroads" }
   # Drain encounter script's narrations + dialogue
   - { type: next }
   - { type: next }
@@ -46,8 +46,12 @@ assertions:
   - kind: state
     path: baseline.characters.kagari.affection
     eq: 2
-  # Mode is still "raid" — we're back at crossroads with control returned
-  # to the raid loop (the encounter script doesn't change mode).
+  # Still in a raid — we're back at crossroads with control returned to
+  # the raid loop (the encounter script doesn't end the raid). raid !==
+  # null is the new "in raid" signal; we check chain identity directly.
   - kind: state
-    path: sengoku-raid.mode
-    eq: raid
+    path: sengoku-raid.raid.chain
+    eq: kuro_swamp
+  - kind: state
+    path: baseline.currentMapId
+    eq: kuro_swamp_crossroads

@@ -28,7 +28,7 @@
 //   our onHubBuild to win first-wins. Skipping game.training avoids
 //   both.
 
-import { evaluateCondition } from "@autogal/engine";
+import { enterMap, evaluateCondition } from "@autogal/engine";
 import type {
   ActionContext,
   ActionHandler,
@@ -39,7 +39,6 @@ import type {
   HubActivity,
   Input,
   MapDef,
-  MapZoneDef,
   Module,
   Output,
   PresetContext,
@@ -113,9 +112,12 @@ function clamp(n: number, min: number, max: number): number {
 // Module sub-state
 // ============================================================================
 
-interface ZoneInstance {
-  id: string;
-  name: string;
+// Per-map runtime state for the *current* raid. Lazy-initialized when
+// the player enters a map; lives only inside a RaidInstance and resets
+// every raid. Static data (name, connections, encounter/loot tables) is
+// not duplicated here — read it from `ctx.mapMap.get(<mapId>)` whenever
+// needed.
+interface MapInstance {
   visited: boolean;
   searched: boolean;
   encounter: null | {
@@ -127,26 +129,27 @@ interface ZoneInstance {
     // (encounter goes null).
     negotiable?: boolean;
   };
-  encounterCleared: boolean; // was there an encounter that's been resolved
-  encounterTable: { enemyId: string | null; weight: number }[];
-  lootTable: { itemId: string | null; min: number; max: number; weight: number }[];
-  connections: { dir: string; target: string }[];
-  isExtract: boolean;
-  bg?: string;
+  encounterCleared: boolean;
   pendingLoot: Record<string, number>;
 }
 
+// One raid (a single "expedition" from edo_castle through a chain of maps).
+// `chain` matches MapDef.chain; entryMapId is the chain entry the player
+// departed to. Per-map state lives in `visited`, keyed by map id —
+// crucially, "what map am I on now" is not stored here, it lives in
+// `state.baseline.currentMapId` (engine-canonical).
 interface RaidInstance {
-  mapId: string;
-  mapName: string;
-  currentZoneId: string;
-  zones: Record<string, ZoneInstance>;
-  pendingLoot: Record<string, number>; // gathered this raid
+  chain: string;
+  entryMapId: string;
+  visited: Record<string, MapInstance>;
+  pendingLoot: Record<string, number>; // gathered this raid (sum across maps)
   turnsTaken: number;
 }
 
 interface RaidModuleState {
-  mode: "hub" | "raid";
+  // "In a raid?" is equivalent to `raid !== null`. The previous explicit
+  // `mode: "hub" | "raid"` flag was redundant with the raid sub-state
+  // pointer; collapsed in the flat-map migration.
   raid: RaidInstance | null;
   metCharacters: string[];
   // Currently-invited companion. Cleared on raid end (success or
@@ -176,6 +179,45 @@ function moduleState(ctx: Ctx): RaidModuleState {
   return s;
 }
 
+// Engine-canonical reads. "Where am I right now" is `currentMapId`; the
+// per-map runtime instance for the current raid lives at
+// `m.raid.visited[currentMapId]`. These helpers consolidate the read so
+// the rest of the file doesn't repeat the null-checks.
+function currentMap(ctx: Ctx): MapDef | undefined {
+  const id = ctx.state.baseline.currentMapId;
+  if (id === null) return undefined;
+  return ctx.game.maps?.find((m) => m.id === id);
+}
+
+function currentMapInstance(ctx: Ctx): MapInstance | undefined {
+  const m = moduleState(ctx);
+  if (!m.raid) return undefined;
+  const id = ctx.state.baseline.currentMapId;
+  if (id === null) return undefined;
+  return m.raid.visited[id];
+}
+
+function ensureMapInstance(ctx: Ctx, mapId: string): MapInstance {
+  const m = moduleState(ctx);
+  if (!m.raid) throw new Error(`${MODULE_ID}: ensureMapInstance with no active raid`);
+  let inst = m.raid.visited[mapId];
+  if (!inst) {
+    inst = {
+      visited: false,
+      searched: false,
+      encounter: null,
+      encounterCleared: false,
+      pendingLoot: {},
+    };
+    m.raid.visited[mapId] = inst;
+  }
+  return inst;
+}
+
+function inRaid(ctx: Ctx): boolean {
+  return moduleState(ctx).raid !== null;
+}
+
 // ============================================================================
 // Maps — loaded by the engine's parser as a first-class resource type
 // (packages/parser/src/map.ts). Module consumes them via ctx.game.maps
@@ -186,18 +228,41 @@ function getMap(ctx: Ctx, mapId: string): MapDef | undefined {
   return ctx.game.maps?.find((m) => m.id === mapId);
 }
 
-function discoverableMaps(ctx: Ctx): string[] {
-  return (ctx.game.maps ?? [])
-    .slice()
-    .sort((a, b) => a.difficulty - b.difficulty)
-    .filter((m) => mapUnlocked(ctx, m.id))
-    .map((m) => m.id);
+// Chain → entry map id. Each chain's expedition starts at its
+// entry map (the first map the player lands on when they "depart"
+// for that chain). Hard-coded because every chain has a distinct
+// natural entry; a schema flag would just push this lookup into yaml.
+const CHAIN_ENTRY: Record<string, string> = {
+  kuro_swamp: "kuro_swamp_edge",
+  mt_houkyou: "mt_houkyou_foothills",
+  sumida_river: "sumida_river_bridge_foot",
+  hell_gate: "hell_gate_mouth",
+};
+
+// Sorted list of (chain, entry-map) pairs the player can currently
+// depart to. Hub menu uses this to emit depart activities.
+function discoverableChains(ctx: Ctx): { chain: string; entry: MapDef }[] {
+  const seen = new Set<string>();
+  const out: { chain: string; entry: MapDef; difficulty: number }[] = [];
+  for (const m of ctx.game.maps ?? []) {
+    if (!m.chain) continue;
+    if (seen.has(m.chain)) continue;
+    seen.add(m.chain);
+    const entryId = CHAIN_ENTRY[m.chain];
+    if (!entryId) continue;
+    const entry = getMap(ctx, entryId);
+    if (!entry) continue;
+    if (!chainUnlocked(ctx, m.chain)) continue;
+    out.push({ chain: m.chain, entry, difficulty: entry.difficulty ?? 1 });
+  }
+  out.sort((a, b) => a.difficulty - b.difficulty);
+  return out.map(({ chain, entry }) => ({ chain, entry }));
 }
 
-// Map availability gates. Hell-gate is the only currently-locked map;
-// composite condition (weapon power AND two skills AND pulse_oni).
-function mapUnlocked(ctx: Ctx, mapId: string): boolean {
-  if (mapId === "hell_gate") {
+// Chain availability gates. hell_gate stays locked behind the same
+// composite (weapon power AND two skills AND pulse_oni).
+function chainUnlocked(ctx: Ctx, chain: string): boolean {
+  if (chain === "hell_gate") {
     const pulseOni = (ctx.state.baseline.variables.pulse_oni ?? 0) as number;
     const power = ctx.state.baseline.weapons.ancestor_yaodao?.power ?? 0;
     const knows = ctx.state.baseline.knownSkills;
@@ -670,18 +735,17 @@ function buildHubMenu(ctx: Ctx): Output {
     });
   }
 
-  // Depart on raid
-  for (const mapId of discoverableMaps(ctx)) {
-    const map = getMap(ctx, mapId);
-    if (!map) continue;
+  // Depart on raid — one entry per unlocked chain, sorted by difficulty.
+  for (const { chain, entry } of discoverableChains(ctx)) {
     const hpFull = hp >= hpMax;
+    const label = chainDisplayName(chain) ?? entry.name;
     activities.push({
-      id: `depart:${mapId}`,
+      id: `depart:${chain}`,
       kind: "action",
       actionKind: "depart",
-      payload: { mapId },
-      title: `出立 — ${map.name}（難度 ${map.difficulty}）`,
-      description: map.description,
+      payload: { chain },
+      title: `出立 — ${label}（難度 ${entry.difficulty ?? 1}）`,
+      description: entry.description,
       category: "raid",
       cost: 0,
       available: hpFull,
@@ -696,8 +760,10 @@ function buildRaidMenu(ctx: Ctx): Output {
   const m = moduleState(ctx);
   if (!m.raid) return buildHubMenu(ctx);
 
-  const zone = m.raid.zones[m.raid.currentZoneId];
-  if (!zone) throw new Error(`${MODULE_ID}: invalid zone ${m.raid.currentZoneId}`);
+  const map = currentMap(ctx);
+  if (!map) throw new Error(`${MODULE_ID}: currentMapId missing during raid`);
+  const inst = currentMapInstance(ctx);
+  if (!inst) throw new Error(`${MODULE_ID}: map instance missing for ${map.id}`);
 
   const activities: HubActivity[] = [];
 
@@ -738,12 +804,12 @@ function buildRaidMenu(ctx: Ctx): Output {
     return buildSnapshot(activities, ctx);
   }
 
-  if (zone.encounter) {
+  if (inst.encounter) {
     activities.push({
       id: "attack",
       kind: "action",
       actionKind: "attack",
-      title: `斬る — ${enemyName(ctx, zone.encounter.enemyId)}（HP ${zone.encounter.enemyHp}/${zone.encounter.enemyHpMax}）`,
+      title: `斬る — ${enemyName(ctx, inst.encounter.enemyId)}（HP ${inst.encounter.enemyHp}/${inst.encounter.enemyHpMax}）`,
       description: "妖刀威力 × (1 + 霊体化×0.04) × ばらつき",
       category: "combat",
       cost: 0,
@@ -769,20 +835,13 @@ function buildRaidMenu(ctx: Ctx): Output {
       cost: 0,
       available: true,
     });
-    // 鬼の交渉 — only when the enemy is at or below 30% HP
-    // (flag set by doAttackRound). Three branches:
-    //   listen — free chat, may yield negotiate_drop based on cunning
-    //   release — set selfSwitch unlocking a zone_haunt lore script;
-    //             spectral -2, encounter cleared, no loot
-    //   yaodao voice — composite gate (spectral ≥ 50); guaranteed
-    //                  finish + spectral cost + pulse_oni +1
-    if (zone.encounter.negotiable) {
-      const cunning = enemyCunning(ctx, zone.encounter.enemyId);
+    if (inst.encounter.negotiable) {
+      const cunning = enemyCunning(ctx, inst.encounter.enemyId);
       activities.push({
         id: "negotiate_listen",
         kind: "action",
         actionKind: "negotiate_listen",
-        title: `聞き出す — ${enemyName(ctx, zone.encounter.enemyId)}`,
+        title: `聞き出す — ${enemyName(ctx, inst.encounter.enemyId)}`,
         description: `成功率 ${negotiateDropChance(cunning)}%（cunning ${cunning}）。失敗でも斬り直せる`,
         category: "combat",
         cost: 0,
@@ -792,7 +851,7 @@ function buildRaidMenu(ctx: Ctx): Output {
         id: "negotiate_release",
         kind: "action",
         actionKind: "negotiate_release",
-        title: `逃がす — ${enemyName(ctx, zone.encounter.enemyId)}`,
+        title: `逃がす — ${enemyName(ctx, inst.encounter.enemyId)}`,
         description: "霊体化 -2、戦利品なし、その鬼種の zone_haunt 解錠",
         category: "combat",
         cost: 0,
@@ -817,7 +876,7 @@ function buildRaidMenu(ctx: Ctx): Output {
       });
     }
   } else {
-    if (!zone.searched && Object.keys(zone.pendingLoot).length > 0) {
+    if (!inst.searched && Object.keys(inst.pendingLoot).length > 0) {
       activities.push({
         id: "search",
         kind: "action",
@@ -828,30 +887,29 @@ function buildRaidMenu(ctx: Ctx): Output {
         available: true,
       });
     }
-    if (zone.isExtract) {
+    if (map.isExtract) {
       activities.push({
         id: "extract",
         kind: "action",
         actionKind: "extract",
-        title: `${zone.name} から撤退して大名府に戻る`,
+        title: `${map.name} から撤退して大名府に戻る`,
         description: "戦利品を蔵に納める",
         category: "raid",
         cost: 0,
         available: true,
       });
     }
-    for (const conn of zone.connections) {
-      const target = m.raid.zones[conn.target];
-      const visitedNote = target?.visited ? "（既訪）" : "";
-      // Hint extract-capable zones in the move title so the player
-      // doesn't have to walk in to discover they can leave from there.
-      const extractNote = target?.isExtract ? "（撤退可）" : "";
+    for (const conn of map.connections ?? []) {
+      const targetMap = getMap(ctx, conn.target);
+      const targetInst = m.raid.visited[conn.target];
+      const visitedNote = targetInst?.visited ? "（既訪）" : "";
+      const extractNote = targetMap?.isExtract ? "（撤退可）" : "";
       activities.push({
         id: `move:${conn.target}`,
         kind: "action",
         actionKind: "move",
-        payload: { zoneId: conn.target },
-        title: `${conn.dir}へ進む — ${target?.name ?? conn.target}${visitedNote}${extractNote}`,
+        payload: { mapId: conn.target },
+        title: `${conn.dir}へ進む — ${targetMap?.name ?? conn.target}${visitedNote}${extractNote}`,
         category: "raid",
         cost: 0,
         available: true,
@@ -958,11 +1016,10 @@ function getSwordPower(ctx: Ctx): number {
 // or null when it's safe to do non-combat actions. Centralized so all
 // three callers (move/search/extract) use the same invariant.
 function combatBlock(ctx: Ctx): string | null {
-  const m = moduleState(ctx);
-  if (!m.raid) return null;
-  const zone = m.raid.zones[m.raid.currentZoneId];
-  if (zone?.encounter) {
-    return `${enemyName(ctx, zone.encounter.enemyId)}に背を向けるわけにはいかぬ。斬るか、抜けるかだ。`;
+  if (!inRaid(ctx)) return null;
+  const inst = currentMapInstance(ctx);
+  if (inst?.encounter) {
+    return `${enemyName(ctx, inst.encounter.enemyId)}に背を向けるわけにはいかぬ。斬るか、抜けるかだ。`;
   }
   return null;
 }
@@ -971,85 +1028,89 @@ function combatBlock(ctx: Ctx): string | null {
 // Raid lifecycle
 // ============================================================================
 
-function startRaid(ctx: Ctx, mapId: string): void {
-  const map = getMap(ctx, mapId);
-  if (!map) throw new Error(`${MODULE_ID}: unknown map ${mapId}`);
+// Begin a raid on a chain. Enters the chain's entry map (engine
+// updates currentMapId + bg via enterMap), initializes RaidInstance,
+// rolls the entry map's loot (encounter table on entry maps is always
+// trivial — null-only — so no encounter to roll).
+function startRaid(ctx: Ctx, chain: string): void {
+  const entryId = CHAIN_ENTRY[chain];
+  if (!entryId) throw new Error(`${MODULE_ID}: unknown chain ${chain}`);
+  const entry = getMap(ctx, entryId);
+  if (!entry) throw new Error(`${MODULE_ID}: chain ${chain} entry "${entryId}" missing`);
   const m = moduleState(ctx);
 
-  const zones: Record<string, ZoneInstance> = {};
-  for (const z of map.zones) {
-    zones[z.id] = {
-      id: z.id,
-      name: z.name,
-      visited: false,
-      searched: false,
-      encounter: null,
-      encounterCleared: false,
-      encounterTable: z.encounterTable ?? [{ enemyId: null, weight: 1 }],
-      lootTable: z.lootTable ?? [],
-      connections: z.connections,
-      isExtract: !!z.isExtract,
-      ...(z.bg ? { bg: z.bg } : {}),
-      pendingLoot: {},
-    };
-  }
-
+  enterMap(ctx.state, ctx.game, entryId);
   m.raid = {
-    mapId,
-    mapName: map.name,
-    currentZoneId: map.spawnZoneId,
-    zones,
+    chain,
+    entryMapId: entryId,
+    visited: {},
     pendingLoot: {},
     turnsTaken: 0,
   };
-  m.mode = "raid";
-
-  // Visit the spawn zone (roll its loot but no encounter at spawn).
-  const spawn = zones[map.spawnZoneId]!;
-  spawn.visited = true;
-  spawn.pendingLoot = rollLoot(ctx, spawn);
-  if (spawn.bg) ctx.state.baseline.visuals.bg = spawn.bg;
-  // Spawn has trivial encounter table (only `null`) — encounter stays null.
+  // Mark the entry map visited + roll its loot. Encounter stays null
+  // (entry maps' encounter tables are null-only by convention).
+  const spawnInst = ensureMapInstance(ctx, entryId);
+  spawnInst.visited = true;
+  spawnInst.pendingLoot = rollLoot(ctx, entry);
 
   const flavor =
-    typeof map.custom?.entry_narration === "string"
-      ? (map.custom.entry_narration as string)
+    typeof entry.custom?.entry_narration === "string"
+      ? (entry.custom.entry_narration as string)
       : "霧が脛に絡みつく。";
+  // Chain display name: take any chain map's "name" as a label — they
+  // all share the same chain identity, but the entry map's name is the
+  // most evocative ("沼の縁" works for narration as well as "黒沼地" did
+  // pre-migration). Fall back to chain id when truly degenerate.
+  const chainLabel = chainDisplayName(chain) ?? entry.name;
   ctx.state.runtime.pendingNarrations.push(
-    `${map.name}に踏み入る。${flavor}`,
+    `${chainLabel}に踏み入る。${flavor}`,
   );
+}
+
+// Human-facing label for a chain. We don't have an explicit "chain
+// name" field on MapDef (chain is just a grouping id); instead, every
+// chain has a canonical display name kept here. Module-side because
+// it's purely a presentation concern.
+function chainDisplayName(chain: string): string | undefined {
+  return {
+    kuro_swamp: "黒沼地",
+    mt_houkyou: "砲響山",
+    sumida_river: "隅田河",
+    hell_gate: "地獄門",
+  }[chain];
 }
 
 function rollEncounter(
   ctx: Ctx,
-  zone: ZoneInstance,
+  map: MapDef,
 ): null | { enemyId: string; enemyHp: number; enemyHpMax: number } {
-  if (zone.encounterTable.length === 0) return null;
-  const pick = pickWeighted(ctx.rng, zone.encounterTable);
+  const table = map.encounterTable ?? [];
+  if (table.length === 0) return null;
+  const pick = pickWeighted(ctx.rng, table);
   if (pick.enemyId === null) return null;
   const hp = enemyHp(ctx, pick.enemyId);
   return { enemyId: pick.enemyId, enemyHp: hp, enemyHpMax: hp };
 }
 
+// Roll the current map's character spawns. Skips characters the player
+// has already met (one-shot encounters by convention).
 function rollCharacterSpawn(
   ctx: Ctx,
-  mapId: string,
-  zoneId: string,
+  map: MapDef,
 ): CharacterSpawnRule | null {
-  const map = getMap(ctx, mapId);
-  if (!map?.characterSpawns) return null;
+  if (!map.characterSpawns) return null;
   const m = moduleState(ctx);
   for (const rule of map.characterSpawns) {
     if (m.metCharacters.includes(rule.characterId)) continue;
-    if (!rule.zones.includes(zoneId)) continue;
     if (ctx.rng() <= rule.chance) return rule;
   }
   return null;
 }
 
-function rollLoot(ctx: Ctx, zone: ZoneInstance): Record<string, number> {
-  if (zone.lootTable.length === 0) return {};
-  const pick = pickWeighted(ctx.rng, zone.lootTable);
+function rollLoot(ctx: Ctx, map: MapDef): Record<string, number> {
+  const table = map.lootTable ?? [];
+  if (table.length === 0) return {};
+  const pick = pickWeighted(ctx.rng, table);
   if (pick.itemId === null) return {};
   const count = rollIntInclusive(ctx.rng, pick.min, pick.max);
   return { [pick.itemId]: count };
@@ -1078,7 +1139,7 @@ function endRaidExtract(ctx: Ctx): void {
       (ctx.state.baseline.inventory[itemId] ?? 0) + count;
     lootSummary.push(`${itemName(ctx, itemId)} ×${count}`);
   }
-  const mapName = m.raid.mapName;
+  const chainLabel = chainDisplayName(m.raid.chain) ?? m.raid.chain;
 
   // If companion survived the raid (HP > 0), mark the persistent
   // "befriended" switch and grant +1 affection. This is the loop:
@@ -1096,12 +1157,12 @@ function endRaidExtract(ctx: Ctx): void {
   }
 
   m.raid = null;
-  m.mode = "hub";
+  enterMap(ctx.state, ctx.game, "edo_castle");
   setVar(ctx, "raidsCompleted", getVar(ctx, "raidsCompleted") + 1);
   clearCompanionAfterRaid(ctx);
 
   ctx.state.runtime.pendingNarrations.push(
-    `${mapName}から撤退に成功。${lootSummary.length > 0 ? "持ち帰った戦利品：" + lootSummary.join("、") + "。" : "今回は手ぶら。"}`,
+    `${chainLabel}から撤退に成功。${lootSummary.length > 0 ? "持ち帰った戦利品：" + lootSummary.join("、") + "。" : "今回は手ぶら。"}`,
   );
 
   // 脈絡の話 — defer pulse_intro to the back-in-hub transition rather
@@ -1125,9 +1186,9 @@ function endRaidExtract(ctx: Ctx): void {
 function endRaidFailure(ctx: Ctx, reason: string): void {
   const m = moduleState(ctx);
   if (!m.raid) return;
-  const mapName = m.raid.mapName;
+  const chainLabel = chainDisplayName(m.raid.chain) ?? m.raid.chain;
   m.raid = null;
-  m.mode = "hub";
+  enterMap(ctx.state, ctx.game, "edo_castle");
   setVar(ctx, "raidsFailed", getVar(ctx, "raidsFailed") + 1);
   clearCompanionAfterRaid(ctx);
   // Reset HP/mental/spectral to defaults (death/overload triggered).
@@ -1136,7 +1197,7 @@ function endRaidFailure(ctx: Ctx, reason: string): void {
   setPlayerStat(ctx, "mental", Math.max(1, Math.floor(playerStatMax(ctx, "mental") / 2)));
   setPlayerStat(ctx, "spectral", Math.max(5, Math.floor(playerStat(ctx, "spectral") / 2)));
   ctx.state.runtime.pendingNarrations.push(
-    `${mapName}での討伐は失敗——${reason}。戦利品は全て失われた。気がついたら大名府の御殿医の枕元。`,
+    `${chainLabel}での討伐は失敗——${reason}。戦利品は全て失われた。気がついたら大名府の御殿医の枕元。`,
   );
 }
 
@@ -1184,7 +1245,7 @@ function tryCompanionAbsorb(ctx: Ctx, raw: number): number {
 function doAttackRound(ctx: Ctx, kind: "normal" | "sneak"): void {
   const m = moduleState(ctx);
   if (!m.raid) return;
-  const zone = m.raid.zones[m.raid.currentZoneId]!;
+  const zone = currentMapInstance(ctx)!;
   if (!zone.encounter) return;
 
   const sword = getSwordPower(ctx);
@@ -1294,7 +1355,7 @@ function doAttackRound(ctx: Ctx, kind: "normal" | "sneak"): void {
 function doFlee(ctx: Ctx): void {
   const m = moduleState(ctx);
   if (!m.raid) return;
-  const zone = m.raid.zones[m.raid.currentZoneId]!;
+  const zone = currentMapInstance(ctx)!;
   if (!zone.encounter) return;
   const enemyId = zone.encounter.enemyId;
 
@@ -1355,15 +1416,18 @@ function denial(message: string): ActionResult {
 }
 
 const departHandler: ActionHandler = (ctx) => {
-  const mapId = ctx.action.payload?.mapId as string | undefined;
-  if (!mapId) return denial(`出立先が指定されていない。`);
+  const chain = ctx.action.payload?.chain as string | undefined;
+  if (!chain) return denial(`出立先が指定されていない。`);
   if (playerStat(ctx, "hp") < playerStatMax(ctx, "hp")) {
     return denial("体力が満たぬ。先に宿で休め。");
   }
-  if (!getMap(ctx, mapId)) {
-    return denial(`その地は地図にない（${mapId}）。`);
+  if (!CHAIN_ENTRY[chain]) {
+    return denial(`その地は地図にない（${chain}）。`);
   }
-  startRaid(ctx, mapId);
+  if (!chainUnlocked(ctx, chain)) {
+    return denial(`まだ${chainDisplayName(chain) ?? chain}には踏み入れない。`);
+  }
+  startRaid(ctx, chain);
   return {};
 };
 
@@ -1646,26 +1710,25 @@ const useChinkonhoHandler: ActionHandler = (ctx) => {
 const moveHandler: ActionHandler = (ctx) => {
   const blocker = combatBlock(ctx);
   if (blocker) return denial(blocker);
-  const target = ctx.action.payload?.zoneId as string | undefined;
+  const target = ctx.action.payload?.mapId as string | undefined;
   if (!target) return denial("行き先が指定されていない。");
 
   const m = moduleState(ctx);
   if (!m.raid) return {};
-  const cur = m.raid.zones[m.raid.currentZoneId]!;
-  const conn = cur.connections.find((c) => c.target === target);
+  const cur = currentMap(ctx);
+  if (!cur) return denial("現在地が不明だ。");
+  const conn = (cur.connections ?? []).find((c) => c.target === target);
   if (!conn) return denial(`${cur.name}からそちらへ通じる道はない。`);
 
-  // Module-private state writes (zone graph traversal). The engine
-  // doesn't model these in StateDelta — they live on the module's own
-  // state slice.
-  m.raid.currentZoneId = target;
+  // enterMap writes currentMapId + visuals.bg; we layer raid-specific
+  // side effects (turn count, companion passives, encounter roll) on
+  // top. The engine doesn't model raid-instance state in StateDelta —
+  // these writes live in the module's own slice.
+  enterMap(ctx.state, ctx.game, target);
   m.raid.turnsTaken += 1;
-  const zone = m.raid.zones[target]!;
-  if (zone.bg) ctx.state.baseline.visuals.bg = zone.bg;
+  const targetMap = currentMap(ctx)!;
 
-  // 篝同行者 passive: each new zone, spectral -1. Kasumi/mio don't
-  // alter movement (kasumi's passive lands in doFlee; mio's in a
-  // future scry action).
+  // 篝同行者 passive: each new zone, spectral -1.
   if (m.companion === "kagari") {
     const spec = playerStat(ctx, "spectral");
     if (spec > 0) {
@@ -1676,18 +1739,17 @@ const moveHandler: ActionHandler = (ctx) => {
     }
   }
 
-  if (zone.visited) {
-    return { narrations: [`${zone.name}に戻る。一度通った道。`] };
+  const inst = ensureMapInstance(ctx, target);
+  if (inst.visited) {
+    return { narrations: [`${targetMap.name}に戻る。一度通った道。`] };
   }
-  zone.visited = true;
-  zone.pendingLoot = rollLoot(ctx, zone);
-  zone.encounter = rollEncounter(ctx, zone);
+  inst.visited = true;
+  inst.pendingLoot = rollLoot(ctx, targetMap);
+  inst.encounter = rollEncounter(ctx, targetMap);
 
   // Character spawn check. If a rule fires, launch the encounter
-  // script instead of narrating zone entry. Setting currentScriptId
-  // is engine-state mutation but predates StateDelta; the preset's
-  // run loop picks it up next iteration.
-  const spawnedChar = rollCharacterSpawn(ctx, m.raid.mapId, target);
+  // script instead of narrating map entry.
+  const spawnedChar = rollCharacterSpawn(ctx, targetMap);
   if (spawnedChar) {
     m.metCharacters.push(spawnedChar.characterId);
     ctx.state.baseline.currentScriptId = spawnedChar.encounterScriptId;
@@ -1695,21 +1757,21 @@ const moveHandler: ActionHandler = (ctx) => {
     return {};
   }
 
-  if (zone.encounter) {
-    const intro = getEnemyNarration(ctx, zone.encounter.enemyId, "intro");
+  if (inst.encounter) {
+    const intro = getEnemyNarration(ctx, inst.encounter.enemyId, "intro");
     if (intro) {
       return {
         narrations: [
           fillTemplate(intro, {
-            name: enemyName(ctx, zone.encounter.enemyId),
-            hp: zone.encounter.enemyHpMax,
+            name: enemyName(ctx, inst.encounter.enemyId),
+            hp: inst.encounter.enemyHpMax,
           }),
         ],
       };
     }
     return {};
   }
-  return { narrations: [`${zone.name}に出る。静かだ。`] };
+  return { narrations: [`${targetMap.name}に出る。静かだ。`] };
 };
 
 const searchHandler: ActionHandler = (ctx) => {
@@ -1717,12 +1779,14 @@ const searchHandler: ActionHandler = (ctx) => {
   if (blocker) return denial(blocker);
   const m = moduleState(ctx);
   if (!m.raid) return {};
-  const zone = m.raid.zones[m.raid.currentZoneId]!;
-  if (zone.searched) return denial(`${zone.name}はもう探った。`);
+  const map = currentMap(ctx);
+  if (!map) return {};
+  const inst = currentMapInstance(ctx)!;
+  if (inst.searched) return denial(`${map.name}はもう探った。`);
 
-  zone.searched = true;
+  inst.searched = true;
   const lines: string[] = [];
-  for (const [itemId, count] of Object.entries(zone.pendingLoot)) {
+  for (const [itemId, count] of Object.entries(inst.pendingLoot)) {
     if (count <= 0) continue;
     m.raid.pendingLoot[itemId] = (m.raid.pendingLoot[itemId] ?? 0) + count;
     lines.push(`${itemName(ctx, itemId)} ×${count}`);
@@ -1730,8 +1794,8 @@ const searchHandler: ActionHandler = (ctx) => {
   return {
     narrations: [
       lines.length > 0
-        ? `${zone.name}を探った。見つけたもの：${lines.join("、")}。`
-        : `${zone.name}は何もなかった。`,
+        ? `${map.name}を探った。見つけたもの：${lines.join("、")}。`
+        : `${map.name}は何もなかった。`,
     ],
   };
 };
@@ -1758,7 +1822,7 @@ const fleeHandler: ActionHandler = (ctx) => {
 const negotiateListenHandler: ActionHandler = (ctx) => {
   const m = moduleState(ctx);
   if (!m.raid) return denial("交渉できる相手がいない。");
-  const zone = m.raid.zones[m.raid.currentZoneId];
+  const zone = currentMapInstance(ctx);
   if (!zone?.encounter?.negotiable) {
     return denial("まだ斬れるうちに聞き出すには弱らせろ。");
   }
@@ -1793,7 +1857,7 @@ const negotiateListenHandler: ActionHandler = (ctx) => {
 const negotiateReleaseHandler: ActionHandler = (ctx) => {
   const m = moduleState(ctx);
   if (!m.raid) return denial("放す相手がいない。");
-  const zone = m.raid.zones[m.raid.currentZoneId];
+  const zone = currentMapInstance(ctx);
   if (!zone?.encounter?.negotiable) {
     return denial("斬れる距離まで弱らせろ。");
   }
@@ -1823,7 +1887,7 @@ const negotiateReleaseHandler: ActionHandler = (ctx) => {
 const yaodaoVoiceHandler: ActionHandler = (ctx) => {
   const m = moduleState(ctx);
   if (!m.raid) return denial("ここでは聞こえぬ声だ。");
-  const zone = m.raid.zones[m.raid.currentZoneId];
+  const zone = currentMapInstance(ctx);
   if (!zone?.encounter?.negotiable) {
     return denial("妖刀が応える気配は無い——まだ早い。");
   }
@@ -1858,9 +1922,10 @@ const extractHandler: ActionHandler = (ctx) => {
   if (blocker) return denial(blocker);
   const m = moduleState(ctx);
   if (!m.raid) return {};
-  const zone = m.raid.zones[m.raid.currentZoneId]!;
-  if (!zone.isExtract) {
-    return denial(`${zone.name}は撤退点ではない。社か杜まで戻れ。`);
+  const map = currentMap(ctx);
+  if (!map) return {};
+  if (!map.isExtract) {
+    return denial(`${map.name}は撤退点ではない。社か杜まで戻れ。`);
   }
   endRaidExtract(ctx);
   return {};
@@ -1876,7 +1941,7 @@ const inviteHandler: ActionHandler = (ctx) => {
   if (!m.metCharacters.includes(charId)) {
     return denial("会ったことのない相手は誘えない。");
   }
-  if (m.mode === "raid") {
+  if (m.raid !== null) {
     return denial("出立後は誘えない。大名府に戻ってから。");
   }
   const affection =
@@ -1937,7 +2002,7 @@ const triggers: Trigger[] = [
     when: { characterStat: { character: "player", name: "hp", max: 0 } },
     do: (ctx) => {
       const m = moduleState(ctx);
-      if (m.mode === "raid") {
+      if (m.raid !== null) {
         endRaidFailure(ctx, "体力が尽きた");
       }
       return {};
@@ -1948,7 +2013,7 @@ const triggers: Trigger[] = [
     when: { characterStat: { character: "player", name: "spectral", min: 100 } },
     do: (ctx) => {
       const m = moduleState(ctx);
-      if (m.mode === "raid") {
+      if (m.raid !== null) {
         endRaidFailure(ctx, "霊体化が振り切れた");
       }
       return {};
@@ -2038,7 +2103,6 @@ const raidModule: Module = {
   version: "0.3.0",
 
   initialize: (_game: Game): RaidModuleState => ({
-    mode: "hub",
     raid: null,
     metCharacters: [],
     companion: null,
@@ -2113,6 +2177,14 @@ const raidModule: Module = {
     // pre-populates from game.yaml.
     if (ctx.state.baseline.inventory.ryo === undefined) {
       ctx.state.baseline.inventory.ryo = 100;
+    }
+    // Establish the starting location. Fresh sessions land in the hub
+    // (大名府 / edo_castle); seeded fixtures that have already entered a
+    // raid map keep their currentMapId. The hub menu / raid menu split
+    // keys off `m.raid !== null`, but the bg / location semantics still
+    // need currentMapId to be set.
+    if (ctx.state.baseline.currentMapId === null) {
+      enterMap(ctx.state, ctx.game, "edo_castle");
     }
     if (
       ctx.state.baseline.scripts["000_intro"]?.completed !== true &&
@@ -2305,7 +2377,7 @@ const raidModule: Module = {
       if (ctx.state.baseline.scripts[id]?.completed === true) return undefined;
     }
     const m = moduleState(ctx);
-    return m.mode === "hub" ? buildHubMenu(ctx) : buildRaidMenu(ctx);
+    return m.raid === null ? buildHubMenu(ctx) : buildRaidMenu(ctx);
   },
 };
 

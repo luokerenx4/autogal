@@ -5,26 +5,31 @@ description: |
   No state mutation occurs.
 state:
   baseline:
-    completedScripts: [000_intro]
+    completedScripts:
+      - 000_intro
     inventory:
       ryo: 400
       cursed_blade_fragment: 1
     characters:
       player:
-        stats: { hp: 30, mental: 8, spectral: 10, intellect: 70 }
+        stats:
+          hp: 30
+          mental: 8
+          spectral: 10
+          intellect: 70
     variables:
       intel_active: ""
       intel_count: 0
   sengoku-raid:
-    mode: hub
     metCharacters: []
     raid: null
     companion: null
     companionHp: 0
     pulsePending: null
 inputs:
-  - { type: doActivity, id: "infoshop_hidden" }
-  - { type: next }
+  - type: doActivity
+    id: infoshop_hidden
+  - type: next
 assertions:
   - kind: state
     path: baseline.inventory.ryo

@@ -4,19 +4,22 @@ description: |
   成功、companion_kagari true、m.companion = "kagari"、m.companionHp = 10。
 state:
   baseline:
-    completedScripts: [000_intro]
+    completedScripts:
+      - 000_intro
     characters:
       kagari:
-        stats: { affection: 4 }
+        stats:
+          affection: 4
   sengoku-raid:
-    mode: hub
-    metCharacters: [kagari]
+    metCharacters:
+      - kagari
     raid: null
     companion: null
     companionHp: 0
 inputs:
-  - { type: doActivity, id: "invite:kagari" }
-  - { type: next }
+  - type: doActivity
+    id: invite:kagari
+  - type: next
 assertions:
   - kind: state
     path: baseline.switches.companion_kagari

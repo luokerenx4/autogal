@@ -1,0 +1,9 @@
+id: edo_castle
+name: 大名府
+description: 江戸城内、抜刀衆の詰所。出立も帰参も、すべてここから。
+bg: assets/backgrounds/edo-castle
+# 拠点。ここに居ると raid モジュールが hub モードでメニューを組む。
+# 出立先（黒沼地、砲響山、隅田河、地獄門）はそれぞれの chain の入口地図と
+# つながっている。実際の「出立する」アクションは raid モジュールが
+# 同じ depart hub activity を組み立てるため、ここでは connections を
+# 列挙せずに chain 単位の動きをモジュール側に任せている。

@@ -7,6 +7,7 @@ description: |
 state:
   baseline:
     completedScripts: [000_intro]
+    currentMapId: kuro_swamp_shrine
     weapons:
       ancestor_yaodao: { power: 6 }
     variables:
@@ -14,26 +15,18 @@ state:
       raidsFailed: 0
       shogun_chapter: 0
   sengoku-raid:
-    mode: raid
     metCharacters: []
     raid:
-      mapId: kuro_swamp
-      mapName: 黒沼地
-      currentZoneId: shrine
+      chain: kuro_swamp
+      entryMapId: kuro_swamp_edge
       turnsTaken: 3
       pendingLoot: { ryo: 20 }
-      zones:
-        shrine:
-          id: shrine
-          name: 潰れた社
+      visited:
+        kuro_swamp_shrine:
           visited: true
           searched: true
           encounter: null
           encounterCleared: false
-          encounterTable: []
-          lootTable: []
-          connections: [{ dir: 戻る, target: crossroads }]
-          isExtract: true
           pendingLoot: {}
 inputs:
   - { type: doActivity, id: "extract" }

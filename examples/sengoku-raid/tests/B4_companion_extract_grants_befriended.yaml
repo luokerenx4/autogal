@@ -5,47 +5,50 @@ description: |
   companion clears, raid counters tick.
 state:
   baseline:
-    completedScripts: [000_intro, letter_01_suspicion]
+    completedScripts:
+      - 000_intro
+      - letter_01_suspicion
     characters:
       player:
-        stats: { hp: 30, mental: 8, spectral: 25, intellect: 5 }
+        stats:
+          hp: 30
+          mental: 8
+          spectral: 25
+          intellect: 5
       kasumi:
-        stats: { affection: 5 }
+        stats:
+          affection: 5
     switches:
       companion_kasumi: true
     variables:
       raidsCompleted: 4
       shogun_chapter: 1
+    currentMapId: kuro_swamp_shrine
   runtime:
-    firedTriggers: [letter_01_dispatch]
+    firedTriggers:
+      - letter_01_dispatch
   sengoku-raid:
-    mode: raid
-    metCharacters: [kasumi]
+    metCharacters:
+      - kasumi
     companion: kasumi
     companionHp: 8
     raid:
-      mapId: kuro_swamp
-      mapName: 黒沼地
-      currentZoneId: shrine
+      chain: kuro_swamp
+      entryMapId: kuro_swamp_edge
       turnsTaken: 4
       pendingLoot: {}
-      zones:
-        shrine:
-          id: shrine
-          name: 潰れた社
+      visited:
+        kuro_swamp_shrine:
           visited: true
           searched: true
           encounter: null
           encounterCleared: false
-          encounterTable: []
-          lootTable: []
-          connections: [{ dir: 戻る, target: crossroads }]
-          isExtract: true
           pendingLoot: {}
 inputs:
-  - { type: doActivity, id: "extract" }
-  - { type: next }
-  - { type: next }
+  - type: doActivity
+    id: extract
+  - type: next
+  - type: next
 assertions:
   - kind: state
     path: baseline.switches.befriended_kasumi

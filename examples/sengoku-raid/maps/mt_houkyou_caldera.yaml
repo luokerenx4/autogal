@@ -1,0 +1,13 @@
+id: mt_houkyou_caldera
+name: 火口
+chain: mt_houkyou
+difficulty: 3
+bg: assets/backgrounds/houkyou-caldera
+is_extract: true
+connections:
+  - { dir: 戻る, target: mt_houkyou_lava_vent }
+encounter_table:
+  - { enemy: kijin, weight: 100 }
+loot_table:
+  - { item: cursed_blade_fragment, min: 1, max: 1, weight: 60 }
+  - { item: oni_horn, min: 2, max: 3, weight: 40 }

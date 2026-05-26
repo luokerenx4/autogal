@@ -235,7 +235,7 @@ describe("validateGame — module triggers", () => {
 });
 
 describe("validateGame — maps", () => {
-  test("zone connection target must reference a zone in this map", () => {
+  test("connection target must reference a declared map", () => {
     const game = baseGame({
       maps: [
         {
@@ -243,18 +243,11 @@ describe("validateGame — maps", () => {
           name: "M",
           description: "",
           difficulty: 1,
-          spawnZoneId: "a",
-          zones: [
-            {
-              id: "a",
-              name: "a",
-              connections: [{ dir: "東", target: "ghost" }],
-            },
-          ],
+          connections: [{ dir: "東", target: "ghost_map" }],
         },
       ],
     });
-    expect(() => validateGame(game)).toThrow(/ghost/);
+    expect(() => validateGame(game)).toThrow(/ghost_map/);
   });
 
   test("encounter_table enemy ids validated", () => {
@@ -268,17 +261,7 @@ describe("validateGame — maps", () => {
           name: "M",
           description: "",
           difficulty: 1,
-          spawnZoneId: "a",
-          zones: [
-            {
-              id: "a",
-              name: "a",
-              connections: [],
-              encounterTable: [
-                { enemyId: "wraith", weight: 1 },
-              ],
-            },
-          ],
+          encounterTable: [{ enemyId: "wraith", weight: 1 }],
         },
       ],
     });
@@ -296,17 +279,7 @@ describe("validateGame — maps", () => {
           name: "M",
           description: "",
           difficulty: 1,
-          spawnZoneId: "a",
-          zones: [
-            {
-              id: "a",
-              name: "a",
-              connections: [],
-              lootTable: [
-                { itemId: "phantom_drop", min: 1, max: 1, weight: 1 },
-              ],
-            },
-          ],
+          lootTable: [{ itemId: "phantom_drop", min: 1, max: 1, weight: 1 }],
         },
       ],
     });
@@ -321,12 +294,9 @@ describe("validateGame — maps", () => {
           name: "M",
           description: "",
           difficulty: 1,
-          spawnZoneId: "a",
-          zones: [{ id: "a", name: "a", connections: [] }],
           characterSpawns: [
             {
               characterId: "ghost_char",
-              zones: ["a"],
               chance: 0.5,
               encounterScriptId: "missing_script",
             },
@@ -346,8 +316,6 @@ describe("validateGame — maps", () => {
           name: "R",
           description: "",
           difficulty: 1,
-          spawnZoneId: "a",
-          zones: [{ id: "a", name: "a", connections: [] }],
         },
       ],
       actions: [

@@ -4,6 +4,7 @@ description: 让朝日转一笔钱。但每年只能开口几次。
 category: social
 slot: any
 cost: 1
+whenIn: [town]
 effects:
   stats: { funds: 25, stamina: -1 }
   affection: { asahi: -1 }

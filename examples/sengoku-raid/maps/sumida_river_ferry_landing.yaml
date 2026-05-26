@@ -1,0 +1,13 @@
+id: sumida_river_ferry_landing
+name: 渡し場
+chain: sumida_river
+difficulty: 2
+bg: assets/backgrounds/sumida-ferry
+is_extract: true
+connections:
+  - { dir: 戻る, target: sumida_river_bridge_foot }
+encounter_table:
+  - { enemy: null, weight: 1 }
+loot_table:
+  - { item: ryo, min: 20, max: 35, weight: 70 }
+  - { item: soul_shard, min: 1, max: 1, weight: 30 }

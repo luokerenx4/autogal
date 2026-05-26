@@ -7,16 +7,20 @@ description: |
   structured reason and raid.ts surfaces it on bond_* scripts.
 state:
   baseline:
-    completedScripts: [000_intro, encounter_kagari_first]
+    completedScripts:
+      - 000_intro
+      - encounter_kagari_first
     characters:
-      kagari: { affection: 1, custom: {} }
+      kagari:
+        affection: 1
+        custom: {}
   sengoku-raid:
-    mode: hub
     raid: null
-    metCharacters: [kagari]
+    metCharacters:
+      - kagari
 inputs: []
 assertions:
   - kind: activity
-    id: "script:bond_kagari_01"
+    id: script:bond_kagari_01
     available: false
-    lockedReasonIncludes: "affection.kagari"
+    lockedReasonIncludes: affection.kagari

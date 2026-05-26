@@ -6,6 +6,6 @@ slot: any
 cost: 1
 whenIn: [lab]
 effects:
-  stats: { engineering: 5, neuroscience: 2, stamina: -1 }
+  stats: { engineering: 6, neuroscience: 2, stamina: -1 }
 narrations:
   - 礼堂里全是 PPT 的反光。你把每个公式都抄进义体设计本第三册。

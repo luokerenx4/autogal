@@ -1,9 +1,15 @@
 id: end_year
 title: 跨年 · 让这一年过去
-description: 仅冬季可选。结束本年，时间向前推一年。
+description: 仅冬季可选。在阳台守完零点，让这一年过去。回点心力。
 category: rest
 slot: night
 cost: 1
 kind: sleep
+effects:
+  stats: { stamina: 2 }
 narrations:
-  - 元旦零点。窗外烟花。你把今年的笔记合上，扔进义体设计本里。
+  - 元旦零点。窗外烟花。
+  - 你把今年的笔记合上，扔进义体设计本里。
+  - 笔记本上多了几页，是这一年新画的电路图、肌腱排布、神经丛走向。
+  - 哥哥发来消息："新年快乐。别熬通宵。"
+  - 你没回。你看着烟花，等它散。

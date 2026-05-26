@@ -51,6 +51,7 @@ export async function loadGame(dir: string): Promise<Game> {
     [".yaml", ".yml"],
     (content, source) => parseAction(content, source),
   );
+  actions.sort((a, b) => a.id.localeCompare(b.id));
 
   const items = await loadDir<ItemDef>(
     path.join(dir, "items"),

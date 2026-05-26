@@ -37,6 +37,22 @@ function pickActivity(
   return { type: "doActivity", id: chosen.id };
 }
 
+// Sum all signed integers in an effectsHint string (e.g. "engineering+5
+// stamina-1 alice+1" → 5). Hub activities without a hint score 0;
+// module-dispatched actions (kind: dive etc.) and effects-less actions
+// fall into this bucket and lose ties to anything with a positive hint.
+// This is intentionally crude — it treats affection deltas and stat
+// deltas as equally valuable. Good enough for "fuzz the game with a
+// not-totally-dumb agent" which is all greedy is for.
+function activityScore(hint: string | undefined): number {
+  if (!hint) return 0;
+  let total = 0;
+  for (const m of hint.matchAll(/[+-]\d+/g)) {
+    total += parseInt(m[0]!, 10);
+  }
+  return total;
+}
+
 export const personas: Record<string, Persona> = {
   greedy: async (output) => {
     if (output.type === "choice") return pickFirstAvailableChoice(output);
@@ -45,7 +61,19 @@ export const personas: Record<string, Persona> = {
       return first ? { type: "select", scriptId: first.id } : null;
     }
     if (output.type === "hubMenu") {
-      return pickActivity(output, (acts) => acts[0]!.idx);
+      const available = output.snapshot.activities.filter((a) => a.available);
+      if (available.length === 0) return { type: "quit" };
+      // Pick highest-scoring activity; first-wins on ties (hub order).
+      let best = available[0]!;
+      let bestScore = activityScore(best.effectsHint);
+      for (let i = 1; i < available.length; i++) {
+        const s = activityScore(available[i]!.effectsHint);
+        if (s > bestScore) {
+          best = available[i]!;
+          bestScore = s;
+        }
+      }
+      return { type: "doActivity", id: best.id };
     }
     if (output.type === "gameEnd") return null;
     return { type: "next" };
@@ -260,7 +288,7 @@ export const personas: Record<string, Persona> = {
 };
 
 export const personaDescriptions: Record<string, string> = {
-  greedy: "总选第一个可选项 — 平均下来是温柔系玩家",
+  greedy: "选 effectsHint 数值之和最高的可用项 — 平均下来是温柔系玩家",
   charmer: "总选最后一个可选项 — 倾向更主动的回答",
   rude: "总选第二个 — 偏向冷漠/拒绝路线",
   random: "随机选 — 用来 stress-test 路径",

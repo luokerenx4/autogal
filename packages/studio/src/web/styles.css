@@ -438,9 +438,18 @@ code, pre, .mono {
   border-radius: 4px;
   font-family: ui-monospace, monospace;
   font-size: 12px;
+  line-height: 1.0;        /* tight rows so cells line up like a terminal */
   white-space: pre;
   overflow: auto;
-  max-height: 400px;
+  max-height: 480px;
+}
+/* ansi-to-html emits <span style="color:..."> chunks. Keep the
+ * span baseline matching the parent so SGR-colored cells don't
+ * shift vertically vs neutral cells (otherwise the column grid
+ * skews and the picture looks crooked). */
+.tui-preview.ansi span {
+  font: inherit;
+  line-height: inherit;
 }
 
 .toast {

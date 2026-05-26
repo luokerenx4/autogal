@@ -254,6 +254,7 @@ async function postRenderTui(
       sizeRows: opts.rows ?? spec.sizeHint?.tui?.rows,
       ...(opts.symbols !== undefined ? { symbols: opts.symbols } : {}),
       ...(opts.dither !== undefined ? { dither: opts.dither } : {}),
+      ...(opts.colors !== undefined ? { colors: opts.colors } : {}),
     });
   } catch (err) {
     return json({ error: `chafa failed: ${(err as Error).message}` }, 500);

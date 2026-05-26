@@ -67,6 +67,12 @@ export async function fetchTuiTxt(assetPath: string): Promise<string> {
   return r.text();
 }
 
+export async function fetchTuiAns(assetPath: string): Promise<string> {
+  const r = await fetch(`/files/tui-ans/${assetPath}`);
+  if (!r.ok) throw new Error(`tui-ans missing`);
+  return r.text();
+}
+
 export interface ToolCheck {
   present: boolean;
   version?: string;
@@ -119,12 +125,14 @@ export type SymbolSet =
   | "ascii"
   | "all";
 export type DitherMode = "none" | "ordered" | "diffusion";
+export type ColorMode = "none" | "16" | "256" | "full";
 
 export interface RenderOptions {
   symbols?: SymbolSet;
   cols?: number;
   rows?: number;
   dither?: DitherMode;
+  colors?: ColorMode;
 }
 
 // Invoke server-side chafa to produce tui.txt from source.png.

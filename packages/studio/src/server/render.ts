@@ -29,6 +29,18 @@ export type SymbolSet = (typeof ALLOWED_SYMBOLS)[number];
 export const ALLOWED_DITHER = ["none", "ordered", "diffusion"] as const;
 export type DitherMode = (typeof ALLOWED_DITHER)[number];
 
+// chafa's `--colors` flag. We expose the four useful tiers + none:
+//   none  — monochrome (writes to tui.txt)
+//   16    — basic ANSI (terminal universally supports it)
+//   256   — xterm 256-color palette
+//   full  — 24-bit truecolor (requires a TRUECOLOR-aware terminal)
+//
+// When colors != none the output gets ANSI SGR escapes and lands in
+// tui.ans; the TUI's selectRendering already prefers .ans over .txt
+// so the new file takes over on next reload.
+export const ALLOWED_COLORS = ["none", "16", "256", "full"] as const;
+export type ColorMode = (typeof ALLOWED_COLORS)[number];
+
 export interface RenderArgs {
   sourcePath: string;
   outDir: string;
@@ -39,24 +51,35 @@ export interface RenderArgs {
   sizeCols?: number;
   sizeRows?: number;
   // Caller-supplied chafa knobs. All optional with sensible defaults
-  // matching v2's behavior so a caller passing nothing gets the
-  // same rendering as before this commit.
+  // matching v2's original behavior so a caller passing nothing gets
+  // the same rendering as before colors/dither were exposed.
   symbols?: SymbolSet;
   dither?: DitherMode;
+  colors?: ColorMode;
 }
 
-// Shell out to chafa to produce a `tui.txt` rendering of source.png.
-// Written to `outDir/tui.txt` atomically (tmp + rename) so a partial
-// chafa run never leaves a torn file the running TUI would pick up
-// via hot-reload mid-write.
+export interface RenderResult {
+  // Which file got written (tui.txt for monochrome, tui.ans for any
+  // color mode). The caller propagates this back to the client so
+  // the UI knows whether to render ANSI or plain text in its preview.
+  outFile: "tui.txt" | "tui.ans";
+}
+
+// Shell out to chafa to produce a TUI rendering of source.png.
+// Output filename depends on the color mode — monochrome lands in
+// `tui.txt`, anything colored in `tui.ans` (ANSI SGR escapes).
+// Writes are atomic (tmp + rename) so a partial chafa run never
+// leaves a torn file the running TUI would pick up via hot-reload
+// mid-write.
 //
-// Stays monochrome (`--colors none`) — colored renderings belong in
-// `tui.ans`, deferred. The symbol-set choice is what currently
-// drives perceptible quality; the v2 follow-up exposed it as a knob
-// because the default (`block`, 1×2 effective density) loses too
-// much detail on typical portrait/CG content.
-export async function renderSourceToTuiTxt(args: RenderArgs): Promise<void> {
-  const out = path.join(args.outDir, "tui.txt");
+// The function does NOT auto-clean the "other" file: rendering color
+// after rendering mono leaves both tui.txt and tui.ans on disk. The
+// TUI's selectRendering prefers .ans, so the latest render wins;
+// authors who want a clean state can delete the unused file by hand.
+export async function renderSourceToTui(args: RenderArgs): Promise<RenderResult> {
+  const colors = args.colors ?? "none";
+  const outFile: RenderResult["outFile"] = colors === "none" ? "tui.txt" : "tui.ans";
+  const out = path.join(args.outDir, outFile);
   const tmp = out + ".tmp";
 
   const chafaArgs = [
@@ -65,7 +88,7 @@ export async function renderSourceToTuiTxt(args: RenderArgs): Promise<void> {
     "--symbols",
     args.symbols ?? "block",
     "--colors",
-    "none",
+    colors,
     "--dither",
     args.dither ?? "none",
   ];
@@ -74,6 +97,13 @@ export async function renderSourceToTuiTxt(args: RenderArgs): Promise<void> {
     typeof args.sizeRows === "number"
   ) {
     chafaArgs.push("--size", `${args.sizeCols}x${args.sizeRows}`);
+  }
+  // Strip cursor moves and resets — chafa sometimes emits a final
+  // ANSI reset that's harmless in a terminal but confuses Ink's
+  // diff renderer. `--polite on` keeps the output to SGR-only
+  // escapes, which is what the TUI's Stage component expects.
+  if (colors !== "none") {
+    chafaArgs.push("--polite", "on");
   }
   chafaArgs.push(args.sourcePath);
 
@@ -100,7 +130,14 @@ export async function renderSourceToTuiTxt(args: RenderArgs): Promise<void> {
     await unlink(tmp).catch(() => {});
     throw err;
   });
+  return { outFile };
 }
+
+// Back-compat alias for the original v2 name. Existing callers that
+// don't care which file landed can keep using this; new callers
+// take the {outFile} return value to know whether the .ans or .txt
+// slot is now populated.
+export const renderSourceToTuiTxt = renderSourceToTui;
 
 // Validate a parsed request body against the allowed symbol/dither
 // whitelists and number invariants. Returns either a normalized
@@ -112,6 +149,7 @@ export interface RenderOptions {
   cols?: number;
   rows?: number;
   dither?: DitherMode;
+  colors?: ColorMode;
 }
 
 export function parseRenderOptions(
@@ -146,6 +184,18 @@ export function parseRenderOptions(
       };
     }
     out.dither = obj.dither as DitherMode;
+  }
+
+  if (obj.colors !== undefined) {
+    if (
+      typeof obj.colors !== "string" ||
+      !(ALLOWED_COLORS as readonly string[]).includes(obj.colors)
+    ) {
+      return {
+        error: `colors must be one of: ${ALLOWED_COLORS.join(", ")}`,
+      };
+    }
+    out.colors = obj.colors as ColorMode;
   }
 
   if (obj.cols !== undefined) {

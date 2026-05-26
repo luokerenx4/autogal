@@ -17,6 +17,7 @@
     "@autogal/cli": "workspace:*",
     "@autogal/engine": "workspace:*",
     "@autogal/parser": "workspace:*",
+    "ansi-to-html": "^0.7.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.28.0"

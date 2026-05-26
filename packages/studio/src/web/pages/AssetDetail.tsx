@@ -1,7 +1,9 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
+import AnsiToHtml from "ansi-to-html";
 import type {
   AssetRow,
+  ColorMode,
   DitherMode,
   HealthState,
   RenderOptions,
@@ -10,6 +12,7 @@ import type {
 import {
   fetchAsset,
   fetchHealth,
+  fetchTuiAns,
   fetchTuiTxt,
   renderTui,
   sourceImageUrl,
@@ -74,6 +77,34 @@ const SYMBOL_OPTIONS: SymbolOpt[] = [
   },
 ];
 
+interface ColorOpt {
+  value: ColorMode;
+  label: string;
+  hint: string;
+}
+const COLOR_OPTIONS: ColorOpt[] = [
+  {
+    value: "none",
+    label: "none",
+    hint: "Monochrome. Writes tui.txt. Smallest, most portable; loses color entirely.",
+  },
+  {
+    value: "16",
+    label: "16",
+    hint: "Basic ANSI palette. Writes tui.ans. Works on every terminal but quantizes hard.",
+  },
+  {
+    value: "256",
+    label: "256",
+    hint: "Xterm 256 palette. Writes tui.ans. Sweet spot — most modern terminals support it.",
+  },
+  {
+    value: "full",
+    label: "full (truecolor)",
+    hint: "24-bit RGB. Writes tui.ans. Needs a truecolor terminal (Ghostty / iTerm2 / WezTerm / modern Kitty).",
+  },
+];
+
 interface DitherOpt {
   value: DitherMode;
   label: string;
@@ -112,7 +143,14 @@ export function AssetDetail() {
 
   const [asset, setAsset] = useState<AssetRow | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [tuiTxt, setTuiTxt] = useState<string | null>(null);
+  // Preview content lives in one slot; `kind` tells us whether it's
+  // ANSI-escape-laden (tui.ans, render colored) or plain text
+  // (tui.txt, render as <pre>). When both files exist on disk, .ans
+  // wins — matches the TUI's selectRendering priority so the preview
+  // shows the same thing the player would see.
+  const [tuiPreview, setTuiPreview] = useState<
+    { kind: "ans" | "txt"; content: string } | null
+  >(null);
   const [toast, setToast] = useState<string | null>(null);
   const [health, setHealth] = useState<HealthState | null>(null);
   const [busy, setBusy] = useState<"upload" | "render" | null>(null);
@@ -124,6 +162,7 @@ export function AssetDetail() {
   // resets to defaults (intentional for v2-experiment-mode use).
   const [symbols, setSymbols] = useState<SymbolSet | "">("");
   const [dither, setDither] = useState<DitherMode | "">("");
+  const [colors, setColors] = useState<ColorMode | "">("");
   const [overrideSize, setOverrideSize] = useState(false);
   const [cols, setCols] = useState<string>("");
   const [rows, setRows] = useState<string>("");
@@ -137,18 +176,45 @@ export function AssetDetail() {
   useEffect(() => {
     setAsset(null);
     setErr(null);
-    setTuiTxt(null);
+    setTuiPreview(null);
     fetchAsset(assetPath)
       .then((a) => {
         setAsset(a);
-        if (a.renderings.tuiTxt) {
+        // Match the TUI's priority: .ans wins over .txt. The preview
+        // is a nice-to-have; fetch failures just leave the section
+        // empty instead of erroring the whole page.
+        if (a.renderings.tuiAns) {
+          fetchTuiAns(assetPath)
+            .then((content) => setTuiPreview({ kind: "ans", content }))
+            .catch(() => {});
+        } else if (a.renderings.tuiTxt) {
           fetchTuiTxt(assetPath)
-            .then(setTuiTxt)
-            .catch(() => {}); // tui-txt is a preview-nice-to-have, not blocking
+            .then((content) => setTuiPreview({ kind: "txt", content }))
+            .catch(() => {});
         }
       })
       .catch((e) => setErr(e.message));
   }, [assetPath, cacheKey]);
+
+  // ansi-to-html converter, built once per render and parameterized
+  // to match the studio's dark theme so colors look right against
+  // the panel background. fg/bg here only set the document defaults;
+  // chafa's SGR escapes override each cell.
+  const ansiConverter = useMemo(
+    () =>
+      new AnsiToHtml({
+        fg: "#e6e6e6",
+        bg: "#0f1115",
+        newline: true,
+        escapeXML: true,
+        stream: false,
+      }),
+    [],
+  );
+  const previewHtml = useMemo(() => {
+    if (!tuiPreview || tuiPreview.kind !== "ans") return null;
+    return ansiConverter.toHtml(tuiPreview.content);
+  }, [tuiPreview, ansiConverter]);
 
   // Health is global; fetch once on mount and reuse for the whole
   // session. The user installing chafa mid-session would need to
@@ -219,6 +285,7 @@ export function AssetDetail() {
     const options: RenderOptions = {};
     if (symbols !== "") options.symbols = symbols;
     if (dither !== "") options.dither = dither;
+    if (colors !== "") options.colors = colors;
     if (overrideSize) {
       const c = parseInt(cols, 10);
       const r = parseInt(rows, 10);
@@ -469,6 +536,28 @@ export function AssetDetail() {
                 </div>
 
                 <label>
+                  <span>colors</span>
+                  <select
+                    value={colors}
+                    onChange={(e) =>
+                      setColors(e.target.value as ColorMode | "")
+                    }
+                  >
+                    <option value="">(default: none — mono)</option>
+                    {COLOR_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="opt-hint">
+                  {colors === ""
+                    ? COLOR_OPTIONS[0]!.hint
+                    : COLOR_OPTIONS.find((o) => o.value === colors)?.hint}
+                </div>
+
+                <label>
                   <span>dither</span>
                   <select
                     value={dither}
@@ -547,18 +636,40 @@ export function AssetDetail() {
               </div>
 
               <div className="render-opts-tip">
-                <strong>Quick recipe:</strong> portraits → <code>sextant</code>{" "}
-                + <code>diffusion</code>; bg / scenery →{" "}
-                <code>sextant</code> + <code>ordered</code>; line-art or
-                logos → <code>quad</code> + <code>none</code>.
+                <strong>Quick recipe:</strong> portraits →{" "}
+                <code>sextant</code> + <code>256</code> +{" "}
+                <code>diffusion</code>; bg / scenery →{" "}
+                <code>sextant</code> + <code>full</code> +{" "}
+                <code>ordered</code>; line-art or logos →{" "}
+                <code>quad</code> + <code>none</code> +{" "}
+                <code>none</code>.
               </div>
             </details>
 
-            {asset.renderings.tuiTxt && tuiTxt !== null ? (
-              <div className="tui-preview">{tuiTxt}</div>
+            {tuiPreview ? (
+              tuiPreview.kind === "ans" && previewHtml ? (
+                // dangerouslySetInnerHTML is the standard idiom for
+                // injecting a controlled HTML string into React; the
+                // input is generated by ansi-to-html with escapeXML on,
+                // so chafa output can't smuggle <script> through.
+                <div
+                  className="tui-preview ansi"
+                  dangerouslySetInnerHTML={{ __html: previewHtml }}
+                />
+              ) : (
+                <div className="tui-preview">{tuiPreview.content}</div>
+              )
             ) : (
               <div className="empty" style={{ padding: 16 }}>
-                no tui.txt yet
+                no tui rendering yet
+              </div>
+            )}
+            {tuiPreview && (
+              <div className="muted" style={{ fontSize: 11, marginTop: 6 }}>
+                showing <code>{tuiPreview.kind === "ans" ? "tui.ans" : "tui.txt"}</code>
+                {asset.renderings.tuiAns && asset.renderings.tuiTxt
+                  ? " (both .ans and .txt exist on disk; .ans wins)"
+                  : ""}
               </div>
             )}
           </div>

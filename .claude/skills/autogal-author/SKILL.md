@@ -41,11 +41,17 @@ title: 樱花树下           # human-readable
 characters: [alice]      # which characters appear
 requires:                # optional — when this script becomes available
   affection: { character: alice, min: 1 }
+bg: assets/backgrounds/sakura-path     # optional — scene's backdrop
+defaultPortraits:                       # optional — visuals set on entry
+  center: { characterId: alice, emotion: smile }
 ---
 
 narration line.          # plain text is narration
 
 @alice 嗨。               # @<id> <text> is dialogue from character <id>
+
+@alice smile 嗨，又见面了。  # optional emotion token resolves via
+                            # alice.portraits.smile → portrait swap
 
 ? 你怎么回应？             # ? at start = choice block
 - 打招呼 -> +alice         # inline: "<text> -> <effects>"
@@ -53,6 +59,10 @@ narration line.          # plain text is narration
 - 转身 -> goto leave       # goto a label (or `goto $end` to end script here)
 
 她笑了。
+
+:cg assets/cgs/handshake   # full-screen CG overlay
+@alice 别说什么了。
+:hide-cg                    # back to bg + portraits
 
 [end]                     # explicit end-of-script (skip remaining beats)
 
@@ -98,6 +108,27 @@ You can also add `goto <label>` after `|`:
 Label names: ASCII letters/digits/underscore/hyphen. Cannot start with `$` (reserved).
 
 **End-of-script** — `[end]` on its own line. Stops the script immediately. Use this to prevent fall-through into following label sections.
+
+**Inline portrait emotion** — optional second token after `@<speaker>`:
+```
+@alice smile こんにちは。
+```
+Resolves `smile` against `alice.portraits.smile` (declared in `characters/alice.md`'s frontmatter `portraits:` map) and updates the `center` portrait slot before yielding the dialogue. The lookup is **runtime, not parse-time**: if `smile` isn't in alice's portraits map, the engine treats `smile` as the first word of dialogue text — graceful fallback, no parse error.
+
+Authors who don't want emotions in their game can ignore this entirely; `@alice こんにちは。` works unchanged.
+
+**Visual directive lines** — `:` at start of a single-line block, no indentation:
+```
+:bg assets/backgrounds/town       # set background asset
+:bg none                          # clear background
+:cg assets/cgs/key-moment         # full-screen CG (covers bg + portraits)
+:hide-cg                          # close the CG; bg/portraits return
+:portrait center assets/portraits/alice-smile   # set named slot
+:portrait left                    # empty path → clear slot
+:clear-visuals                    # clear portraits + cg (keeps bg)
+```
+
+Slots are open-shape strings. `left` / `center` / `right` get canonical layout positions in the TUI; other names render in declaration order. The asset path must exist (the loader warns at load time on dangling references). All directives are silent — they mutate `state.baseline.visuals` but don't yield a beat. The next narration / dialogue / choice carries the new visuals to the renderer.
 
 **YAML fenced choice** — when you need flags, requires on options, or multi-effect:
 
@@ -160,12 +191,19 @@ requires:
 id: alice
 name: 薄樱
 defaultAffection: 0
+portraits:                                  # optional — for visual assets
+  default: assets/portraits/alice-normal
+  smile:   assets/portraits/alice-smile
+  angry:   assets/portraits/alice-angry
+defaultPortrait: default                    # optional, defaults to "default"
 ---
 
 短描述。用于作者参考，引擎不读。
 ```
 
 The `id` must match what scripts use in `@<id>` dialogue beats.
+
+The `portraits` map binds emotion names (used in scripts as `@alice smile`) to asset paths. Paths are full — repeating `assets/portraits/` per entry is intentional, so an AI reader sees the source-of-truth path at the declaration site rather than tracing through a config indirection. See the Visual assets section below for the directory shape on the other end.
 
 ## Item file format — `items/<id>.md`
 
@@ -369,6 +407,102 @@ requires:
 **Custom metadata**: any frontmatter key not listed above is preserved
 under `skill.custom`. Combat / spirit modules read game-specific tags
 (school, element, passive marker) via `skill.custom.<key>`.
+
+## Visual assets — `assets/<kind>/<id>/`
+
+Optional. Once declared, scripts can reference portraits, backgrounds, and CG (cut-scene illustrations) by path; the TUI renders them as a galgame-style stage, and the headless JSON output carries semantic descriptions so AI players can also "see" the scene.
+
+**The asset is a directory, not a file.** Every asset has a `spec.yaml` (always present — the source of truth) plus zero or more pre-rendered files (`source.png` / `tui.txt` / `tui.ans` / `web.*`). The engine never decodes images; renderings are produced by external tools (chafa, Midjourney, Stable Diffusion, hand-drawn ASCII, etc.) and committed alongside the spec. Missing renderings degrade to the spec's `placeholder` text — that text is also what AI players see in their JSON event stream, which is what makes the system work when nobody's drawn the art yet.
+
+### Directory layout
+
+```
+assets/
+  portraits/
+    alice-smile/
+      spec.yaml           # always required
+      source.png?         # authoring source (PNG, optional)
+      tui.txt?            # plain ASCII for TUI (optional)
+      tui.ans?            # ANSI-colored for TUI (optional; preferred over txt)
+      web.webp?           # future web frontend (optional)
+    alice-angry/
+      spec.yaml
+  backgrounds/
+    sakura-path/
+      spec.yaml
+      ...
+  cgs/
+    handshake/
+      spec.yaml
+      ...
+```
+
+Three kinds, no others in v1: **portrait** (right/left/center character on a backdrop), **bg** (full-stage backdrop), **cg** (full-screen takeover for cinematic moments).
+
+### `spec.yaml` fields
+
+```yaml
+kind: portrait                              # portrait | bg | cg — required
+description: |                              # required — what this depicts
+  Alice, half-body, school uniform under sakura, soft smile.
+prompt: |                                   # required — generator-facing
+  Anime-style half-body portrait of Alice (twin-tails, school uniform),
+  standing under a cherry blossom tree, soft smile, painterly palette.
+placeholder: "[薄樱・微笑] 桜の下、淡く笑む"   # required — short, AI-visible
+style_ref: ../alice-normal                  # optional — points to another spec
+                                            # for style consistency reference
+refs:                                       # optional — what the asset depicts
+  characters: [alice]
+  emotion: smile
+size_hint:                                  # optional — playback / web sizing
+  tui:  { cols: 28, rows: 16 }
+  web:  { aspect: "3:4" }
+tags: [main-cast, chapter-1]                # optional — for filtering / search
+tui_render:                                 # optional — authoring metadata
+  symbols: sextant                          # studio writes this after a
+  dither: diffusion                         # successful chafa render; on
+  colors: "256"                             # next open, the form pre-fills
+  cols: 40                                  # so the winning combo persists
+  rows: 24
+```
+
+`placeholder` is the most important field: it's what every consumer that can't or won't render the actual image sees. AI authors should write it as a full one-line description (character, emotion, posture, scene) so AI players reading the JSON stream can react to the scene as if they'd seen it.
+
+`prompt` is consumed by image generators. Write it the way you'd write to Midjourney / SD / Claude — full sentences, style guidance, palette hints. Authors who want a different prompt format for their generator can edit the field freely; the engine doesn't validate it beyond non-empty.
+
+`tui_render` is **authoring metadata only** — the engine doesn't read it. The studio (browser workbench, see below) writes this after a successful chafa render so the next-time author opens the page, the render-options form is pre-filled with the combo that worked.
+
+### Render priority in the TUI
+
+The TUI's `selectRendering` picks the best file the terminal can display:
+
+1. `tui.ans` (truecolor / 256-color terminal only) → richest
+2. `tui.txt` (any terminal) → plain
+3. `placeholder` text → fallback when no rendering files exist
+
+`NO_COLOR=1`, `TERM=dumb`, or `FORCE_COLOR=0` force a skip past `.ans` straight to `.txt`. Headless flows (`autogal autoplay`, `peek`, `step` JSON) always see `placeholder` regardless of files present — they don't need image bytes, just semantic descriptions.
+
+### The studio workflow (browser, optional)
+
+`autogal studio <game-dir>` boots a local web workbench at `http://localhost:5173` for visual asset management. v3 capabilities:
+
+- **Gallery** — grid of all asset specs, filter by kind / missing-rendering, color-coded badges
+- **Detail page** — view spec, copy prompt to clipboard, upload PNG to `source.png` slot, render `source.png → tui.txt`/`tui.ans` via chafa with options (symbols / dither / colors / size), preview the rendered output (ANSI colors render correctly in browser)
+- **Inline spec edit** — placeholder / description / prompt / tags / refs / size_hint editable; saves go through the YAML Document API so author-formatted comments and key ordering survive the round-trip
+- **Persisted render prefs** — last successful render's options auto-write to `spec.tui_render`; on page reload the form pre-fills
+
+chafa is a system dependency (`brew install chafa` on macOS); studio detects whether it's installed and disables the render button with an install hint when it isn't. Authors who don't want chafa can hand-author `tui.txt` directly or commit only `placeholder` (the TUI will render that in a dim placeholder box).
+
+### Workflow when AI authors a new game
+
+The "AI generates game, human fills in art" flow is the canonical one:
+
+1. AI writes `spec.yaml` for every visual asset the game needs — including detailed `placeholder` and `prompt` fields. **No image files needed yet** — the game is fully playable in placeholder mode.
+2. AI references those assets from scripts (`bg:` frontmatter, `:cg ...` directives, character `portraits` map + `@speaker emotion` syntax).
+3. Headless / AI playthroughs work end-to-end. The JSON event stream carries `placeholder` text wherever there'd be an image.
+4. **Later**, a human (or another AI step) runs `autogal assets list <game-dir> --missing` to see what art is needed, then `autogal assets prompts <game-dir> <asset-path>` to copy the prompt into an image generator, drops the resulting PNG into `<asset-dir>/source.png`, and runs the chafa render in studio. The TUI hot-reloads the new rendering on next beat.
+
+This separation means AI doesn't have to generate images itself, and humans don't have to write spec.yaml by hand. The two halves of the workflow are decoupled — they share `spec.yaml` as the contract.
 
 ## Map file format — `maps/*.yaml`
 
@@ -631,7 +765,7 @@ For the special case of customizing the **main loop itself** (e.g. add a daybrea
 
 ## Where to make changes
 
-- **DO** edit `scripts/`, `characters/`, `items/`, `enemies/`, `weapons/`, `skills/`, `actions/`, `tests/`, `game.yaml` — that's content.
+- **DO** edit `scripts/`, `characters/`, `items/`, `enemies/`, `weapons/`, `skills/`, `actions/`, `maps/`, `assets/`, `tests/`, `game.yaml` — that's content.
 - **DO** edit `modules/*.ts` (and `preset/*.ts`, if ejected) when the game needs mechanics the engine doesn't already provide. New action `kind`s, new triggers, new private state, custom hub builds — they belong in a module, not in engine.
 - **DON'T** edit `packages/engine`, `packages/parser`, `packages/cli` source — that's the engine itself, off-limits from inside a game folder.
 - **DON'T** touch `.autogal/sessions/` — those are the player's saves.
@@ -652,3 +786,6 @@ For the special case of customizing the **main loop itself** (e.g. add a daybrea
 - **Label names with special chars** — only `[a-zA-Z_][\w-]*` works. `$end` is the reserved goto-to-end-of-script target.
 - **Inline effects with flags** — inline only supports affection. For flags use YAML fence.
 - **Forgetting to add `scriptCompleted` to ending requires** — if you have `004 → 005`, ending 005 should also require 004 completed, otherwise random play can skip ahead.
+- **`@speaker emotion` collides with first word of dialogue** — if the second token happens to look like an emotion (`@alice ok let's go`) the parser tags it as a candidate emotion. The engine resolves at runtime: if `ok` isn't in `alice.portraits`, the token is restored to the dialogue text — graceful fallback. Authors who want to be safe can rephrase (`@alice 「ok let's go」`) or just not worry; the emotion-form is opt-in by character's `portraits` map.
+- **Forgetting the `assets/` prefix in asset paths** — script `bg: backgrounds/foo` won't resolve. The full path is `bg: assets/backgrounds/foo`. Same for `:cg` and `:portrait` directives, and character `portraits:` map values.
+- **Editing `tui_render` by hand and getting whitelist errors** — `colors: 256` must be quoted as `"256"` (YAML reads bare `256` as int; the studio writes it quoted, the parser accepts both, but unquoted on hand-edits is fine too — the parser normalizes to string). `symbols` / `dither` values are checked against the chafa whitelist (sextant / quad / braille / ordered / diffusion / etc.) at parse time.

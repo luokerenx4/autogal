@@ -78,7 +78,8 @@ autogal/
 ├── packages/
 │   ├── engine/    Pure state-machine runtime. No DOM, no Node-specific APIs.
 │   ├── parser/    Markdown + frontmatter + YAML fence → engine AST.
-│   └── cli/       The `autogal` binary: init / play / step / peek / autoplay / test / sessions.
+│   ├── cli/       The `autogal` binary: init / play / step / peek / autoplay / test / sessions / assets / studio.
+│   └── studio/    Browser-based asset workbench (chafa render loop, spec editor).
 ├── examples/
 │   ├── sengoku-raid/    "妖刀奇譚" — bundled flagship. Extraction-shooter raid loop +
 │   │                    GalGame bonds + 3 endings + most of the engine surface
@@ -147,7 +148,7 @@ autogal · headless RPG Maker
 
 Saves live at `<game-dir>/.autogal/sessions/<name>/state.json` — plain JSON, `git diff`-able, copyable between machines.
 
-## The seven modes
+## The nine modes
 
 ```bash
 autogal init     <dir> [--force]                                  # scaffold a new game
@@ -157,12 +158,16 @@ autogal peek     <game-dir> [--session NAME]                      # inspect curr
 autogal autoplay <game-dir> --persona NAME [-v]                   # built-in AI plays through
 autogal test     <game-dir>                                       # run fixtures
 autogal sessions <game-dir>                                       # list save sessions
+autogal assets   <game-dir> list|prompts [--missing]              # asset manifest / prompt copy
+autogal studio   <game-dir>                                       # browser asset workbench
 ```
 
 Every mode runs on the same engine and the same content. `step` and `play` produce
 identical state files. `autoplay` is just `step` with a built-in persona deciding
 the input. `test` is `step` with assertions on the resulting trace. An AI agent
 playing via the `autogal-player` skill is just `step` with the LLM deciding the input.
+`assets` and `studio` are authoring-side tools — they help humans (or AI) fill in
+visual art for the spec.yaml entries scripts reference.
 
 ## A game is a folder
 
@@ -170,12 +175,20 @@ playing via the `autogal-player` skill is just `step` with the LLM deciding the 
 my-game/
 ├── game.yaml                  title
 ├── characters/
-│   └── alice.md               name, default affection, description
+│   └── alice.md               name, default affection, description, portraits map
 ├── maps/                      optional — locations the player can be in
 │   └── town.yaml              connections, actions, encounter tables
 ├── scripts/
-│   ├── 001_meeting.md         台本 with frontmatter: id, title, requires, characters
+│   ├── 001_meeting.md         台本 with frontmatter: id, title, requires, characters, bg
 │   └── ...
+├── assets/                    optional — portraits, backgrounds, CGs
+│   ├── portraits/alice-smile/
+│   │   ├── spec.yaml          description, prompt, placeholder, sizing
+│   │   ├── tui.txt?           ASCII rendering for terminal (optional)
+│   │   ├── tui.ans?           ANSI-colored rendering (optional)
+│   │   └── source.png?        authoring source (optional)
+│   ├── backgrounds/sakura-path/spec.yaml
+│   └── cgs/handshake/spec.yaml
 └── tests/
     └── good-ending.yaml       fixture: state seed + inputs + assertions
 ```
@@ -231,6 +244,30 @@ options:
     goto: pick_alice
 ​```
 ```
+
+Scripts can also drive visual assets — background, portrait per slot, full-screen CG:
+
+```markdown
+---
+id: 002_under_sakura
+title: 樱花树下
+characters: [alice]
+bg: assets/backgrounds/sakura-path        ← scene's backdrop (set on entry)
+defaultPortraits:
+  center: { characterId: alice, emotion: smile }
+---
+
+@alice smile 嗨，又见面了。                ← inline emotion: swaps to
+                                          ← alice.portraits.smile
+
+:cg assets/cgs/handshake                   ← full-screen CG takes over
+@alice 别说什么了。
+:hide-cg                                   ← back to bg + portrait
+
+[end]
+```
+
+Backgrounds, portraits, and CGs are **visual assets** — each lives in `assets/<kind>/<id>/` with a `spec.yaml` describing what it depicts plus optional pre-rendered files (ASCII art `tui.txt` for terminals, `tui.ans` for color terminals, `source.png` for image generators). Missing renderings degrade to the spec's placeholder text, which is also what AI players see in the headless JSON event stream. See the [autogal-author skill](.claude/skills/autogal-author/SKILL.md) for the full asset spec format.
 
 ## Headless step API
 

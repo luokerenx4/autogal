@@ -19,6 +19,7 @@ Three packages, never cross-import internals:
 3. **One write path: `mutateState`.** Anything that changes `state.baseline` / `state.training` goes through `mutateState(ctx, delta, source)`. It calls `applyDelta` + `fireOnStateMutated` + `checkTriggers`. Bypassing it breaks triggers and the audit trail.
 4. **ActionHandlers resolve atomically.** A handler returns an `ActionResult` (deltas + narrations + scriptStart). It does NOT yield. Multi-step output goes through `narrations: string[]` which the main loop drains one per step. This is what makes `step` mode work; violating it silently breaks AI playtester evaluation.
 5. **Engine owns standard schemas; modules consume them.** Adding a field to `ItemDef` is an engine PR. A module's own data lives under `state[moduleId]` — its private namespace. Modules MUST NOT modify engine-owned slots except via primitives.
+   - **Maps are first-class.** "Where the player is" lives in `state.baseline.currentMapId` (one of the engine's six standard resources, alongside characters/items/enemies/weapons/skills). Modules read it; modules write it via `enterMap(state, game, mapId)`. Do not invent module-private "current location" / "mode flag" fields — that's the pre-refactor pattern that the flat-map model exists to eliminate. If you need to know "are we in a special sub-context" (raid mode, dive jacked-in, etc.), express that by *which map* the player is on (e.g. `currentMap.chain === "kuro_swamp"`) rather than parallel state.
 6. **No `any`, no `as` casts unless unavoidable.** Strict TS is the contract.
 7. **No comments in source code.** Names and types must document themselves. Add a comment only when the WHY would surprise a future reader. Architecture docs go in `docs/`.
 8. **Frontmatter is the only place imperative-looking syntax lives in content.** Scripts are declarative.
@@ -51,6 +52,8 @@ packages/engine/src/
     dispatchActivity.ts script-or-action routing
     applyActionResult.ts apply handler result atomically
     mutateState.ts      THE write path — delta + onStateMutated + checkTriggers
+    enterMap.ts         set currentMapId + sync visuals.bg + queue onEnter script
+    buildMapHub.ts      collectMapActivities / buildMapHubSnapshot — scope hub by currentMapId
     checkEndConditions.ts
     checkTriggers.ts    rising-edge detection + bounded cascade
     hooks.ts            15 fireOn* dispatchers
@@ -59,7 +62,7 @@ packages/engine/src/
     skills.ts           learn / knows
     index.ts            primitive re-exports
   modules/
-    baseline.ts         bundled module: state init + useItem + useSkill handlers
+    baseline.ts         bundled module: state init + useItem + useSkill + moveToMap handlers
     runtime.ts          bundled module: pendingNarrations init etc.
   presets/
     vn/                 visual-novel preset (linear)

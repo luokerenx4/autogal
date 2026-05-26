@@ -22,7 +22,8 @@ You should be in a folder that has at minimum:
 
 And optionally:
 - `items/` `enemies/` `weapons/` `skills/` — engine-typed resources (one .md per id)
-- `actions/` — yaml-defined hub activities (one .yaml per id)
+- `maps/` — locations the player can be in (one .yaml per id). The engine tracks `state.baseline.currentMapId`; hub menus scope to it.
+- `actions/` — yaml-defined hub activities (one .yaml per id). Use `whenIn: [<map_id>, ...]` to restrict an action to specific maps.
 - `modules/` — `*.ts` modules implementing custom mechanics
 - `preset/` — ejected main-loop source (`run.ts` + supporting files)
 - `tests/` — fixture-based regression tests
@@ -369,6 +370,147 @@ requires:
 under `skill.custom`. Combat / spirit modules read game-specific tags
 (school, element, passive marker) via `skill.custom.<key>`.
 
+## Map file format — `maps/*.yaml`
+
+Optional directory. A map is a **container for events** — actions,
+encounter tables, connections to other maps — scoped to "where the
+player is right now." This is the RPGMaker map model: enter a map, the
+hub shows that map's actions/connections; move to another map, the
+hub re-scopes. The engine tracks the player's current location at
+`state.baseline.currentMapId` as a first-class state slot.
+
+Maps are flat — there is no coordinate axis or zone hierarchy inside
+a map. Movement happens map-to-map via `connections`. The graph between
+maps is the world's geometry.
+
+```yaml
+# maps/town.yaml
+id: town                        # unique within the game
+name: 街
+description: 涩谷·西早稲田。咖啡店、便利店、车站。
+bg: assets/backgrounds/town     # optional — synced to visuals.bg on entry
+difficulty: 1                   # optional, defaults to 1
+chain: shibuya                  # optional grouping label
+on_enter: arrive_town           # optional — script id launched on entry
+
+# Edges to other maps. Surfaced as "move:<target>" activities the
+# engine synthesizes with kind: moveToMap.
+connections:
+  - { dir: 校园, target: lab }
+  - { dir: 回家, target: cyber }
+  - { dir: 奥, target: backroom, requires: { switch: { name: key_held, eq: true } }, locked_hint: 鍵がない }
+
+# Optional inline map-scoped actions. Same shape as actions/*.yaml.
+actions:
+  - id: work_town
+    title: 街でバイト
+    cost: 1
+    effects:
+      stats: { funds: 12, stamina: -1 }
+
+# Optional encounter table — modules roll on map entry.
+# enemy ids validated against game.enemies. null = "no encounter this draw".
+encounter_table:
+  - { enemy: oni_lesser, weight: 70 }
+  - { enemy: null,       weight: 30 }
+
+# Optional loot table — modules roll on map entry.
+# item ids validated against game.items.
+loot_table:
+  - { item: ryo, min: 8, max: 16, weight: 50 }
+  - { item: null, min: 0, max: 0, weight: 50 }
+
+# Optional character spawn rules. Modules consume — engine doesn't roll.
+character_spawns:
+  - { character: asahi, chance: 0.3, encounter_script: meet_asahi }
+
+# Optional: marks this map as an "exit" location (raid extract, scene break).
+# Modules surface a leave/extract action when isExtract is true.
+is_extract: false
+```
+
+### Connections (the world's geometry)
+
+Each connection declares a one-way edge `dir → target`. The engine
+synthesizes a hub activity `move:<target>` with `kind: moveToMap` for
+each connection from the current map. Players see "→ <target.name>（<dir>）"
+in the menu. The bundled `moveToMap` handler calls `enterMap`, which:
+
+1. Sets `state.baseline.currentMapId` to the target.
+2. Syncs `state.baseline.visuals.bg` to `<target>.bg` when set.
+3. Queues `<target>.on_enter` script (if any) into `currentScriptId`.
+
+If your game needs side effects on movement (turn count, companion
+passives, encounter rolls, narration variants), don't replace the
+engine handler — observe `onActionComplete` for `action.kind === "moveToMap"`
+in a module and layer behavior on top. The engine handler is the
+default channel.
+
+Locked connections render with `lockedHint` as the reason. The player
+sees where they could go but can't dispatch the move until `requires` is true.
+
+### Entry maps and `onSessionStart`
+
+`state.baseline.currentMapId` starts as `null` on a fresh session.
+**Set the starting map in your game module's `onSessionStart`**:
+
+```ts
+onSessionStart: (ctx) => {
+  if (ctx.state.baseline.currentMapId === null) {
+    ctx.state.baseline.currentMapId = "town";
+  }
+}
+```
+
+Or use `enterMap(ctx.state, ctx.game, "town")` if you also want the
+map's `bg` and `on_enter` script to fire.
+
+### Scoping actions to maps — `Action.whenIn`
+
+Any action (in `actions/*.yaml` OR inline in a map's `actions:` block
+OR in a module's action handler registry) can declare `whenIn: [<map_id>, ...]`
+to limit which maps it appears on. Omitted = visible everywhere (the
+"ambient" pattern, e.g. an `end_year` action that works regardless of
+where the player is).
+
+```yaml
+# actions/study.yaml — only available when in lab
+id: study
+title: 上课 / 听讲座
+cost: 1
+whenIn: [lab]                  # array of map ids
+effects:
+  stats: { engineering: 5, neuroscience: 2, stamina: -1 }
+```
+
+This is the cleanest way to express "I can only study when I'm in the
+lab" — don't manually gate via a `currentMapId` switch / variable.
+
+### Chains (optional grouping)
+
+A `chain: <id>` label on a map marks "this set of maps belongs to the
+same expedition or scene group." Engine doesn't interpret it. Modules
+read it for sorting / gating / "depart on raid → enter the chain's
+entry map" UI patterns. sengoku-raid uses `chain: "kuro_swamp"` (etc.)
+to group flat raid maps under a player-facing "go raid kuro_swamp"
+button that internally enters the chain's entry map.
+
+### Map vs. script vs. action — when to pick which
+
+- **Map**: a stable location. The player's "where am I?" answer for
+  more than one turn. Has actions scoped to it, possibly an `on_enter`
+  intro script.
+- **Script**: linear or branching narrative. The player's "what's
+  happening to me right now?" answer. Doesn't have a hub during itself.
+- **Action**: a single one-shot operation from a hub. Either applies
+  effects directly or dispatches into a module handler that mutates
+  state.
+
+Rule of thumb: if the player should be able to do **multiple different
+things from the same context** (study OR research OR call a friend
+from the lab), that context is a *map*. If they pass through and the
+context ends, it's a *script*.
+
 ## Action file format — `actions/*.yaml`
 
 Actions are hub-bound activities — anything that's not a script the player can pick when the engine yields a hub menu. Three flavors:
@@ -408,12 +550,17 @@ requires:
 id: depart_kuro_swamp
 title: 出征 · 黒沼地
 kind: depart                                  # raid module registers this
-mapId: kuro_swamp                             # arbitrary fields — module reads them
+mapId: kuro_swamp_edge                        # engine-validated map ref (see below)
 requires:
   stat: { name: hp, min: 1 }
 ```
 
 All actions share a frontmatter envelope: `id` (required, unique), `title` (display), `requires` (Condition DSL — same grammar as scripts), `effects` (StateDelta, optional), `narrations` (string[], optional). Any other field is passed through to the dispatcher / handler verbatim.
+
+**Engine-validated fields** on `Action`:
+- `mapId: <id>` — when set, the parser validates the id against `game.maps[]` at load time. Module handlers can pull the map from `ctx.game.maps?.find(...)` or `ctx.mapMap.get(...)`.
+- `whenIn: [<id>, ...]` — array of map ids. The hub builder filters out the action when `state.baseline.currentMapId` isn't one of them. Omitted = ambient (visible on any map).
+- `kind: "moveToMap"` with `payload: { to: <map_id> }` — bundled engine handler. Calls `enterMap` and transitions the player. Used by the synthesized activities the engine emits for each `MapDef.connections[]`.
 
 ## Script ID conventions (suggested, not enforced)
 

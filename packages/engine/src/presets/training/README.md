@@ -7,7 +7,11 @@ Day/slot/stats/hub game loop — the minimal reference is
   hook the bundled `trainingPreset` Module registers), days roll over,
   per-day decay applies to a configured stat
 - **hub**: between scripts the player sees an activity menu (scripts +
-  actions, filtered by day/night slot)
+  actions, filtered by day/night slot AND by the player's current map —
+  see "Maps" in `docs/ARCHITECTURE.md`). When `state.baseline.currentMapId`
+  is set, the hub builder additionally surfaces `move:<target>` activities
+  for each connection from the current map, and filters `game.actions[]`
+  through their optional `whenIn:` map-id list.
 - **end conditions**: checked at the top of every loop iteration when
   no script is in progress; first match triggers the ending script
 

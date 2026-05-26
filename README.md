@@ -112,13 +112,16 @@ in the hub. The `examples/eject-test/` fixture is the minimal reference for
 this mode.
 
 **Extraction-shooter** (like `sengoku-raid`): no `training:` block — instead, a
-game module owns a `mode: "hub" | "raid"` flag and provides mode-appropriate hub
-menus via `onHubBuild`. An ejected `preset/run.ts` routes activity prefixes
-(`script:` / `action:` to the engine's dispatcher, `raid:` / `hub:` to the
-module's). Raids are preset modes, not scripts — so they're naturally repeatable
-and the engine's `completedScripts` never gets polluted. Set-piece scenes still
-use scripts (intros, character first-meets, bonding beats); the random raid
-content lives in module action handlers with `ctx.rng()`.
+declared `maps/` directory carries the hub-city map (`edo_castle`) plus the
+network of raid maps grouped by `chain:` tags. The player's location lives in
+`state.baseline.currentMapId`; the engine's `enterMap` primitive + bundled
+`moveToMap` handler drive transitions. A game module provides custom hub
+rendering for in-raid stats (companion HP, pulse counters) via `onHubBuild`,
+and observes `onActionComplete` for `moveToMap` dispatches to layer raid-side
+effects (turn count, encounter rolls). Raids are repeatable expeditions
+through chains of flat maps — set-piece scenes still use scripts (intros,
+character first-meets, bonding beats); the random raid content lives in
+module action handlers with `ctx.rng()`.
 
 See `examples/sengoku-raid/README.md` for the flagship's full design.
 
@@ -168,6 +171,8 @@ my-game/
 ├── game.yaml                  title
 ├── characters/
 │   └── alice.md               name, default affection, description
+├── maps/                      optional — locations the player can be in
+│   └── town.yaml              connections, actions, encounter tables
 ├── scripts/
 │   ├── 001_meeting.md         台本 with frontmatter: id, title, requires, characters
 │   └── ...

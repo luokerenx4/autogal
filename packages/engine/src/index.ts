@@ -87,6 +87,7 @@ export type {
   AssetRenderings,
   AssetSize,
   AssetSpec,
+  TuiRenderPrefs,
   Beat,
   BaselineState,
   CharacterDef,

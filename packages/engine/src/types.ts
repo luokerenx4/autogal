@@ -317,6 +317,13 @@ export interface MapZoneDef {
   // 戻る …) the module surfaces in the menu; `target` references
   // another zone's `id` in the same map.
   connections: { dir: string; target: string }[];
+  // Optional background asset path. Consuming modules (sengoku-raid's
+  // raid loop, any future explorer module) should mutate
+  // state.baseline.visuals.bg to this value when the player enters
+  // the zone, so the snapshot's visualState tracks where the player
+  // physically is rather than freezing at whatever the last script
+  // `:setBg` directive set.
+  bg?: string;
   // Marks a zone as a successful-exit point. Modules typically
   // surface a "raid:extract" action when the player is here.
   isExtract?: boolean;
@@ -373,12 +380,33 @@ export interface AssetSpec {
   refs?: AssetRefs;
   sizeHint?: AssetSize;
   tags?: string[];
+  // Authoring-side render preferences. The studio writes here after a
+  // successful chafa render so the "winning combo" persists across
+  // page reloads — find a good {symbols, dither, colors, cols, rows}
+  // tuple once, the form pre-fills with it next time.
+  //
+  // Engine doesn't read this. It's authoring metadata, like `prompt`
+  // or `style_ref` — useful for tooling, ignored at runtime.
+  tuiRender?: TuiRenderPrefs;
   // Pre-rendered files discovered alongside spec.yaml in this asset's
   // directory. Engine populates absolute paths but never opens the
   // files itself — frontends do that.
   renderings: AssetRenderings;
   // Forward-compat passthrough for unknown spec.yaml keys.
   custom?: Record<string, unknown>;
+}
+
+export interface TuiRenderPrefs {
+  // All optional — only the fields the author actually committed to
+  // serialize. Studio's render-form hydrates from whatever's present.
+  // Whitelist values are duplicated from studio/server/render.ts; keep
+  // the two in sync (parser can't import from studio because engine
+  // mustn't depend on studio).
+  symbols?: string;
+  dither?: string;
+  colors?: string;
+  cols?: number;
+  rows?: number;
 }
 
 export interface AssetRefs {

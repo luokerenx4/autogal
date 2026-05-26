@@ -4,6 +4,7 @@ description: 八千代默许你访问的最深一层。记忆碎片唯一来源�
 category: dive
 slot: any
 cost: 1
+whenIn: [cyber]
 kind: dive
 requires:
   all:

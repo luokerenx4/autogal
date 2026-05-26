@@ -74,6 +74,12 @@ export interface BaselineState {
   // present key always means count >= 1. Empty record for games that
   // declare no items.
   inventory: Record<string, number>;
+  // Id of the map the player is currently in, or null when the game has
+  // not (yet) entered any map. Updated by the `enterMap` primitive (and
+  // the built-in `moveToMap` action handler). When non-null, the hub
+  // builder filters actions/connections by this id and modules can read
+  // it to answer "where am I?" without inventing a private slot.
+  currentMapId: string | null;
   // Engine-owned runtime weapon instances. Keyed by weapon id; engine
   // initializes each declared WeaponDef with power = basePower at
   // game start. Mutations go through StateDelta.weapons.
@@ -283,12 +289,19 @@ export interface SkillDef {
   custom?: Record<string, unknown>;
 }
 
-// Engine-level standard map resource. A map is a graph of zones connected
-// by named directions. Modules that drive an exploration / extraction loop
-// (e.g. sengoku-raid) read these via ctx.mapMap and instantiate per-run
-// state from the static structure here. The engine itself does not
-// interpret zones — encounter / loot resolution + extraction semantics
-// stay with the consuming module. Maps are loaded from `maps/*.yaml`.
+// Engine-level standard map resource. A map is a *container for events*
+// — actions, scripts, encounter tables, connections to other maps — that
+// scopes "what the player can do right now" to "where they currently are."
+// This is the RPGMaker map model: enter a map, the hub shows that map's
+// actions/connections; move to another map, the hub re-scopes.
+//
+// Movement happens map-to-map (via `connections`). There is no coordinate
+// axis inside a map; "where I am" is just `state.baseline.currentMapId`.
+// Maps that conceptually belong to the same expedition / scene group
+// share a `chain` string — engine doesn't interpret it; modules read it
+// for sorting, gating, or "depart on raid → enter the chain's entry map".
+//
+// Maps are loaded from `maps/*.yaml`.
 export interface MapDef {
   id: string;
   name: string;
@@ -296,53 +309,67 @@ export interface MapDef {
   // Coarse author-declared progression hint. Modules can read this to
   // gate map availability (e.g. only show difficulty<=2 maps until the
   // player has completed an early raid). Engine doesn't enforce.
-  difficulty: number;
-  zones: MapZoneDef[];
-  // Default entry zone when the player enters the map. Must reference
-  // one of `zones[].id`. Validated at parse time.
-  spawnZoneId: string;
-  // Per-character spawn rules (RPGMaker analogue: map events with
-  // self-switch + chance + zone gating). Module evaluates these when
-  // the player enters a zone.
+  difficulty?: number;
+  // Background asset path. When the player enters this map via
+  // `enterMap`, the engine syncs `state.baseline.visuals.bg` to this
+  // value, so the snapshot's visualState tracks where the player
+  // physically is rather than freezing at whatever the last script
+  // `:setBg` directive set.
+  bg?: string;
+  // Actions available while the player is on this map. Surfaced by
+  // `buildMapHubSnapshot` (or any caller iterating map.actions) and
+  // dispatchable via the standard `action:<id>` activity path. Each
+  // action's `requires` still gates availability normally.
+  actions?: Action[];
+  // Outgoing edges to other maps. `dir` is a player-facing label
+  // ("北 / 城へ戻る"); `target` is another map's `id`. The engine's
+  // built-in `moveToMap` handler dispatches a transition to the target.
+  connections?: MapConnection[];
+  // Script id to launch when the player enters this map. Engine sets
+  // baseline.currentScriptId = this; the normal run loop picks it up
+  // next iteration.
+  onEnter?: string;
+  // Marks an "exit" location — modules driving an extraction/expedition
+  // loop typically surface a "leave / extract" action only when
+  // `isExtract` is true on the current map.
+  isExtract?: boolean;
+  // Encounter table — weighted draw the consuming module can roll on
+  // map entry. enemyId values are validated against game.enemies.
+  encounterTable?: { enemyId: string | null; weight: number }[];
+  // Loot table — weighted draw. itemId values are validated against
+  // game.items.
+  lootTable?: { itemId: string | null; min: number; max: number; weight: number }[];
+  // Per-character spawn rules. RPGMaker analogue: map events with
+  // chance + self-switch. Engine doesn't roll; modules do.
   characterSpawns?: CharacterSpawnRule[];
+  // Logical grouping label. Maps that belong to the same expedition or
+  // scene group share a `chain` string. Engine doesn't interpret it;
+  // modules can read it (e.g. "all kuro_swamp maps") for sorting,
+  // gating, or "depart on raid → enter the chain's entry map".
+  chain?: string;
   // Game-specific frontmatter — lore tags, music cues, etc. Engine
   // doesn't interpret it; modules read via mapDef.custom.<key>.
   custom?: Record<string, unknown>;
 }
 
-export interface MapZoneDef {
-  id: string;
-  name: string;
-  // Outgoing connections — `dir` is a short author label (北 / east /
-  // 戻る …) the module surfaces in the menu; `target` references
-  // another zone's `id` in the same map.
-  connections: { dir: string; target: string }[];
-  // Optional background asset path. Consuming modules (sengoku-raid's
-  // raid loop, any future explorer module) should mutate
-  // state.baseline.visuals.bg to this value when the player enters
-  // the zone, so the snapshot's visualState tracks where the player
-  // physically is rather than freezing at whatever the last script
-  // `:setBg` directive set.
-  bg?: string;
-  // Marks a zone as a successful-exit point. Modules typically
-  // surface a "raid:extract" action when the player is here.
-  isExtract?: boolean;
-  // Encounter table: weighted draw at zone entry. `enemyId: null`
-  // means "no encounter this draw". enemyId values are validated
-  // against game.enemies at parse time.
-  encounterTable?: { enemyId: string | null; weight: number }[];
-  // Loot table: weighted draw of items + counts. `itemId: null`
-  // means "no loot". itemId values are validated against game.items.
-  lootTable?: { itemId: string | null; min: number; max: number; weight: number }[];
+// Edge between two maps. Surfaced as a hub activity that dispatches the
+// built-in `moveToMap` handler (`payload.to = target`).
+export interface MapConnection {
+  // Player-facing label ("北", "城へ戻る", "Up the stairs").
+  dir: string;
+  // Target map id. Validated against game.maps at parse time.
+  target: string;
+  // Optional gate. When present and false, the engine surfaces the
+  // connection as a locked entry (with `lockedHint` as the reason) so
+  // the player can see where they could go.
+  requires?: Condition;
+  lockedHint?: string;
 }
 
 export interface CharacterSpawnRule {
   // Which character spawns. Must reference game.characters[].id.
   characterId: string;
-  // Zones where this rule is eligible. Must reference zone ids in
-  // the same map.
-  zones: string[];
-  // Probability per zone entry, 0..1. Module rolls; engine doesn't.
+  // Probability per spawn check, 0..1. Module rolls; engine doesn't.
   chance: number;
   // Script to launch when the spawn triggers. Must reference
   // game.scripts[].id.
@@ -672,6 +699,13 @@ export interface Action {
   // action). Validated against game.maps[] at parse time; resolved at
   // dispatch time via ctx.mapMap.
   mapId?: string;
+  // Optional: restrict this action's visibility to a set of maps.
+  // When set, hub builders that scope by location (buildMapHubSnapshot
+  // and equivalents) hide the action unless `state.baseline.currentMapId`
+  // is one of these ids. Omitted = visible regardless of current map
+  // (the existing global-action behavior). Each entry must reference a
+  // declared map at parse time.
+  whenIn?: string[];
   // Free-form per-action payload. Module handlers read whatever keys
   // they expect (e.g. raid:move reads `zoneId`, raid:bond reads
   // `characterId`). Used primarily by dynamically-constructed

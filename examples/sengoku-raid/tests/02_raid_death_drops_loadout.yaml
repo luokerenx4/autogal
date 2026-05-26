@@ -19,6 +19,7 @@ description: |
 state:
   baseline:
     completedScripts: [000_intro]
+    currentMapId: kuro_swamp_deep_grove
     weapons:
       ancestor_yaodao: { power: 1 }
     characters:
@@ -33,19 +34,15 @@ state:
       raidsCompleted: 0
       raidsFailed: 0
   sengoku-raid:
-    mode: raid
     metCharacters: []
     raid:
-      mapId: kuro_swamp
-      mapName: 黒沼地
-      currentZoneId: deep_grove
+      chain: kuro_swamp
+      entryMapId: kuro_swamp_edge
       turnsTaken: 1
       pendingLoot:
         soul_shard: 2
-      zones:
-        deep_grove:
-          id: deep_grove
-          name: 奥の杜
+      visited:
+        kuro_swamp_deep_grove:
           visited: true
           searched: false
           encounter:
@@ -53,12 +50,6 @@ state:
             enemyHp: 8
             enemyHpMax: 8
           encounterCleared: false
-          encounterTable:
-            - { enemyId: oni_lesser, weight: 100 }
-          lootTable: []
-          connections:
-            - { dir: 戻る, target: crossroads }
-          isExtract: true
           pendingLoot: {}
 inputs:
   - { type: doActivity, id: "attack" }
@@ -69,11 +60,11 @@ inputs:
   - { type: next }
 assertions:
   - kind: state
-    path: sengoku-raid.mode
-    eq: hub
-  - kind: state
     path: sengoku-raid.raid
     eq: null
+  - kind: state
+    path: baseline.currentMapId
+    eq: edo_castle
   - kind: state
     path: baseline.variables.raidsFailed
     eq: 1

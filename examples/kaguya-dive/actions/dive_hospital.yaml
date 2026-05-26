@@ -4,6 +4,7 @@ description: 全是受保护的脑机接口数据。神经映射回报高，但�
 category: dive
 slot: any
 cost: 1
+whenIn: [cyber]
 kind: dive
 requires:
   all:

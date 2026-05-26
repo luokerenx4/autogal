@@ -1,0 +1,11 @@
+id: hell_gate_mirror_pool
+name: 映し井戸
+chain: hell_gate
+difficulty: 5
+is_extract: true
+connections:
+  - { dir: 戻る, target: hell_gate_corridor }
+encounter_table:
+  - { enemy: kijin, weight: 100 }
+loot_table:
+  - { item: cursed_blade_fragment, min: 2, max: 3, weight: 100 }

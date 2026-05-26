@@ -4,6 +4,7 @@ description: 闺蜜三人聚。回心力，回好感，但要应付"你最近怎
 category: social
 slot: any
 cost: 1
+whenIn: [town]
 effects:
   stats: { stamina: 4 }
   affection: { ashihana: 1, mami: 1 }

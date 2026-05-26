@@ -4,73 +4,62 @@ description: |
   Move from spawn to crossroads — spectral should be 39.
 state:
   baseline:
-    completedScripts: [000_intro]
+    completedScripts:
+      - 000_intro
     weapons:
-      ancestor_yaodao: { power: 6 }
+      ancestor_yaodao:
+        power: 6
     characters:
       player:
-        stats: { hp: 30, mental: 8, spectral: 40, intellect: 5 }
+        stats:
+          hp: 30
+          mental: 8
+          spectral: 40
+          intellect: 5
       kagari:
-        stats: { affection: 5 }
+        stats:
+          affection: 5
     switches:
       companion_kagari: true
+    currentMapId: kuro_swamp_edge
   sengoku-raid:
-    mode: raid
-    metCharacters: [kagari]
+    metCharacters:
+      - kagari
     companion: kagari
     companionHp: 10
     raid:
-      mapId: kuro_swamp
-      mapName: 黒沼地
-      currentZoneId: edge
+      chain: kuro_swamp
+      entryMapId: kuro_swamp_edge
       turnsTaken: 0
       pendingLoot: {}
-      zones:
-        edge:
-          id: edge
-          name: 沼の縁
+      visited:
+        kuro_swamp_edge:
           visited: true
           searched: false
           encounter: null
           encounterCleared: false
-          encounterTable: [{ enemyId: null, weight: 1 }]
-          lootTable: []
-          connections: [{ dir: 奥, target: crossroads }]
-          isExtract: false
           pendingLoot: {}
-        crossroads:
-          id: crossroads
-          name: 三叉路
+        kuro_swamp_crossroads:
           visited: false
           searched: false
           encounter: null
           encounterCleared: false
-          encounterTable: [{ enemyId: null, weight: 1 }]
-          lootTable: []
-          connections:
-            - { dir: 東, target: shrine }
-          isExtract: false
           pendingLoot: {}
-        shrine:
-          id: shrine
-          name: 潰れた社
+        kuro_swamp_shrine:
           visited: false
           searched: false
           encounter: null
           encounterCleared: false
-          encounterTable: []
-          lootTable: []
-          connections: [{ dir: 戻る, target: crossroads }]
-          isExtract: true
           pendingLoot: {}
 inputs:
-  - { type: doActivity, id: "move:crossroads" }
-  - { type: next }
-  - { type: next }
+  - type: doActivity
+    id: move:kuro_swamp_crossroads
+  - type: next
+  - type: next
 assertions:
   - kind: state
     path: baseline.characters.player.stats.spectral
     eq: 39
   - kind: state
-    path: sengoku-raid.raid.currentZoneId
-    eq: crossroads
+    path: baseline.currentMapId
+    eq: kuro_swamp_crossroads

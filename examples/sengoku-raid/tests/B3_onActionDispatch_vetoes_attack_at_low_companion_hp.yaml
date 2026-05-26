@@ -6,31 +6,36 @@ description: |
   appears in pendingNarrations.
 state:
   baseline:
-    completedScripts: [000_intro]
+    completedScripts:
+      - 000_intro
     weapons:
-      ancestor_yaodao: { power: 8 }
+      ancestor_yaodao:
+        power: 8
     characters:
       player:
-        stats: { hp: 30, mental: 8, spectral: 30, intellect: 5 }
+        stats:
+          hp: 30
+          mental: 8
+          spectral: 30
+          intellect: 5
       kagari:
-        stats: { affection: 6 }
+        stats:
+          affection: 6
     switches:
       companion_kagari: true
+    currentMapId: kuro_swamp_ruined_hut
   sengoku-raid:
-    mode: raid
-    metCharacters: [kagari]
+    metCharacters:
+      - kagari
     companion: kagari
     companionHp: 2
     raid:
-      mapId: kuro_swamp
-      mapName: 黒沼地
-      currentZoneId: ruined_hut
+      chain: kuro_swamp
+      entryMapId: kuro_swamp_edge
       turnsTaken: 3
       pendingLoot: {}
-      zones:
-        ruined_hut:
-          id: ruined_hut
-          name: 廃れた茅屋
+      visited:
+        kuro_swamp_ruined_hut:
           visited: true
           searched: false
           encounter:
@@ -38,20 +43,15 @@ state:
             enemyHp: 8
             enemyHpMax: 8
           encounterCleared: false
-          encounterTable: []
-          lootTable: []
-          connections: [{ dir: 戻る, target: crossroads }]
-          isExtract: false
           pendingLoot: {}
 inputs:
-  - { type: doActivity, id: "attack" }
-  - { type: next }
+  - type: doActivity
+    id: attack
+  - type: next
 assertions:
-  # Attack didn't actually run — encounter HP intact
   - kind: state
-    path: sengoku-raid.raid.zones.ruined_hut.encounter.enemyHp
+    path: sengoku-raid.raid.visited.kuro_swamp_ruined_hut.encounter.enemyHp
     eq: 8
-  # ...and spectral wasn't bumped by the +1 per-strike creep
   - kind: state
     path: baseline.characters.player.stats.spectral
     eq: 30

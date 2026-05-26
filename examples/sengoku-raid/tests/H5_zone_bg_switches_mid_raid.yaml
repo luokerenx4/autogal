@@ -5,20 +5,22 @@ description: |
   Validates that moveHandler applies zone.bg in addition to startRaid.
 state:
   baseline:
-    completedScripts: [000_intro]
+    completedScripts:
+      - 000_intro
   sengoku-raid:
-    mode: hub
     raid: null
 maxSteps: 40
 inputs:
-  - { type: doActivity, id: "depart:sumida_river" }
-  - { type: next }
-  - { type: doActivity, id: "move:ferry_landing" }
-  - { type: next }
+  - type: doActivity
+    id: depart:sumida_river
+  - type: next
+  - type: doActivity
+    id: move:sumida_river_ferry_landing
+  - type: next
 assertions:
   - kind: state
     path: baseline.visuals.bg
     eq: assets/backgrounds/sumida-ferry
   - kind: state
-    path: sengoku-raid.raid.currentZoneId
-    eq: ferry_landing
+    path: baseline.currentMapId
+    eq: sumida_river_ferry_landing

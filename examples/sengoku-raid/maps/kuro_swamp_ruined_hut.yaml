@@ -1,0 +1,15 @@
+id: kuro_swamp_ruined_hut
+name: 廃れた茅屋
+chain: kuro_swamp
+difficulty: 1
+connections:
+  - { dir: 戻る, target: kuro_swamp_crossroads }
+encounter_table:
+  - { enemy: oni_lesser, weight: 80 }
+  - { enemy: null, weight: 20 }
+loot_table:
+  - { item: ryo, min: 15, max: 30, weight: 60 }
+  - { item: soul_shard, min: 1, max: 2, weight: 30 }
+  - { item: null, min: 0, max: 0, weight: 10 }
+character_spawns:
+  - { character: kagari, chance: 1.0, encounter_script: encounter_kagari_first }

@@ -1,4 +1,5 @@
-name: 提案F：onLabelEnter observer — letter_03 で end_silent label に入ると "御沙汰：silent" が記録される
+name: 提案F：onLabelEnter observer — letter_03 で end_silent label に入ると "御沙汰：silent"
+  が記録される
 description: |
   Player at chapter 2, raidsCompleted 12, in raid at extract zone.
   Extract → letter_03 fires. Player picks the silent branch
@@ -6,72 +7,79 @@ description: |
   Achievement log gets "御沙汰：silent".
 state:
   baseline:
-    completedScripts: [000_intro, letter_01_suspicion, letter_02_rival]
+    completedScripts:
+      - 000_intro
+      - letter_01_suspicion
+      - letter_02_rival
     weapons:
-      ancestor_yaodao: { power: 10 }
+      ancestor_yaodao:
+        power: 10
     characters:
       player:
-        stats: { hp: 30, mental: 8, spectral: 20, intellect: 8 }
+        stats:
+          hp: 30
+          mental: 8
+          spectral: 20
+          intellect: 8
     variables:
       raidsCompleted: 11
       shogun_chapter: 2
+    currentMapId: kuro_swamp_shrine
   runtime:
-    firedTriggers: [letter_01_dispatch, letter_02_dispatch]
+    firedTriggers:
+      - letter_01_dispatch
+      - letter_02_dispatch
   sengoku-raid:
-    mode: raid
-    metCharacters: [kagari, mio]
+    metCharacters:
+      - kagari
+      - mio
     companion: null
     companionHp: 0
     pulsePending: null
     achievementLog: []
     raid:
-      mapId: kuro_swamp
-      mapName: 黒沼地
-      currentZoneId: shrine
+      chain: kuro_swamp
+      entryMapId: kuro_swamp_edge
       turnsTaken: 1
       pendingLoot: {}
-      zones:
-        shrine:
-          id: shrine
-          name: 潰れた社
+      visited:
+        kuro_swamp_shrine:
           visited: true
           searched: true
           encounter: null
           encounterCleared: false
-          encounterTable: []
-          lootTable: []
-          connections: [{ dir: 戻る, target: crossroads }]
-          isExtract: true
           pendingLoot: {}
 maxSteps: 200
 inputs:
-  - { type: doActivity, id: "extract" }
-  - { type: next }
-  - { type: next }
-  - { type: next }
-  - { type: next }
-  - { type: next }
-  - { type: next }
-  - { type: next }
-  - { type: next }
-  - { type: next }
-  - { type: next }
-  - { type: next }
-  - { type: next }
-  - { type: next }
-  - { type: next }
-  - { type: next }
-  - { type: next }
-  - { type: choose, index: 2 }
-  - { type: next }
-  - { type: next }
-  - { type: next }
-  - { type: next }
-  - { type: next }
+  - type: doActivity
+    id: extract
+  - type: next
+  - type: next
+  - type: next
+  - type: next
+  - type: next
+  - type: next
+  - type: next
+  - type: next
+  - type: next
+  - type: next
+  - type: next
+  - type: next
+  - type: next
+  - type: next
+  - type: next
+  - type: next
+  - type: choose
+    index: 2
+  - type: next
+  - type: next
+  - type: next
+  - type: next
+  - type: next
 assertions:
   - kind: state
     path: baseline.switches.chose_court_silent
     eq: true
   - kind: state
     path: sengoku-raid.achievementLog
-    includes: "御沙汰：silent"
+    includes: 御沙汰：silent

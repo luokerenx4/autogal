@@ -17,7 +17,17 @@ export function parseAction(content: string, source?: string): Action {
   if (!raw || typeof raw !== "object") {
     throw new ActionParseError(`${source ?? "action"}: must be a YAML object`);
   }
-  const obj = raw as Record<string, unknown>;
+  return parseActionSpec(raw as Record<string, unknown>, source);
+}
+
+// Parse an Action from an already-decoded YAML object. Lets parsers
+// that read actions as inline children of another structure (e.g. a
+// MapDef's `actions:` array) reuse the same shape rules and error
+// messages as standalone `actions/<id>.yaml` files.
+export function parseActionSpec(
+  obj: Record<string, unknown>,
+  source?: string,
+): Action {
   if (typeof obj.id !== "string" || obj.id.length === 0) {
     throw new ActionParseError(`${source ?? "action"}: missing \`id\``);
   }
@@ -38,11 +48,6 @@ export function parseAction(content: string, source?: string): Action {
   if (obj.slot === "any" || obj.slot === "day" || obj.slot === "night") {
     action.slot = obj.slot;
   }
-  // Engine resolves kind against the loaded module set at runtime, so
-  // any string is parser-valid. The engine's actionHandlerRegistry
-  // build step throws an informative error if no module provides the
-  // referenced kind. Kinds with a namespace prefix (`module-id:kind`)
-  // are also accepted.
   if (typeof obj.kind === "string" && obj.kind.length > 0) {
     action.kind = obj.kind as Action["kind"];
   }
@@ -54,6 +59,18 @@ export function parseAction(content: string, source?: string): Action {
   }
   if (typeof obj.skillId === "string") {
     action.skillId = obj.skillId;
+  }
+  if (typeof obj.mapId === "string") {
+    action.mapId = obj.mapId;
+  }
+  if (Array.isArray(obj.whenIn)) {
+    const ids = obj.whenIn.filter((v): v is string => typeof v === "string");
+    if (ids.length !== obj.whenIn.length) {
+      throw new ActionParseError(
+        `${source ?? action.id}: \`whenIn\` must be an array of map id strings`,
+      );
+    }
+    if (ids.length > 0) action.whenIn = ids;
   }
   if (action.kind === "useItem" && !action.itemId) {
     throw new ActionParseError(

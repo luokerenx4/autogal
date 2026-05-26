@@ -3,13 +3,16 @@ description: |
   Smoke test:
     - module's onSessionStart bootstraps player flags
     - weapon ancestor_yaodao auto-equipped at basePower=4
-    - mode starts as "hub"
+    - currentMapId starts at edo_castle (hub)
     - intro script auto-launches (becomes first non-hub Output)
 inputs: []
 assertions:
   - kind: state
-    path: sengoku-raid.mode
-    eq: hub
+    path: sengoku-raid.raid
+    eq: null
+  - kind: state
+    path: baseline.currentMapId
+    eq: edo_castle
   - kind: state
     path: baseline.equippedWeaponId
     eq: ancestor_yaodao

@@ -5,25 +5,30 @@ description: |
   infoshop bands (until the briefing is read).
 state:
   baseline:
-    completedScripts: [000_intro]
+    completedScripts:
+      - 000_intro
     inventory:
       ryo: 100
     characters:
       player:
-        stats: { hp: 30, mental: 8, spectral: 10, intellect: 0 }
+        stats:
+          hp: 30
+          mental: 8
+          spectral: 10
+          intellect: 0
     variables:
       intel_active: ""
       intel_count: 0
   sengoku-raid:
-    mode: hub
     metCharacters: []
     raid: null
     companion: null
     companionHp: 0
     pulsePending: null
 inputs:
-  - { type: doActivity, id: "infoshop_basic" }
-  - { type: next }
+  - type: doActivity
+    id: infoshop_basic
+  - type: next
 assertions:
   - kind: state
     path: baseline.variables.intel_active

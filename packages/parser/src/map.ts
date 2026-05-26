@@ -1,9 +1,12 @@
 import { parse as parseYaml } from "yaml";
 import type {
+  Action,
   CharacterSpawnRule,
+  Condition,
+  MapConnection,
   MapDef,
-  MapZoneDef,
 } from "@autogal/engine";
+import { parseActionSpec } from "./action";
 
 export class MapParseError extends Error {}
 
@@ -12,17 +15,22 @@ const KNOWN_KEYS = [
   "name",
   "description",
   "difficulty",
-  "spawn_zone_id",
-  "zones",
+  "bg",
+  "actions",
+  "connections",
+  "on_enter",
+  "is_extract",
+  "encounter_table",
+  "loot_table",
   "character_spawns",
+  "chain",
 ] as const;
 
-// Parse a `maps/<id>.yaml` file into an engine-level MapDef. Maps stay
-// pure YAML (not markdown + frontmatter): they're large structured
-// documents and pretending the body is "description" would be silly.
-// The top-level `description:` field carries that instead. snake_case
-// in the YAML (matching the existing sengoku-raid convention) is
-// normalized to camelCase on the engine side.
+// Parse a `maps/<id>.yaml` file into an engine-level MapDef. Maps are
+// flat — they declare their own connections / actions / bg / encounter
+// tables / on_enter directly. Movement is map-to-map (no coordinate axis
+// inside a map). snake_case in YAML normalizes to camelCase on the
+// engine side.
 export function parseMap(content: string, source?: string): MapDef {
   let raw: unknown;
   try {
@@ -41,141 +49,63 @@ export function parseMap(content: string, source?: string): MapDef {
   const name = readString(obj, "name", source ?? id);
   const description =
     typeof obj.description === "string" ? obj.description : "";
+  // Omitted difficulty reads as 1 — covers "this map doesn't care about
+  // difficulty" without forcing every flat map to declare a value.
   const difficulty =
     typeof obj.difficulty === "number" ? obj.difficulty : 1;
 
-  const zonesRaw = obj.zones;
-  if (!Array.isArray(zonesRaw)) {
-    throw new MapParseError(`${source ?? id}: \`zones\` must be an array`);
+  const def: MapDef = { id, name, description, difficulty };
+
+  if (typeof obj.bg === "string" && obj.bg.length > 0) def.bg = obj.bg;
+  if (obj.is_extract === true) def.isExtract = true;
+  if (typeof obj.chain === "string" && obj.chain.length > 0) {
+    def.chain = obj.chain;
   }
-  const zones: MapZoneDef[] = zonesRaw.map((z, i) =>
-    parseZone(z, source ?? id, i),
-  );
-  if (zones.length === 0) {
-    throw new MapParseError(`${source ?? id}: \`zones\` must be non-empty`);
+  if (typeof obj.on_enter === "string" && obj.on_enter.length > 0) {
+    def.onEnter = obj.on_enter;
   }
 
-  // spawn_zone_id is optional — defaults to the first declared zone.
-  // When present, must reference a zone id in this map.
-  const spawnZoneIdRaw =
-    typeof obj.spawn_zone_id === "string" ? obj.spawn_zone_id : zones[0]!.id;
-  if (!zones.some((z) => z.id === spawnZoneIdRaw)) {
-    throw new MapParseError(
-      `${source ?? id}: \`spawn_zone_id\` "${spawnZoneIdRaw}" must reference a declared zone`,
+  if (obj.connections !== undefined) {
+    def.connections = parseMapConnections(obj.connections, source ?? id);
+  }
+  if (obj.actions !== undefined) {
+    def.actions = parseMapActions(obj.actions, source ?? id);
+  }
+  if (obj.encounter_table !== undefined) {
+    def.encounterTable = parseEncounterTable(
+      obj.encounter_table,
+      `${source ?? id}.encounter_table`,
+    );
+  }
+  if (obj.loot_table !== undefined) {
+    def.lootTable = parseLootTable(
+      obj.loot_table,
+      `${source ?? id}.loot_table`,
     );
   }
 
   const spawnsRaw = obj.character_spawns;
-  let characterSpawns: CharacterSpawnRule[] | undefined;
   if (spawnsRaw !== undefined) {
     if (!Array.isArray(spawnsRaw)) {
       throw new MapParseError(
         `${source ?? id}: \`character_spawns\` must be an array`,
       );
     }
-    characterSpawns = spawnsRaw.map((s, i) =>
+    const characterSpawns = spawnsRaw.map((s, i) =>
       parseSpawn(s, source ?? id, i),
     );
+    if (characterSpawns.length > 0) def.characterSpawns = characterSpawns;
   }
 
-  const def: MapDef = {
-    id,
-    name,
-    description,
-    difficulty,
-    spawnZoneId: spawnZoneIdRaw,
-    zones,
-  };
-  if (characterSpawns && characterSpawns.length > 0) {
-    def.characterSpawns = characterSpawns;
-  }
   const custom = extractCustom(obj, KNOWN_KEYS);
   if (custom) def.custom = custom;
   return def;
 }
 
-function parseZone(
+function parseMapConnections(
   raw: unknown,
   source: string,
-  idx: number,
-): MapZoneDef {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
-    throw new MapParseError(`${source}: zones[${idx}] must be an object`);
-  }
-  const obj = raw as Record<string, unknown>;
-  const id = readString(obj, "id", `${source}.zones[${idx}]`);
-  const name =
-    typeof obj.name === "string" && obj.name.length > 0 ? obj.name : id;
-
-  const connections = parseConnections(
-    obj.connections,
-    `${source}.zones[${id}]`,
-  );
-
-  const zone: MapZoneDef = { id, name, connections };
-  if (obj.is_extract === true) zone.isExtract = true;
-  if (typeof obj.bg === "string" && obj.bg.length > 0) zone.bg = obj.bg;
-
-  if (obj.encounter_table !== undefined) {
-    if (!Array.isArray(obj.encounter_table)) {
-      throw new MapParseError(
-        `${source}.zones[${id}].encounter_table must be an array`,
-      );
-    }
-    zone.encounterTable = obj.encounter_table.map((e, ei) => {
-      if (!e || typeof e !== "object") {
-        throw new MapParseError(
-          `${source}.zones[${id}].encounter_table[${ei}] must be an object`,
-        );
-      }
-      const eo = e as Record<string, unknown>;
-      const enemyId =
-        typeof eo.enemy === "string"
-          ? eo.enemy
-          : eo.enemy === null
-            ? null
-            : null;
-      const weight = typeof eo.weight === "number" ? eo.weight : 1;
-      return { enemyId, weight };
-    });
-  }
-
-  if (obj.loot_table !== undefined) {
-    if (!Array.isArray(obj.loot_table)) {
-      throw new MapParseError(
-        `${source}.zones[${id}].loot_table must be an array`,
-      );
-    }
-    zone.lootTable = obj.loot_table.map((l, li) => {
-      if (!l || typeof l !== "object") {
-        throw new MapParseError(
-          `${source}.zones[${id}].loot_table[${li}] must be an object`,
-        );
-      }
-      const lo = l as Record<string, unknown>;
-      const itemId =
-        typeof lo.item === "string"
-          ? lo.item
-          : lo.item === null
-            ? null
-            : null;
-      return {
-        itemId,
-        min: typeof lo.min === "number" ? lo.min : 0,
-        max: typeof lo.max === "number" ? lo.max : 0,
-        weight: typeof lo.weight === "number" ? lo.weight : 1,
-      };
-    });
-  }
-
-  return zone;
-}
-
-function parseConnections(
-  raw: unknown,
-  source: string,
-): { dir: string; target: string }[] {
-  if (raw === undefined) return [];
+): MapConnection[] {
   if (!Array.isArray(raw)) {
     throw new MapParseError(`${source}.connections must be an array`);
   }
@@ -194,7 +124,78 @@ function parseConnections(
         `${source}.connections[${i}].target must be a string`,
       );
     }
-    return { dir: co.dir, target: co.target };
+    const conn: MapConnection = { dir: co.dir, target: co.target };
+    if (co.requires !== undefined) {
+      conn.requires = co.requires as Condition;
+    }
+    if (typeof co.locked_hint === "string") {
+      conn.lockedHint = co.locked_hint;
+    } else if (typeof co.lockedHint === "string") {
+      conn.lockedHint = co.lockedHint;
+    }
+    return conn;
+  });
+}
+
+function parseMapActions(raw: unknown, source: string): Action[] {
+  if (!Array.isArray(raw)) {
+    throw new MapParseError(`${source}.actions must be an array`);
+  }
+  return raw.map((a, i) => {
+    if (!a || typeof a !== "object") {
+      throw new MapParseError(`${source}.actions[${i}] must be an object`);
+    }
+    return parseActionSpec(a as Record<string, unknown>, `${source}.actions[${i}]`);
+  });
+}
+
+function parseEncounterTable(
+  raw: unknown,
+  source: string,
+): { enemyId: string | null; weight: number }[] {
+  if (!Array.isArray(raw)) {
+    throw new MapParseError(`${source} must be an array`);
+  }
+  return raw.map((e, ei) => {
+    if (!e || typeof e !== "object") {
+      throw new MapParseError(`${source}[${ei}] must be an object`);
+    }
+    const eo = e as Record<string, unknown>;
+    const enemyId =
+      typeof eo.enemy === "string"
+        ? eo.enemy
+        : eo.enemy === null
+          ? null
+          : null;
+    const weight = typeof eo.weight === "number" ? eo.weight : 1;
+    return { enemyId, weight };
+  });
+}
+
+function parseLootTable(
+  raw: unknown,
+  source: string,
+): { itemId: string | null; min: number; max: number; weight: number }[] {
+  if (!Array.isArray(raw)) {
+    throw new MapParseError(`${source} must be an array`);
+  }
+  return raw.map((l, li) => {
+    if (!l || typeof l !== "object") {
+      throw new MapParseError(`${source}[${li}] must be an object`);
+    }
+    const lo = l as Record<string, unknown>;
+    const itemId =
+      typeof lo.item === "string"
+        ? lo.item
+        : lo.item === null
+          ? null
+          : null;
+    return {
+      itemId,
+      min: typeof lo.min === "number" ? lo.min : 0,
+      max: typeof lo.max === "number" ? lo.max : 0,
+      weight: typeof lo.weight === "number" ? lo.weight : 1,
+    };
   });
 }
 
@@ -214,11 +215,6 @@ function parseSpawn(
     "character",
     `${source}.character_spawns[${idx}]`,
   );
-  if (!Array.isArray(obj.zones) || obj.zones.some((z) => typeof z !== "string")) {
-    throw new MapParseError(
-      `${source}.character_spawns[${idx}].zones must be an array of strings`,
-    );
-  }
   if (typeof obj.chance !== "number" || obj.chance < 0 || obj.chance > 1) {
     throw new MapParseError(
       `${source}.character_spawns[${idx}].chance must be a number in [0,1]`,
@@ -231,7 +227,6 @@ function parseSpawn(
   );
   return {
     characterId,
-    zones: obj.zones as string[],
     chance: obj.chance,
     encounterScriptId,
   };

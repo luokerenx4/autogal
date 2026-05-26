@@ -4,6 +4,7 @@ description: 焊电路 / 测神经接口 / 调皮肤导电层。涨工学+神经
 category: study
 slot: any
 cost: 1
+whenIn: [lab]
 requires:
   stat: { name: funds, min: 5 }
 effects:

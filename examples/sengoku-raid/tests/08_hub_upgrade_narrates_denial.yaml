@@ -4,19 +4,20 @@ description: |
   upgrade_pure/upgrade_oni. This test exercises the mundane path
   (魂石碎片 ×3 + 100 両) with no shards. The denial narration mentions
   the missing resource.
-
 state:
   baseline:
-    completedScripts: [000_intro]
+    completedScripts:
+      - 000_intro
     weapons:
-      ancestor_yaodao: { power: 4 }
+      ancestor_yaodao:
+        power: 4
   sengoku-raid:
-    mode: hub
     raid: null
     metCharacters: []
 inputs:
-  - { type: doActivity, id: "upgrade_mundane" }
-  - { type: next }
+  - type: doActivity
+    id: upgrade_mundane
+  - type: next
 assertions:
   - kind: state
     path: baseline.weapons.ancestor_yaodao.power

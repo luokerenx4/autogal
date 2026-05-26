@@ -5,13 +5,19 @@ description: |
   pulse_oni counter.
 state:
   baseline:
-    completedScripts: [000_intro]
+    completedScripts:
+      - 000_intro
     knownSkills: []
     weapons:
-      ancestor_yaodao: { power: 6 }
+      ancestor_yaodao:
+        power: 6
     characters:
       player:
-        stats: { hp: 30, mental: 8, spectral: 30, intellect: 5 }
+        stats:
+          hp: 30
+          mental: 8
+          spectral: 30
+          intellect: 5
     variables:
       pulse_oni: 0
     inventory:
@@ -19,15 +25,15 @@ state:
       oni_horn: 2
       cursed_blade_fragment: 1
   sengoku-raid:
-    mode: hub
     metCharacters: []
     companion: null
     companionHp: 0
     pulsePending: null
     raid: null
 inputs:
-  - { type: doActivity, id: "upgrade_oni" }
-  - { type: next }
+  - type: doActivity
+    id: upgrade_oni
+  - type: next
 assertions:
   - kind: state
     path: baseline.weapons.ancestor_yaodao.power

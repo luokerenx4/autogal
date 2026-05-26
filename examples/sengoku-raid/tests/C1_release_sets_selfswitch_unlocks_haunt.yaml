@@ -7,25 +7,29 @@ description: |
   field from an action handler.
 state:
   baseline:
-    completedScripts: [000_intro]
+    completedScripts:
+      - 000_intro
     weapons:
-      ancestor_yaodao: { power: 10 }
+      ancestor_yaodao:
+        power: 10
     characters:
       player:
-        stats: { hp: 30, mental: 8, spectral: 30, intellect: 5 }
+        stats:
+          hp: 30
+          mental: 8
+          spectral: 30
+          intellect: 5
+    currentMapId: kuro_swamp_ruined_hut
   sengoku-raid:
-    mode: raid
-    metCharacters: [kagari]
+    metCharacters:
+      - kagari
     raid:
-      mapId: kuro_swamp
-      mapName: 黒沼地
-      currentZoneId: ruined_hut
+      chain: kuro_swamp
+      entryMapId: kuro_swamp_edge
       turnsTaken: 2
       pendingLoot: {}
-      zones:
-        ruined_hut:
-          id: ruined_hut
-          name: 廃れた茅屋
+      visited:
+        kuro_swamp_ruined_hut:
           visited: true
           searched: false
           encounter:
@@ -34,14 +38,11 @@ state:
             enemyHpMax: 8
             negotiable: true
           encounterCleared: false
-          encounterTable: []
-          lootTable: []
-          connections: [{ dir: 戻る, target: crossroads }]
-          isExtract: false
           pendingLoot: {}
 inputs:
-  - { type: doActivity, id: "negotiate_release" }
-  - { type: next }
+  - type: doActivity
+    id: negotiate_release
+  - type: next
 assertions:
   - kind: state
     path: baseline.scripts.zone_haunt_oni_lesser.selfSwitches.A
@@ -50,8 +51,8 @@ assertions:
     path: baseline.characters.player.stats.spectral
     eq: 28
   - kind: state
-    path: sengoku-raid.raid.zones.ruined_hut.encounter
+    path: sengoku-raid.raid.visited.kuro_swamp_ruined_hut.encounter
     eq: null
   - kind: state
-    path: sengoku-raid.raid.zones.ruined_hut.encounterCleared
+    path: sengoku-raid.raid.visited.kuro_swamp_ruined_hut.encounterCleared
     eq: true

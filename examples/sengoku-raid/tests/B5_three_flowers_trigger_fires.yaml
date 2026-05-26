@@ -7,7 +7,10 @@ description: |
   startup. currentScriptId becomes three_flowers_alliance.
 state:
   baseline:
-    completedScripts: [000_intro, letter_01_suspicion, letter_02_rival]
+    completedScripts:
+      - 000_intro
+      - letter_01_suspicion
+      - letter_02_rival
     switches:
       befriended_kagari: true
       befriended_kasumi: true
@@ -16,10 +19,13 @@ state:
       raidsCompleted: 6
       shogun_chapter: 1
   runtime:
-    firedTriggers: [letter_01_dispatch]
+    firedTriggers:
+      - letter_01_dispatch
   sengoku-raid:
-    mode: hub
-    metCharacters: [kagari, kasumi, mio]
+    metCharacters:
+      - kagari
+      - kasumi
+      - mio
     companion: null
     companionHp: 0
     raid: null

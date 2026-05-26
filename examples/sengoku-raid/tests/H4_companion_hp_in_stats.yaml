@@ -5,16 +5,20 @@ description: |
   the tank is bleeding. WU3.
 state:
   baseline:
-    completedScripts: [000_intro, encounter_kagari_first]
+    completedScripts:
+      - 000_intro
+      - encounter_kagari_first
     characters:
-      kagari: { affection: 6, custom: {} }
+      kagari:
+        affection: 6
+        custom: {}
     switches:
       companion_kagari: true
       befriended_kagari: true
   sengoku-raid:
-    mode: hub
     raid: null
-    metCharacters: [kagari]
+    metCharacters:
+      - kagari
     companion: kagari
     companionHp: 8
 inputs: []

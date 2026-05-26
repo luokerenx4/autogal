@@ -1,5 +1,6 @@
 // Hub Output construction for training-mode games. Walks game.scripts
-// + game.actions, filters by slot/availability, builds a HubSnapshot.
+// + game.actions, filters by slot / availability / current-map scope,
+// surfaces map-connection moves as activities, builds a HubSnapshot.
 
 import { evaluateCondition } from "../../condition";
 import type {
@@ -18,6 +19,11 @@ export function buildHubSnapshot(state: ComposedState, game: Game): Output {
   const isNight = t.slot === cfg.slotsPerDay - 1;
 
   const activities: HubActivity[] = [];
+  const currentMapId = state.baseline.currentMapId;
+  const currentMap =
+    currentMapId !== null
+      ? (game.maps ?? []).find((m) => m.id === currentMapId)
+      : undefined;
 
   for (const s of game.scripts) {
     if (state.baseline.scripts[s.id]?.completed === true) continue;
@@ -34,9 +40,58 @@ export function buildHubSnapshot(state: ComposedState, game: Game): Output {
     });
   }
 
+  // Map connections — synthesize "move" activities pointing at neighbor
+  // maps. Locked connections still appear so the player sees where they
+  // could go. Movement costs 0 slots; advancing the calendar is a
+  // separate concern.
+  if (currentMap) {
+    for (const conn of currentMap.connections ?? []) {
+      const target = (game.maps ?? []).find((m) => m.id === conn.target);
+      const title = target ? `→ ${target.name}（${conn.dir}）` : `→ ${conn.dir}`;
+      const r =
+        conn.requires === undefined
+          ? { ok: true as const }
+          : evaluateCondition(conn.requires, state);
+      activities.push({
+        id: `move:${conn.target}`,
+        kind: "action",
+        actionKind: "moveToMap",
+        payload: { to: conn.target },
+        title,
+        category: "move",
+        cost: 0,
+        available: r.ok,
+        ...(r.ok ? {} : { lockedReason: conn.lockedHint ?? r.reason }),
+      });
+    }
+    // Map-inline actions — same gating + slot rules as game.actions.
+    for (const a of currentMap.actions ?? []) {
+      if (a.slot === "day" && isNight) continue;
+      if (a.slot === "night" && !isNight) continue;
+      const r =
+        a.requires === undefined ? { ok: true } : evaluateCondition(a.requires, state);
+      activities.push({
+        id: `action:${a.id}`,
+        kind: "action",
+        title: a.title,
+        description: a.description,
+        category: a.category,
+        cost: a.cost,
+        effectsHint: formatEffectsHint(a.effects),
+        available: r.ok,
+        ...(r.ok ? {} : { lockedReason: r.reason }),
+      });
+    }
+  }
+
   for (const a of game.actions ?? []) {
     if (a.slot === "day" && isNight) continue;
     if (a.slot === "night" && !isNight) continue;
+    // Filter by current map. Omitted whenIn = ambient (visible everywhere).
+    if (a.whenIn !== undefined) {
+      if (currentMapId === null) continue;
+      if (!a.whenIn.includes(currentMapId)) continue;
+    }
     const r =
       a.requires === undefined ? { ok: true } : evaluateCondition(a.requires, state);
     activities.push({

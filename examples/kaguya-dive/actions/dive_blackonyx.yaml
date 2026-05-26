@@ -4,6 +4,7 @@ description: 哥哥默许你用的电竞战队后端。手部 + 反应速度的�
 category: dive
 slot: any
 cost: 1
+whenIn: [cyber]
 kind: dive
 requires:
   affection: { character: asahi, min: 6 }

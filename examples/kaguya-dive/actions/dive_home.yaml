@@ -4,4 +4,5 @@ description: 冰箱、空调、扫地机器人。安全无虞，量少而杂。
 category: dive
 slot: any
 cost: 1
+whenIn: [cyber]
 kind: dive

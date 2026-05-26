@@ -15,44 +15,40 @@ description: |
   pulse_intro AFTER the raid wrap-up (not before).
 state:
   baseline:
-    completedScripts: [000_intro]
+    completedScripts:
+      - 000_intro
     characters:
       player:
-        stats: { hp: 30, mental: 8, spectral: 5, intellect: 0 }
+        stats:
+          hp: 30
+          mental: 8
+          spectral: 5
+          intellect: 0
     variables:
       pulse_mundane: 1
+    currentMapId: kuro_swamp_shrine
   sengoku-raid:
-    mode: raid
     metCharacters: []
     companion: null
     companionHp: 0
     pulsePending: null
     raid:
-      mapId: kuro_swamp
-      mapName: 黒沼地
-      currentZoneId: shrine
+      chain: kuro_swamp
+      entryMapId: kuro_swamp_edge
       turnsTaken: 2
       pendingLoot: {}
-      zones:
-        shrine:
-          id: shrine
-          name: 潰れた社
+      visited:
+        kuro_swamp_shrine:
           visited: true
           searched: true
           encounter: null
           encounterCleared: true
-          encounterTable: []
-          lootTable: []
-          connections: [{ dir: 戻る, target: crossroads }]
-          isExtract: true
           pendingLoot: {}
 inputs:
-  - { type: doActivity, id: "extract" }
-  - { type: next }
+  - type: doActivity
+    id: extract
+  - type: next
 assertions:
   - kind: state
     path: baseline.currentScriptId
     eq: pulse_intro
-  - kind: state
-    path: sengoku-raid.mode
-    eq: hub

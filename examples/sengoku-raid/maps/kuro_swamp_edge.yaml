@@ -1,0 +1,14 @@
+id: kuro_swamp_edge
+name: 沼の縁
+chain: kuro_swamp
+difficulty: 1
+description: 黒沼地の入口。霧が脛に絡みつく。
+bg: assets/backgrounds/swamp-edge
+entry_narration: 霧が脛に絡みつく。
+connections:
+  - { dir: 奥, target: kuro_swamp_crossroads }
+encounter_table:
+  - { enemy: null, weight: 1 }
+loot_table:
+  - { item: ryo, min: 5, max: 12, weight: 30 }
+  - { item: null, min: 0, max: 0, weight: 70 }

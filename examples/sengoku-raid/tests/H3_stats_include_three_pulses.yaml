@@ -5,9 +5,9 @@ description: |
   these gate endings and the player needs to see them tracking up. WU3.
 state:
   baseline:
-    completedScripts: [000_intro]
+    completedScripts:
+      - 000_intro
   sengoku-raid:
-    mode: hub
     raid: null
 inputs: []
 assertions:

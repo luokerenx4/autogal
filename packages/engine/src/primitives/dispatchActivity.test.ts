@@ -368,3 +368,45 @@ describe("dispatchActivity — dynamic activity resolution via lastHubActivities
     expect(ret).toBe("ok");
   });
 });
+
+describe("dispatchActivity — moveToMap (baseline-provided handler)", () => {
+  test("synthesized move activity transitions currentMapId", async () => {
+    const game = makeGame({
+      characters: [makeCharacter("alice")],
+      maps: [
+        {
+          id: "home",
+          name: "家",
+          description: "",
+          connections: [{ dir: "外", target: "street" }],
+        },
+        {
+          id: "street",
+          name: "街",
+          description: "",
+          bg: "assets/backgrounds/street",
+        },
+      ],
+    });
+    const ctx = makeCtx(game);
+    ctx.state.baseline.currentMapId = "home";
+    // Simulate the hub having yielded a move activity (what
+    // buildMapHubSnapshot would emit) so dynamic-activity resolution
+    // can find it.
+    ctx.state.runtime.lastHubActivities = [
+      {
+        id: "move:street",
+        kind: "action",
+        title: "→ 街",
+        cost: 0,
+        available: true,
+        actionKind: "moveToMap",
+        payload: { to: "street" },
+      },
+    ];
+    const { ret } = await drain(dispatchActivity(ctx, "move:street"));
+    expect(ret).toBe("ok");
+    expect(ctx.state.baseline.currentMapId).toBe("street");
+    expect(ctx.state.baseline.visuals.bg).toBe("assets/backgrounds/street");
+  });
+});

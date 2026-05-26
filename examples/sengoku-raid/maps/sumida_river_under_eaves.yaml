@@ -1,0 +1,14 @@
+id: sumida_river_under_eaves
+name: 軒下の闇
+chain: sumida_river
+difficulty: 2
+is_extract: true
+connections:
+  - { dir: 戻る, target: sumida_river_drowned_shrine }
+encounter_table:
+  - { enemy: oni_warrior, weight: 80 }
+  - { enemy: null, weight: 20 }
+loot_table:
+  - { item: oni_horn, min: 1, max: 2, weight: 70 }
+  - { item: cursed_blade_fragment, min: 1, max: 1, weight: 10 }
+  - { item: soul_shard, min: 2, max: 3, weight: 20 }

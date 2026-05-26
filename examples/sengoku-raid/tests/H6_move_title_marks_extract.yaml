@@ -5,21 +5,19 @@ description: |
   has no extract, so its move title stays plain.
 state:
   baseline:
-    completedScripts: [000_intro]
+    completedScripts:
+      - 000_intro
   sengoku-raid:
-    mode: hub
     raid: null
 maxSteps: 20
 inputs:
-  - { type: doActivity, id: "depart:sumida_river" }
-  - { type: next }
+  - type: doActivity
+    id: depart:sumida_river
+  - type: next
 assertions:
   - kind: activity
-    id: "move:ferry_landing"
-    titleIncludes: "撤退可"
+    id: move:sumida_river_ferry_landing
+    titleIncludes: 撤退可
   - kind: activity
-    id: "move:reed_marsh"
-    titleIncludes: "葦の藪"
-  # reed_marsh title should NOT contain 撤退可 — sanity. (Not strictly
-  # enforced — titleIncludes can't express negative — but the positive
-  # case above is sufficient for this PR.)
+    id: move:sumida_river_reed_marsh
+    titleIncludes: 葦の藪

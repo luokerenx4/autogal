@@ -20,14 +20,16 @@ describe("buildPresetContext", () => {
       }),
     );
     // Each kind appears both bare (single provider) and qualified;
-    // baseline contributes useItem + useSkill.
+    // baseline contributes useItem + useSkill + moveToMap.
     expect(Object.keys(ctx.actionHandlerRegistry).sort()).toEqual([
+      "baseline:moveToMap",
       "baseline:useItem",
       "baseline:useSkill",
       "custom_a",
       "custom_b",
       "modA:custom_a",
       "modB:custom_b",
+      "moveToMap",
       "useItem",
       "useSkill",
     ]);

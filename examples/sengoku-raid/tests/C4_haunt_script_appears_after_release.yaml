@@ -5,32 +5,39 @@ description: |
   drain it to completion, assert completedScripts records the haunt.
 state:
   baseline:
-    completedScripts: [000_intro]
+    completedScripts:
+      - 000_intro
     scripts:
       zone_haunt_oni_lesser:
-        selfSwitches: { A: true }
+        selfSwitches:
+          A: true
     weapons:
-      ancestor_yaodao: { power: 6 }
+      ancestor_yaodao:
+        power: 6
     characters:
       player:
-        stats: { hp: 30, mental: 8, spectral: 28, intellect: 5 }
+        stats:
+          hp: 30
+          mental: 8
+          spectral: 28
+          intellect: 5
   sengoku-raid:
-    mode: hub
-    metCharacters: [kagari]
+    metCharacters:
+      - kagari
     raid: null
 maxSteps: 100
 inputs:
-  - { type: doActivity, id: "script:zone_haunt_oni_lesser" }
-  # The script is ~7 narrations
-  - { type: next }
-  - { type: next }
-  - { type: next }
-  - { type: next }
-  - { type: next }
-  - { type: next }
-  - { type: next }
-  - { type: next }
-  - { type: next }
+  - type: doActivity
+    id: script:zone_haunt_oni_lesser
+  - type: next
+  - type: next
+  - type: next
+  - type: next
+  - type: next
+  - type: next
+  - type: next
+  - type: next
+  - type: next
 assertions:
   - kind: state
     path: baseline.completedScripts

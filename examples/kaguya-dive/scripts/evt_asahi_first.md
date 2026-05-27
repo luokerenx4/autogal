@@ -13,11 +13,11 @@ requires:
 
 @iroha 嗯。
 
-@asahi 老爸老妈知道吗？
+@asahi 跟妈说了吗。
 
-@iroha 还没说。
+@iroha 还没。
 
-@asahi 那就别说。等你做出东西来再说。
+@asahi 那先别说。爸不在以后她操心多。等你做出东西来再说。
 
 @iroha ……谢谢。
 

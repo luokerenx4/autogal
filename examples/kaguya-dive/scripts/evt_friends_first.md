@@ -68,13 +68,15 @@ requires:
 
 @ashihana 那行。
 
-@ashihana 你需要钱跟我说一声。我直播间打赏分你一半。
+@ashihana 哎。
 
-@iroha 不用。
+@ashihana 我直播间打赏分你一半，你要不要就放着，不用先回我。
 
-@ashihana 我没问你要不要。我说我会给。
+@ashihana 你要用就用。不用就当我帮你存。
 
-@mami 我也是。
+@iroha ……
+
+@mami 我也分。
 
 [end]
 

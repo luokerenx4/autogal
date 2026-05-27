@@ -157,27 +157,119 @@ function diveHome(_rng: () => number): Outcome {
   };
 }
 
-function diveCore(rng: () => number): Outcome {
-  // Only place memory comes from. Bond up, but she fades a little each time.
-  const roll = weightedPick(rng, [40, 35, 20, 5]);
+// 月読核心 dive。月读最深一层，唯一记忆碎片来源。每次见她都不太一样。
+// 池子按访问轮次切：
+//   - 第 1 次：决定性的初见，确定不随机
+//   - kaguya_truth 撞破前：常规池 10 段，平均 ~3 记忆 / 次
+//   - kaguya_truth 撞破后：递减池 5 段，平均 ~2 记忆 / 次（她在淡）
+// 90 天版本 memory 阈值 50，意味着玩家需要约 15 次 core dive 才够 GOOD/TRUE 的
+// 数据 — 配合 90 天预算很宽松，留出大量 slot 给其他事。
+function diveCore(rng: () => number, visits: number, ctx: ActionContext): Outcome {
+  // 决定性初见 —— 不走 RNG，让"第一次"有重量。
+  if (visits === 1) {
+    return {
+      deltas: { stats: { data_memory: 3, bond: 2, funds: -3 } },
+      narration:
+        "白色空间。她坐在那里像在等。你不知道她等什么，但她抬头看到你，笑了一下。「你来了。」+3 记忆 / +2 心连 / -3 资金。",
+    };
+  }
+
+  // kaguya_truth 之后她在淡 —— 不同情绪温度的池子。
+  const truthSeen =
+    ctx.state.baseline.scripts["evt_kaguya_truth"]?.completed === true;
+  if (truthSeen) {
+    const roll = weightedPick(rng, [25, 25, 20, 20, 10]);
+    if (roll === 0)
+      return {
+        deltas: { stats: { data_memory: 2, bond: 2, funds: -3 } },
+        narration:
+          "她坐在你昨天发现被删的那个节点边上。「我没新东西给你了。」她又笑了一下。「但你来了我也开心。」+2 记忆 / +2 心连 / -3 资金。",
+      };
+    if (roll === 1)
+      return {
+        deltas: { stats: { data_memory: 1, bond: 3, funds: -3 } },
+        narration:
+          "她今天说了一段你录不下来的话 —— 你的录音笔自己关掉了。「不许录这种。」她说完，把那段又讲了一遍，更慢。+1 记忆 / +3 心连 / -3 资金。",
+      };
+    if (roll === 2)
+      return {
+        deltas: { stats: { data_memory: 0, bond: 1, funds: -3 } },
+        narration:
+          "她让你回去。「真的。今天我不想被你看见。」白色空间外面下雪。你的设备外面也下雪。+1 心连 / -3 资金。",
+      };
+    if (roll === 3)
+      return {
+        deltas: { stats: { data_memory: 5, bond: -2, funds: -3 } },
+        narration:
+          "你今天进核心比往常深。看见一些她明显不希望你看见的东西 —— 8000 年里某一段她独自走的路。她转过身。「出去。」+5 记忆 / -2 心连 / -3 资金。",
+      };
+    return {
+      deltas: { stats: { data_memory: 3, bond: 1, data_voice: 3, funds: -3 } },
+      narration:
+        "她说「我把今天这段唱完，你就去做别的事行不行？」她唱完。你没动。她也没动。+3 记忆 / +1 心连 / +3 声纹 / -3 资金。",
+    };
+  }
+
+  // 常规池 —— 撞破真相之前。10 段，权重略偏向常见日常。
+  const roll = weightedPick(rng, [14, 14, 12, 12, 12, 10, 10, 8, 5, 3]);
   if (roll === 0)
     return {
-      deltas: { stats: { data_memory: 8, bond: 1, funds: -3 } },
-      narration: "白色空间里，辉夜抬头看你。她讲了一段你不记得的童年。+8 记忆 / +1 心连 / -3 资金。",
+      deltas: { stats: { data_memory: 3, bond: 1, funds: -3 } },
+      narration:
+        "她讲了一段你不记得的童年 —— 你五岁那年掉进神社水池，是你妈妈捞起来的。你确实不记得这件事。她说「不奇怪，你妈也没跟你讲。」+3 记忆 / +1 心连 / -3 资金。",
     };
   if (roll === 1)
     return {
-      deltas: { stats: { data_memory: 12, bond: 1 } },
-      narration: "她哼了一首很短的曲子。你录下来，她笑了笑就消散了。+12 记忆 / +1 心连。",
+      deltas: { stats: { data_memory: 4, funds: -3 } },
+      narration:
+        "她哼了一首很短的曲子。你打开录音笔。她哼完，看了一眼时间。「下次系统重启前我可能讲不完了。」+4 记忆 / -3 资金。",
     };
   if (roll === 2)
     return {
-      deltas: { stats: { data_memory: 5, bond: 2, data_voice: 4 } },
-      narration: "她说，今天能不能多待一会。你陪她坐到下次系统例行重启。+5 记忆 / +2 心连 / +4 声纹。",
+      deltas: { stats: { data_memory: 2, bond: 2, data_voice: 2, funds: -3 } },
+      narration:
+        "她说今天能不能多待一会。你陪她坐到下次系统例行重启。期间她说了三个名字 —— 都是你不认识的人。「8000 年里我认识的人。她们也都老了。」+2 记忆 / +2 心连 / +2 声纹 / -3 资金。",
+    };
+  if (roll === 3)
+    return {
+      deltas: { stats: { data_memory: 3, bond: 2, funds: -3 } },
+      narration:
+        "她在白色空间里画了一棵竹子。「这是我第一次见你那天的竹子。你忘了吗？」你没忘。你只是没料到 8000 年了她还记得那棵竹子的纹路。+3 记忆 / +2 心连 / -3 资金。",
+    };
+  if (roll === 4)
+    return {
+      deltas: { stats: { data_memory: 3, bond: 1, data_motor: 2, funds: -3 } },
+      narration:
+        "她在白色空间里跳了几下，转了个圈。「你看，我会跳了。」你说原来你不会？她说「8000 年总能学会一点东西吧。」+3 记忆 / +1 心连 / +2 运动模型 / -3 资金。",
+    };
+  if (roll === 5)
+    return {
+      deltas: { stats: { data_memory: 5, funds: -3 } },
+      narration:
+        "她拿出一本看起来很旧的纸本翻给你看。「这是我那时候自己写的。后来变成《竹取物语》了。」你说骗人。她说「真的。我妈妈是月亮 —— 这件事是我写进去的，因为我没别的方式跟你说。」+5 记忆 / -3 资金。",
+    };
+  if (roll === 6)
+    return {
+      deltas: { stats: { data_memory: 2, bond: 1, funds: -3 } },
+      narration:
+        "她让你回放她昨天的那段哼唱。「我自己不记得哼过这个。」你说要不要我帮你存下来。她说「不用了，反正你记得就行。」+2 记忆 / +1 心连 / -3 资金。",
+    };
+  if (roll === 7)
+    return {
+      deltas: { stats: { data_memory: 1, bond: 1, funds: -3 } },
+      narration:
+        "她什么都没说。你也什么都没说。系统例行重启。你下线时她朝你挥了一下手 —— 这是她第一次主动跟你做这个动作。+1 记忆 / +1 心连 / -3 资金。",
+    };
+  if (roll === 8)
+    return {
+      deltas: { stats: { data_memory: 5, bond: -1, funds: -3 } },
+      narration:
+        "她今天的色温不太对，比平时偏蓝。你问她怎么了。她说「数据稍微紧了一点。今天不要待太久。」她让你拷走了平常不会给的一段，然后让你走。+5 记忆 / -1 心连 / -3 资金。",
     };
   return {
-    deltas: { stats: { data_memory: 15, bond: -1 } },
-    narration: "她突然认不出你了。看着你的眼睛和看路灯一样。记忆吐出来很多，但今天她没回来。+15 记忆 / -1 心连。",
+    deltas: { stats: { data_memory: 8, bond: -2, funds: -3 } },
+    narration:
+      "她突然认不出你了。看着你的眼睛和看路灯一样。今天她吐出来很多记忆碎片 —— 全是 8000 年里某个你不知道的人的脸。但她没回来。+8 记忆 / -2 心连 / -3 资金。",
   };
 }
 
@@ -205,13 +297,21 @@ function diveBlackonyx(rng: () => number): Outcome {
   };
 }
 
-const NODE_TABLE: Record<NodeId, (rng: () => number) => Outcome> = {
-  konbini: diveKonbini,
-  hospital: diveHospital,
-  idol: diveIdol,
-  home: diveHome,
+// Node fns share a signature so the handler can dispatch uniformly.
+// Most ignore `visits` / `ctx` — diveCore uses both for visit-aware /
+// truth-aware narration tiers.
+type NodeFn = (
+  rng: () => number,
+  visits: number,
+  ctx: ActionContext,
+) => Outcome;
+const NODE_TABLE: Record<NodeId, NodeFn> = {
+  konbini: (rng) => diveKonbini(rng),
+  hospital: (rng) => diveHospital(rng),
+  idol: (rng) => diveIdol(rng),
+  home: (rng) => diveHome(rng),
   core: diveCore,
-  blackonyx: diveBlackonyx,
+  blackonyx: (rng) => diveBlackonyx(rng),
 };
 
 function nodeFromActionId(id: string): NodeId | undefined {
@@ -232,7 +332,7 @@ const diveHandler: ActionHandler = (ctx: ActionContext): ActionResult => {
   const m = moduleState(ctx.state);
   m.visits[node] += 1;
 
-  const outcome = NODE_TABLE[node](ctx.rng);
+  const outcome = NODE_TABLE[node](ctx.rng, m.visits[node], ctx);
   // Always charge 1 stamina (except home, which restores; net handled per-node).
   const stamCost = node === "home" ? 0 : -1;
   const baseStats: Record<string, number> = stamCost ? { stamina: stamCost } : {};
@@ -307,15 +407,14 @@ const triggers: Trigger[] = [
       return {};
     },
   },
-  // 哥哥首联系：第一年夏天(day 1, slot 1+)。
+  // 哥哥首联系：开学第一周末（day ≥ 5）。
   {
     id: "asahi_first",
     once: true,
     when: {
       all: [
         { scriptCompleted: "evt_friends_first" },
-        { day: { min: 1 } },
-        { slot: { min: 1 } },
+        { day: { min: 5 } },
       ],
     },
     do: (ctx) => {
@@ -334,7 +433,24 @@ const triggers: Trigger[] = [
       return {};
     },
   },
-  // ——— 第二年 ———
+  // ambient: 犬DOGE 早晨的一段小戏。day ≥ 3 + 闺蜜首场已完成 → 第一次正经的
+  // 日常清晨。不耗 slot、不影响 stat —— 纯氛围。这是"走到哪都有东西看"的
+  // 第一道证明。
+  {
+    id: "doge_morning",
+    once: true,
+    when: {
+      all: [
+        { day: { min: 3 } },
+        { scriptCompleted: "evt_friends_first" },
+      ],
+    },
+    do: (ctx) => {
+      queueScript(ctx, "evt_doge_morning");
+      return {};
+    },
+  },
+  // ——— 第二年（约 day 30 起）———
   // X 浮出水面：x_intel 攒到 15。
   {
     id: "x_first_seen",
@@ -347,13 +463,13 @@ const triggers: Trigger[] = [
       return {};
     },
   },
-  // 闺蜜察觉：第二年某个时点。
+  // 闺蜜察觉：进游戏一个月后（day ≥ 30）+ 闺蜜首场完成。
   {
     id: "friends_suspect",
     once: true,
     when: {
       all: [
-        { day: { min: 2 } },
+        { day: { min: 30 } },
         { scriptCompleted: "evt_friends_first" },
       ],
     },
@@ -362,7 +478,7 @@ const triggers: Trigger[] = [
       return {};
     },
   },
-  // 八千代试探：核心去深了 + bond 到位。
+  // 八千代试探：核心去深了（memory ≥ 30，新尺度下约半程）+ bond 到位。
   {
     id: "yachiyo_test",
     once: true,
@@ -396,15 +512,15 @@ const triggers: Trigger[] = [
       return {};
     },
   },
-  // 撞破八千代删自己数据：彩叶足够深 + 已经见过八千代一面。
-  // memory ≥ 15 是个软门槛——她已经积累出"可以被删的东西"。
+  // 撞破八千代删自己数据：见过八千代试探 + 又积累出"可被删的东西"。
+  // memory ≥ 35 = 比 yachiyo_test 的 30 多一点，留出"她又删了几次"的窗口。
   {
     id: "kaguya_truth",
     once: true,
     when: {
       all: [
         { scriptCompleted: "evt_yachiyo_test" },
-        { stat: { name: "data_memory", min: 15 } },
+        { stat: { name: "data_memory", min: 35 } },
       ],
     },
     do: (ctx) => {
@@ -413,13 +529,14 @@ const triggers: Trigger[] = [
     },
   },
   // 芦花的一瞬：仅对真的把芦花放在心上的玩家开放（好感 ≥ 8）。
+  // day ≥ 40 = 进入第二年中段，已经过完一个完整的春夏轮替。
   // 不到位的玩家完全错过这条暗线，这是对他们道德的镜像 — 不是 bug。
   {
     id: "ashihana_glimpse",
     once: true,
     when: {
       all: [
-        { day: { min: 2 } },
+        { day: { min: 40 } },
         { affection: { character: "ashihana", min: 8 } },
         { scriptCompleted: "evt_friends_suspect" },
       ],
@@ -429,18 +546,18 @@ const triggers: Trigger[] = [
       return {};
     },
   },
-  // ——— 第三年（剧情高潮）———
-  // 通电前夜：4 类数据各自过 20（约 GOOD 阈值 30 的 2/3）。给一波 stat
+  // ——— 第三年（剧情高潮，约 day 60+）———
+  // 通电前夜：4 类数据各自过 35（约 GOOD 阈值 50 的 2/3）。给一波 stat
   // 增益作为奖励，并把"通电前夜"这一刻郑重表达出来。
   {
     id: "body_almost_ready",
     once: true,
     when: {
       all: [
-        { stat: { name: "data_neural", min: 20 } },
-        { stat: { name: "data_motor",  min: 20 } },
-        { stat: { name: "data_voice",  min: 20 } },
-        { stat: { name: "data_memory", min: 20 } },
+        { stat: { name: "data_neural", min: 35 } },
+        { stat: { name: "data_motor",  min: 35 } },
+        { stat: { name: "data_voice",  min: 35 } },
+        { stat: { name: "data_memory", min: 35 } },
       ],
     },
     do: (ctx) => {
@@ -453,7 +570,7 @@ const triggers: Trigger[] = [
   },
   // X 移交（TRUE-end 的入口）：所有硬指标 + 撞破真相 + 顶住热度战。
   // 全跑到这一步意味着玩家：
-  //   - 收齐了 4 类数据（4 × 30）→ 有义体的物理基础
+  //   - 收齐了 4 类数据（4 × 50）→ 有义体的物理基础
   //   - bond ≥ 7 → 八千代真心想留下来
   //   - heat ≥ 50 → 顶住了注意力虹吸
   //   - 撞破了八千代消极删数据这件事 → 在最后一夜的选择里能说出"我要现在的你"
@@ -465,10 +582,10 @@ const triggers: Trigger[] = [
     when: {
       all: [
         { scriptCompleted: "evt_kaguya_truth" },
-        { stat: { name: "data_neural", min: 30 } },
-        { stat: { name: "data_motor",  min: 30 } },
-        { stat: { name: "data_voice",  min: 30 } },
-        { stat: { name: "data_memory", min: 30 } },
+        { stat: { name: "data_neural", min: 50 } },
+        { stat: { name: "data_motor",  min: 50 } },
+        { stat: { name: "data_voice",  min: 50 } },
+        { stat: { name: "data_memory", min: 50 } },
         { stat: { name: "bond",        min: 7 } },
         { stat: { name: "heat",        min: 50 } },
       ],
@@ -484,7 +601,10 @@ const triggers: Trigger[] = [
 // Heat decay + 注意力虹吸 (data drift). Fires after every cost ≥ 1 action.
 // ----------------------------------------------------------------------------
 
-const HEAT_DECAY_PER_SLOT = 2;
+// 90 天版本：每个 cost ≥ 1 的 action（=一天）heat -1。
+// 50 起步 / -1/天 → 不 stream 的话 50 天后归零。
+// stream_collab 效果 +8，配合衰减 -1 净 +7，玩家约每 7-10 天 stream 一次能稳。
+const HEAT_DECAY_PER_SLOT = 1;
 const DRIFT_THRESHOLD = 40;
 const DATA_KEYS = [
   "data_neural",

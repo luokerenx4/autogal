@@ -41,26 +41,42 @@ requires:
 
 @mami 在做什么呢？
 
+——你看着她。
+
+——三个月前她在食堂没问你"为什么转专业"。
+
+——这次她问了。
+
+——这次她已经知道答案的轮廓，只是来找你确认。
+
 ? 怎么回。
-- "在帮一个朋友。她需要一个身体。" -> +2mami | goto pick_truth
+- "跟辉夜有关。我在想怎么让芦花消化这件事。" -> +2mami | goto pick_open
 - "做实验。别问。" -> -mami | goto pick_deflect
 - "你别管。" -> -2mami | goto pick_push
 
-# pick_truth
+# pick_open
 
 @mami ……
 
-@mami 那个朋友。
+@mami 嗯。
 
-@mami 还在吗？
+@mami 我猜的。
 
-@iroha 在。
+@mami 不是猜你在做什么。
 
-@iroha 只是不完整。
+@mami 我猜你"什么时候告诉芦花"那件事。
 
-@mami 嗯……
+@mami 她那天哭得最厉害。你怕她再经历一次。
 
-@mami 那你以后扛不动的话，跟我说一声呀。
+@iroha 嗯。
+
+@mami 你想让她在你做完之前以为这事翻篇了。
+
+@iroha 嗯。
+
+@mami ——我不催你。
+
+@mami 但你以后扛不动的话，跟我说一声呀。
 
 @mami 我可以陪你去医院。我装作我有点不舒服那种。
 

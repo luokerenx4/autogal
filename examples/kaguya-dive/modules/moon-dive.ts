@@ -36,6 +36,10 @@ interface DiveState {
   visits: Record<NodeId, number>;
   metX: boolean;
   yachiyoTested: boolean;
+  // stream_collab 累计次数。triggers 用条件 DSL 读不到 module state，所以
+  // 计数器在这里维护，当跨过阈值时把一个 switch 翻成 true，trigger 用
+  // switch 条件触发。
+  streamCollabCount: number;
   // Scripts queued by triggers that couldn't claim currentScriptId at fire
   // time. Drained FIFO in onScriptComplete / onActionComplete. Without
   // this, a trigger that fires while another script is running gets its
@@ -52,6 +56,7 @@ function initial(): DiveState {
     visits: { konbini: 0, hospital: 0, idol: 0, home: 0, core: 0, blackonyx: 0 },
     metX: false,
     yachiyoTested: false,
+    streamCollabCount: 0,
     pendingScripts: [],
     studyVisits: 0,
   };
@@ -591,6 +596,175 @@ const triggers: Trigger[] = [
       return {};
     },
   },
+  // ——— 友情线 · 喝咖啡奖励事件链 ———
+  // 把原来 town 常驻的 coffee_with_friends action 拆成 4 段独立剧情。
+  // 每段触发条件不同，避免"天天和闺蜜喝咖啡"的违和感。
+  // 第一次：开学后第一周末，三人正经坐下来。
+  {
+    id: "coffee_first",
+    once: true,
+    when: {
+      all: [
+        { scriptCompleted: "evt_friends_first" },
+        { day: { min: 7 } },
+      ],
+    },
+    do: (ctx) => {
+      queueScript(ctx, "evt_coffee_first");
+      return {
+        deltas: {
+          stats: { stamina: 4 },
+          characterStats: { ashihana: { affection: 1 }, mami: { affection: 1 } },
+        },
+      };
+    },
+  },
+  // 真实察觉后的迟疑：单独跟真实坐，彩叶第一次想把芦花也拉进来。
+  {
+    id: "coffee_doubt",
+    once: true,
+    when: {
+      all: [
+        { scriptCompleted: "evt_friends_suspect" },
+        { day: { min: 35 } },
+      ],
+    },
+    do: (ctx) => {
+      queueScript(ctx, "evt_coffee_doubt");
+      return {
+        deltas: {
+          stats: { stamina: 3 },
+          characterStats: { mami: { affection: 1 } },
+        },
+      };
+    },
+  },
+  // 三人组成军后的第一次工作会：摊开笔记本规划八千代直播。
+  {
+    id: "coffee_planning",
+    once: true,
+    when: { scriptCompleted: "evt_team_meeting" },
+    do: (ctx) => {
+      queueScript(ctx, "evt_coffee_planning");
+      return {
+        deltas: {
+          stats: { stamina: 4, heat: 5 },
+          characterStats: { ashihana: { affection: 2 }, mami: { affection: 1 } },
+        },
+      };
+    },
+  },
+  // 通电前最后一次咖啡：芦花已经哭过、再装作没哭。
+  {
+    id: "coffee_winter",
+    once: true,
+    when: {
+      all: [
+        { scriptCompleted: "evt_team_meeting" },
+        { day: { min: 70 } },
+      ],
+    },
+    do: (ctx) => {
+      queueScript(ctx, "evt_coffee_winter");
+      return {
+        deltas: {
+          stats: { stamina: 3, bond: 1 },
+        },
+      };
+    },
+  },
+  // ——— 哥哥电话奖励事件 ———
+  // 资金告急时哥哥主动出现（彩叶打过去）。day ≥ 20 避免太早压戏。
+  {
+    id: "asahi_money",
+    once: true,
+    when: {
+      all: [
+        { stat: { name: "funds", max: 5 } },
+        { day: { min: 20 } },
+        { scriptCompleted: "evt_asahi_first" },
+      ],
+    },
+    do: (ctx) => {
+      queueScript(ctx, "evt_asahi_money");
+      return {
+        deltas: {
+          stats: { funds: 25, stamina: -1 },
+          characterStats: { asahi: { affection: -1 } },
+        },
+      };
+    },
+  },
+  // 三人组成军后哥哥也跟进：他看见妹妹身边多了人，主动追加资源。
+  {
+    id: "asahi_endgame",
+    once: true,
+    when: {
+      all: [
+        { scriptCompleted: "evt_team_meeting" },
+        { day: { min: 60 } },
+      ],
+    },
+    do: (ctx) => {
+      queueScript(ctx, "evt_asahi_endgame");
+      return {
+        deltas: {
+          stats: { funds: 10 },
+          characterStats: { asahi: { affection: 2 } },
+        },
+      };
+    },
+  },
+  // ——— "撑不住 → 求助闺蜜 → 三人组队" 主弧线 ———
+  // 触发条件：stream_collab 计 5 次（switch 由 onActionComplete 设置）+
+  // stamina/heat 同时低位 = 彩叶一个人扛不下来的具象时刻。
+  {
+    id: "iroha_burnout",
+    once: true,
+    when: {
+      all: [
+        { switch: { name: "burnout_eligible", eq: true } },
+        { stat: { name: "stamina", max: 3 } },
+        { stat: { name: "heat", max: 45 } },
+      ],
+    },
+    do: (ctx) => {
+      queueScript(ctx, "evt_iroha_burnout");
+      return {
+        // 撞墙的具象化：彩叶熬到天亮没睡。
+        deltas: { stats: { stamina: -1 } },
+      };
+    },
+  },
+  // burnout 撞过墙之后，彩叶正式约闺蜜见面坦白八千代 = 辉夜。
+  {
+    id: "friends_join",
+    once: true,
+    when: { scriptCompleted: "evt_iroha_burnout" },
+    do: (ctx) => {
+      queueScript(ctx, "evt_friends_join");
+      return {
+        deltas: {
+          characterStats: { ashihana: { affection: 1 }, mami: { affection: 1 } },
+        },
+      };
+    },
+  },
+  // 三人开始分工。完成后开放 coffee_planning + asahi_endgame。
+  {
+    id: "team_meeting",
+    once: true,
+    when: { scriptCompleted: "evt_friends_join" },
+    do: (ctx) => {
+      queueScript(ctx, "evt_team_meeting");
+      return {
+        deltas: {
+          stats: { stamina: 3, heat: 10 },
+          characterStats: { ashihana: { affection: 2 }, mami: { affection: 2 } },
+        },
+      };
+    },
+  },
   // ——— 第三年（剧情高潮，约 day 60+）———
   // 通电前夜：4 类数据各自过 35（约 GOOD 阈值 50 的 2/3）。给一波 stat
   // 增益作为奖励，并把"通电前夜"这一刻郑重表达出来。
@@ -721,9 +895,21 @@ const moonDive: Module = {
   // onActionComplete also drives the heat war: every cost ≥ 1 action
   // advances the calendar AND decays heat. move:* and cost:0 scripted
   // beats don't trigger decay.
+  // 同时维护 stream_collab 计数器：到 5 时翻 burnout_eligible switch，让
+  // iroha_burnout trigger 可以用纯条件 DSL 识别"扛不动"的时机。
   onActionComplete: (ctx, action) => {
     drainPending(ctx);
     if (action.cost > 0) applyHeatDecay(ctx);
+    if (action.id === "stream_collab") {
+      const m = moduleState(ctx.state);
+      m.streamCollabCount += 1;
+      if (
+        m.streamCollabCount >= 5 &&
+        ctx.state.baseline.switches["burnout_eligible"] !== true
+      ) {
+        ctx.state.baseline.switches["burnout_eligible"] = true;
+      }
+    }
     if (action.id === "study") handleStudyVisit(ctx);
     refreshStudyMarker(ctx);
   },

@@ -48,6 +48,15 @@ state:
       - ashihana_glimpse
       - body_almost_ready
       - x_handoff
+      - coffee_first
+      - coffee_doubt
+      - coffee_planning
+      - coffee_winter
+      - asahi_money
+      - asahi_endgame
+      - iroha_burnout
+      - friends_join
+      - team_meeting
   training:
     day: 80
     slot: 0

@@ -139,6 +139,14 @@ export interface RuntimeState {
   // move actions, per-character bond gifts, etc.) without each module
   // implementing its own prefix-string router.
   lastHubActivities: HubActivity[];
+  // Per-action title markers. Hub builders prepend the marker string to
+  // an activity's title when it appears here. Modules populate / clear
+  // this map to signal "this option has new content today" — the
+  // canonical use case is a galgame where a trigger arms a story beat
+  // bound to a specific action, and the hub should highlight it so the
+  // player knows where the next bit of plot lives. Keyed by the activity
+  // id (e.g. `action:study`, `move:lab`). Optional; absent = no marker.
+  hubMarkers?: Record<string, string>;
 }
 
 export interface ComposedState {
@@ -720,6 +728,14 @@ export interface Action {
   // statically-declared actions when a generic handler can be
   // parameterized via YAML.
   payload?: Record<string, unknown>;
+  // Optional flavor narration(s) emitted when the action runs. For
+  // kindless actions (those without a `kind` dispatched to a handler),
+  // the engine picks one entry at random per invocation and queues it
+  // into runtime.pendingNarrations alongside applying `effects`. Allows
+  // YAML authors to attach simple per-action flavor without writing a
+  // module handler. Actions with handlers should emit narrations via
+  // their handler's ActionResult instead.
+  narrations?: string[];
 }
 
 // Where a state mutation came from. Passed to onStateMutated so

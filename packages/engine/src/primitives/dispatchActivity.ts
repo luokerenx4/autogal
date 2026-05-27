@@ -121,8 +121,18 @@ async function* runAction(
       rng: ctx.rng,
     });
     applyActionResult(ctx, result);
-  } else if (action.effects) {
-    mutateState(ctx, action.effects, "action");
+  } else if (action.effects || action.narrations) {
+    // Kindless actions: apply effects + emit a random narration from
+    // action.narrations if any. Lets YAML authors give simple actions
+    // (study, work, rest…) flavor variants without a module handler.
+    const narration =
+      action.narrations && action.narrations.length > 0
+        ? [action.narrations[Math.floor(ctx.rng() * action.narrations.length)]!]
+        : undefined;
+    applyActionResult(ctx, {
+      ...(action.effects ? { deltas: action.effects } : {}),
+      ...(narration ? { narrations: narration } : {}),
+    });
   }
   fireOnActionComplete(ctx, action, result);
   return "ok";

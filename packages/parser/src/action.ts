@@ -86,6 +86,17 @@ export function parseActionSpec(
   if (requires) action.requires = requires;
   const effects = parseEffectsObject(obj.effects, source);
   if (effects) action.effects = effects;
+  if (Array.isArray(obj.narrations)) {
+    const lines = obj.narrations.filter(
+      (v): v is string => typeof v === "string",
+    );
+    if (lines.length !== obj.narrations.length) {
+      throw new ActionParseError(
+        `${source ?? action.id}: \`narrations\` must be an array of strings`,
+      );
+    }
+    if (lines.length > 0) action.narrations = lines;
+  }
   return action;
 }
 

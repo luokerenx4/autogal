@@ -45,6 +45,10 @@ interface DiveState {
   // this, a trigger that fires while another script is running gets its
   // payload silently dropped (once: true means it won't re-fire).
   pendingScripts: string[];
+  // Per-action visit counts for action-bound story chains. Currently
+  // tracks `study` to fire 古川 教授 chain at visits 3 / 6 / 10. Add more
+  // entries as we extend other actions (work, coffee, rest, …) with chains.
+  studyVisits: number;
 }
 
 function initial(): DiveState {
@@ -54,6 +58,7 @@ function initial(): DiveState {
     yachiyoTested: false,
     streamCollabCount: 0,
     pendingScripts: [],
+    studyVisits: 0,
   };
 }
 
@@ -398,6 +403,46 @@ function drainPending(ctx: PresetContext): void {
     ctx.state.baseline.beatIndex = 0;
     return;
   }
+}
+
+// ----------------------------------------------------------------------------
+// Action-bound story chains.
+// Pattern: each "chain" action tracks its own visit count in module state.
+// On each visit, queue the next chain script if a milestone visit is hit.
+// Also refresh the hub marker so the player sees "★ 上课" when the next
+// visit will trigger new content. The marker auto-clears when there's no
+// pending chain content.
+// ----------------------------------------------------------------------------
+
+const STUDY_CHAIN: Array<{ atVisit: number; scriptId: string }> = [
+  { atVisit: 3, scriptId: "evt_study_synapse" },
+  { atVisit: 6, scriptId: "evt_study_prof_notices" },
+  { atVisit: 10, scriptId: "evt_study_prof_opens" },
+];
+
+function handleStudyVisit(ctx: PresetContext): void {
+  const m = moduleState(ctx.state);
+  m.studyVisits = (m.studyVisits ?? 0) + 1;
+  const v = m.studyVisits;
+  const scripts = ctx.state.baseline.scripts;
+  for (const step of STUDY_CHAIN) {
+    if (v === step.atVisit && scripts[step.scriptId]?.completed !== true) {
+      queueScript(ctx, step.scriptId);
+    }
+  }
+}
+
+function refreshStudyMarker(ctx: PresetContext): void {
+  const m = moduleState(ctx.state);
+  const next = (m.studyVisits ?? 0) + 1;
+  const scripts = ctx.state.baseline.scripts;
+  const markers = (ctx.state.runtime.hubMarkers ??= {});
+  const pendingChain = STUDY_CHAIN.find(
+    (s) =>
+      s.atVisit === next && scripts[s.scriptId]?.completed !== true,
+  );
+  if (pendingChain) markers["action:study"] = "★";
+  else delete markers["action:study"];
 }
 
 const triggers: Trigger[] = [
@@ -833,12 +878,20 @@ const moonDive: Module = {
       ctx.state.baseline.currentScriptId = "001_intro";
       ctx.state.baseline.beatIndex = 0;
     }
+    // Recompute markers for resumed sessions (fixtures inject mid-game
+    // state; the marker should reflect that state, not a fresh-game empty).
+    refreshStudyMarker(ctx);
   },
   // Both hooks drain pending because either one can free currentScriptId:
   // onScriptComplete fires when a trigger-queued script finishes (chain
   // case), onActionComplete fires when a hub action finishes (the more
   // common "trigger fired during a script, deferred, now hub-time" case).
-  onScriptComplete: (ctx) => drainPending(ctx),
+  // Refresh markers on every transition so the hub always reflects what's
+  // pending.
+  onScriptComplete: (ctx) => {
+    drainPending(ctx);
+    refreshStudyMarker(ctx);
+  },
   // onActionComplete also drives the heat war: every cost ≥ 1 action
   // advances the calendar AND decays heat. move:* and cost:0 scripted
   // beats don't trigger decay.
@@ -857,6 +910,8 @@ const moonDive: Module = {
         ctx.state.baseline.switches["burnout_eligible"] = true;
       }
     }
+    if (action.id === "study") handleStudyVisit(ctx);
+    refreshStudyMarker(ctx);
   },
 };
 

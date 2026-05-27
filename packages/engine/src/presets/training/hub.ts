@@ -107,6 +107,20 @@ export function buildHubSnapshot(state: ComposedState, game: Game): Output {
     });
   }
 
+  // Apply hub markers. Modules populate state.runtime.hubMarkers with
+  // per-activity-id title prefixes (e.g. "★") to signal "this option
+  // has new content today". The marker is prepended to the activity's
+  // title in-place — anything that resolves the activity (the player
+  // picking it, dispatchActivity routing the input) still works because
+  // the id is unchanged.
+  const markers = state.runtime.hubMarkers;
+  if (markers) {
+    for (const a of activities) {
+      const prefix = markers[a.id];
+      if (prefix) a.title = `${prefix} ${a.title}`;
+    }
+  }
+
   const snapshot: HubSnapshot = {
     day: t.day,
     maxDay: cfg.maxDay,

@@ -12,6 +12,9 @@ switches:
   # filters scripts by their `requires`; an unsatisfiable requires hides
   # them while still letting a trigger force-launch via currentScriptId.
   __trigger_only: false
+  # 由 moon-dive.ts 的 onActionComplete 在 stream_collab 累计到 5 次时
+  # 翻成 true。iroha_burnout trigger 用它作为"扛不动"的硬条件之一。
+  burnout_eligible: false
 training:
   # 90 天（约对应彩叶进大学的前三年压缩后的玩家叙事时间）。
   # slotsPerDay: 1 → 每天 = 一个决策窗口 + 一段叙事。

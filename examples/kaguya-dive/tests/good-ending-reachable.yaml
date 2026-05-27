@@ -44,6 +44,17 @@ state:
       - ashihana_glimpse
       - body_almost_ready
       - x_handoff
+      # 新增的奖励事件触发器：fixture 测的是 ending 命中，不测这些剧本，
+      # 全部标为已触发以避免它们在测试期间插队。
+      - coffee_first
+      - coffee_doubt
+      - coffee_planning
+      - coffee_winter
+      - asahi_money
+      - asahi_endgame
+      - iroha_burnout
+      - friends_join
+      - team_meeting
   training:
     day: 60
     slot: 0

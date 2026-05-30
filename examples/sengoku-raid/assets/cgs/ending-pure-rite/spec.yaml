@@ -1,0 +1,22 @@
+kind: cg
+description: |
+  鎮魂結界の儀のCG。主人公、篝、澪の手が妖刀に重なり、
+  白金の浄化光が静かに結界を形作る。
+prompt: |
+  Cinematic anime visual novel CG, simplified colors, bold cel shading,
+  high contrast, large readable shapes for chafa/TUI conversion. Edo castle
+  great hall as a ritual space. Three hands overlap on the ancestral cursed
+  katana: the protagonist's hand, Kagari's armored hand near her spear, and
+  Mio's hand with a small mirror or wakizashi nearby. The sword emits calm
+  white-gold purification light, forming a simple circular barrier. Kagari
+  and Mio are partial solemn silhouettes in the background. Limited palette
+  of white, gold, indigo, and black, 16:9.
+placeholder: "[CG] 三人の手が妖刀に重なり、鎮魂結界が白金に灯る"
+refs:
+  characters: [kagari, mio, player]
+  location: edo-castle
+  time: 儀式
+size_hint:
+  tui: { cols: 80, rows: 30 }
+  web: { aspect: "16:9" }
+tags: [ending, pure, rite]

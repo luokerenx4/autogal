@@ -183,10 +183,11 @@ my-game/
 │   └── ...
 ├── assets/                    optional — portraits, backgrounds, CGs
 │   ├── portraits/alice-smile/
-│   │   ├── spec.yaml          description, prompt, placeholder, sizing
-│   │   ├── tui.txt?           ASCII rendering for terminal (optional)
-│   │   ├── tui.ans?           ANSI-colored rendering (optional)
-│   │   └── source.png?        authoring source (optional)
+│   │   ├── spec.yaml                       description, prompt, placeholder, sizing
+│   │   ├── tui.txt?                        ASCII rendering for terminal (optional)
+│   │   ├── tui.ans?                        ANSI-colored rendering (optional)
+│   │   ├── source.quality.png?             high-res master (gitignored)
+│   │   └── source.compressed.webp?         distribution copy (optional)
 │   ├── backgrounds/sakura-path/spec.yaml
 │   └── cgs/handshake/spec.yaml
 └── tests/
@@ -267,7 +268,7 @@ defaultPortraits:
 [end]
 ```
 
-Backgrounds, portraits, and CGs are **visual assets** — each lives in `assets/<kind>/<id>/` with a `spec.yaml` describing what it depicts plus optional pre-rendered files (ASCII art `tui.txt` for terminals, `tui.ans` for color terminals, `source.png` for image generators). Missing renderings degrade to the spec's placeholder text, which is also what AI players see in the headless JSON event stream. See the [rpg-harness-author skill](.claude/skills/rpg-harness-author/SKILL.md) for the full asset spec format.
+Backgrounds, portraits, and CGs are **visual assets** — each lives in `assets/<kind>/<id>/` with a `spec.yaml` describing what it depicts plus optional pre-rendered files. The convention is two-tier: `source.quality.png` is the author's high-res master (gitignored, kept local) and `source.compressed.{webp,png,jpg,jpeg}` is the slimmed distribution copy that travels with the repo so cloners get a working visual experience out of the box. ASCII art `tui.txt` and color `tui.ans` are what the TUI actually renders; missing renderings degrade to the spec's placeholder text, which is also what AI players see in the headless JSON event stream. See the [rpg-harness-author skill](.claude/skills/rpg-harness-author/SKILL.md) for the full asset spec format.
 
 ## Headless step API
 

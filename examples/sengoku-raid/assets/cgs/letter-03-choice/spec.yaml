@@ -1,0 +1,22 @@
+kind: cg
+description: |
+  最後の御沙汰のCG。大広間の畳に三つの文箱が並ぶ。朱の封蝋、
+  黒の封蝋、封蝋なし。奥には側用人と視線を伏せる澪。
+prompt: |
+  Cinematic anime visual novel CG, simplified colors, bold cel shading,
+  high contrast, symbolic composition for chafa/TUI conversion. Edo castle
+  great hall at night. Three document boxes dominate the lower center:
+  one sealed in vermilion red, one sealed in black, and one plain unsealed.
+  In the background, a shogunate retainer sits in shadow, and Mio lowers
+  her gaze beside him. The protagonist's hand and cursed katana hilt rest
+  in the foreground. Limited palette of black, vermilion, parchment tan,
+  candle gold, and deep indigo, 16:9. No readable text.
+placeholder: "[CG] 大広間に三つの文箱が並び、最後の御沙汰を選ぶ"
+refs:
+  characters: [mio, player]
+  location: edo-castle
+  time: 夜
+size_hint:
+  tui: { cols: 80, rows: 30 }
+  web: { aspect: "16:9" }
+tags: [chapter-3, choice, shogunate]

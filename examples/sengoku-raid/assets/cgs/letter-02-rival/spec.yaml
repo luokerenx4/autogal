@@ -1,0 +1,22 @@
+kind: cg
+description: |
+  澪が査問の使者として現れるCG。大名府の中庭で片膝をつき、
+  深い藍の打掛と家伝の脇差を帯び、冷静に顔を上げる。
+prompt: |
+  Cinematic anime visual novel CG, simplified colors, bold cel shading,
+  high contrast, large readable silhouettes for chafa/TUI conversion.
+  A daimyo residence courtyard after a raid, wet stone and lantern light.
+  Mio, a young inspector from Kyoto, kneels on one knee in a deep indigo
+  uchikake with a family wakizashi at her waist. She raises her face
+  toward the unseen protagonist with cold, calm, professional eyes. Use
+  broad indigo, gray stone, and warm lantern shapes, minimal textile detail,
+  16:9.
+placeholder: "[CG] 深い藍の打掛の澪が、中庭で査問のため顔を上げる"
+refs:
+  characters: [mio, player]
+  location: edo-castle
+  time: 夕刻
+size_hint:
+  tui: { cols: 80, rows: 30 }
+  web: { aspect: "16:9" }
+tags: [chapter-2, character-intro, mio]

@@ -1,0 +1,22 @@
+kind: cg
+description: |
+  祠の封印のCG。山中の小さな祠に妖刀が納められ、主人公は
+  刀を背負わず、朝霧の石段を下りていく。
+prompt: |
+  Cinematic anime visual novel CG, simplified colors, bold cel shading,
+  high contrast, restrained mood for chafa/TUI conversion. A small mountain
+  shrine at dawn, mist in cedar trees, quiet stone steps. The ancestral
+  cursed katana is sealed at the shrine, wrapped with plain rope and paper
+  charms with no readable text. The protagonist walks away down the steps
+  seen from behind as a simple silhouette, with an empty back and no sword.
+  Dawn gray, cedar green, shrine wood brown, pale gold, uncluttered mist,
+  16:9.
+placeholder: "[CG] 山の祠に妖刀を封じ、主人公は刀を持たず石段を去る"
+refs:
+  characters: [player]
+  location: mountain-shrine
+  time: 夜明け
+size_hint:
+  tui: { cols: 80, rows: 30 }
+  web: { aspect: "16:9" }
+tags: [ending, mundane, seal]

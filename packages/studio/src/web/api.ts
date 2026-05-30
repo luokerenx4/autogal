@@ -112,7 +112,7 @@ export async function fetchHealth(): Promise<HealthState> {
   return r.json();
 }
 
-// Upload a PNG to the asset's source.png slot. The server accepts
+// Upload a PNG to the asset's source.quality.png slot. The server accepts
 // multipart "file" or raw image/* — we use multipart so a future
 // helper that posts a Blob from canvas (e.g. paste from clipboard)
 // works without changing the contract. Returns the updated AssetRow.
@@ -185,10 +185,10 @@ export async function patchSpec(
   return r.json();
 }
 
-// Invoke server-side chafa to produce tui.txt from source.png.
+// Invoke server-side chafa to produce tui.txt from source.quality.png.
 // Surfaces server status codes verbatim so the UI can branch:
 //   503 → chafa not installed (show install hint)
-//   412 → no source.png (prompt to upload first)
+//   412 → no source.quality.png (prompt to upload first)
 //   500 → chafa failed (show stderr-derived message)
 export async function renderTui(
   assetPath: string,

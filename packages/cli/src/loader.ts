@@ -176,7 +176,7 @@ async function loadDir<T>(
 
 // Walk <gameDir>/assets/{portraits,backgrounds,cgs}/ and for each
 // subdirectory that contains a spec.yaml, parse the spec and
-// enumerate its rendering files (tui.txt/tui.ans/source.png/web.*).
+// enumerate its rendering files (tui.txt/tui.ans/source.{quality,compressed}.*/web.*).
 // Returns one AssetSpec per discovered directory; missing top-level
 // kind subdirs (e.g. no cgs/ at all) are silently skipped — assets/
 // itself absent is also fine.
@@ -242,8 +242,29 @@ async function discoverRenderings(assetDir: string): Promise<AssetRenderings> {
   if (ans) out.tuiAns = ans;
   const txt = await tryFile("tui.txt");
   if (txt) out.tuiTxt = txt;
-  const src = await tryFile("source.png");
-  if (src) out.source = src;
+  // Source slot — two tiers under the same convention. The
+  // `*.quality.*` file is the author's high-res master (gitignored
+  // by default; lives on the author's machine and on their private
+  // backup branch). The `*.compressed.*` file is the slimmed-down
+  // distribution copy that travels with the repo so cloners get a
+  // working out-of-the-box visual experience. Loader prefers quality
+  // when present, falls back to compressed, falls back to undefined
+  // (TUI still works via tui.*; placeholder text covers the rest).
+  // Both tiers accept multiple formats — PNG for masters (lossless
+  // generator output) and any of webp/png/jpg for compressed (mirror
+  // of the existing web.* slot's format flexibility).
+  const quality = await tryFile("source.quality.png");
+  if (quality) {
+    out.source = quality;
+  } else {
+    for (const ext of ["webp", "png", "jpg", "jpeg"]) {
+      const c = await tryFile(`source.compressed.${ext}`);
+      if (c) {
+        out.source = c;
+        break;
+      }
+    }
+  }
   // Web slot accepts any of webp/png/jpg, in that priority. First match wins.
   for (const ext of ["webp", "png", "jpg", "jpeg"]) {
     const w = await tryFile(`web.${ext}`);

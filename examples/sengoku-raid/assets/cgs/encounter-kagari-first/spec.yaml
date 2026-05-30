@@ -1,0 +1,26 @@
+kind: cg
+description: |
+  黒沼地の三叉路で篝と初めて出会うCG。霧の中、黒い具足の
+  若い女が槍を構え、主人公の妖刀を見て口の端を上げる。
+prompt: |
+  Cinematic anime visual novel CG, simplified colors, bold cel shading,
+  high contrast, large readable silhouettes for chafa/TUI conversion.
+  A foggy mountain three-way crossroads at night. Kagari, a young female
+  warrior in black armor and practical travel clothes, stands half-emerged
+  from the mist holding a long spear. She looks toward the unseen
+  protagonist's cursed katana in the foreground with cold eyes and a
+  slight confident smile. Strong moon rim light, limited palette, clean
+  background masses, 16:9.
+placeholder: "[CG] 霧の三叉路で、槍を持つ篝が妖刀を見て笑う"
+refs:
+  characters: [ kagari, player ]
+  location: kuro-swamp
+  time: 夜
+size_hint:
+  tui: { cols: 80, rows: 30 }
+  web: { aspect: "16:9" }
+tags: [ chapter-1, character-intro, kagari ]
+tui_render:
+  symbols: half
+  colors: "16"
+  dither: diffusion

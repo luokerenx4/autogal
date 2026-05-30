@@ -412,7 +412,7 @@ under `skill.custom`. Combat / spirit modules read game-specific tags
 
 Optional. Once declared, scripts can reference portraits, backgrounds, and CG (cut-scene illustrations) by path; the TUI renders them as a galgame-style stage, and the headless JSON output carries semantic descriptions so AI players can also "see" the scene.
 
-**The asset is a directory, not a file.** Every asset has a `spec.yaml` (always present — the source of truth) plus zero or more pre-rendered files (`source.png` / `tui.txt` / `tui.ans` / `web.*`). The engine never decodes images; renderings are produced by external tools (chafa, Midjourney, Stable Diffusion, hand-drawn ASCII, etc.) and committed alongside the spec. Missing renderings degrade to the spec's `placeholder` text — that text is also what AI players see in their JSON event stream, which is what makes the system work when nobody's drawn the art yet.
+**The asset is a directory, not a file.** Every asset has a `spec.yaml` (always present — the source of truth) plus zero or more pre-rendered files (`source.quality.png` / `source.compressed.{webp,png,jpg,jpeg}` / `tui.txt` / `tui.ans` / `web.*`). The engine never decodes images; renderings are produced by external tools (chafa, Midjourney, Stable Diffusion, hand-drawn ASCII, etc.) and committed alongside the spec. Missing renderings degrade to the spec's `placeholder` text — that text is also what AI players see in their JSON event stream, which is what makes the system work when nobody's drawn the art yet.
 
 ### Directory layout
 
@@ -420,11 +420,12 @@ Optional. Once declared, scripts can reference portraits, backgrounds, and CG (c
 assets/
   portraits/
     alice-smile/
-      spec.yaml           # always required
-      source.png?         # authoring source (PNG, optional)
-      tui.txt?            # plain ASCII for TUI (optional)
-      tui.ans?            # ANSI-colored for TUI (optional; preferred over txt)
-      web.webp?           # future web frontend (optional)
+      spec.yaml                  # always required
+      source.quality.png?        # author's high-res master (gitignored)
+      source.compressed.webp?    # distribution copy (tracked; cwebp / pngquant output)
+      tui.txt?                   # plain ASCII for TUI (optional)
+      tui.ans?                   # ANSI-colored for TUI (optional; preferred over txt)
+      web.webp?                  # future web frontend (optional)
     alice-angry/
       spec.yaml
   backgrounds/
@@ -487,7 +488,7 @@ The TUI's `selectRendering` picks the best file the terminal can display:
 `rpgh studio <game-dir>` boots a local web workbench at `http://localhost:5173` for visual asset management. v3 capabilities:
 
 - **Gallery** — grid of all asset specs, filter by kind / missing-rendering, color-coded badges
-- **Detail page** — view spec, copy prompt to clipboard, upload PNG to `source.png` slot, render `source.png → tui.txt`/`tui.ans` via chafa with options (symbols / dither / colors / size), preview the rendered output (ANSI colors render correctly in browser)
+- **Detail page** — view spec, copy prompt to clipboard, upload PNG to `source.quality.png` slot, render `source.quality.png → tui.txt`/`tui.ans` via chafa with options (symbols / dither / colors / size), preview the rendered output (ANSI colors render correctly in browser)
 - **Inline spec edit** — placeholder / description / prompt / tags / refs / size_hint editable; saves go through the YAML Document API so author-formatted comments and key ordering survive the round-trip
 - **Persisted render prefs** — last successful render's options auto-write to `spec.tui_render`; on page reload the form pre-fills
 
@@ -500,9 +501,37 @@ The "AI generates game, human fills in art" flow is the canonical one:
 1. AI writes `spec.yaml` for every visual asset the game needs — including detailed `placeholder` and `prompt` fields. **No image files needed yet** — the game is fully playable in placeholder mode.
 2. AI references those assets from scripts (`bg:` frontmatter, `:cg ...` directives, character `portraits` map + `@speaker emotion` syntax).
 3. Headless / AI playthroughs work end-to-end. The JSON event stream carries `placeholder` text wherever there'd be an image.
-4. **Later**, a human (or another AI step) runs `rpgh assets list <game-dir> --missing` to see what art is needed, then `rpgh assets prompts <game-dir> <asset-path>` to copy the prompt into an image generator, drops the resulting PNG into `<asset-dir>/source.png`, and runs the chafa render in studio. The TUI hot-reloads the new rendering on next beat.
+4. **Later**, a human (or another AI step) runs `rpgh assets list <game-dir> --missing` to see what art is needed, then `rpgh assets prompts <game-dir> <asset-path>` to copy the prompt into an image generator, drops the resulting PNG into `<asset-dir>/source.quality.png`, generates a distribution copy at `<asset-dir>/source.compressed.webp` (see below), and runs the chafa render in studio. The TUI hot-reloads the new rendering on next beat.
 
 This separation means AI doesn't have to generate images itself, and humans don't have to write spec.yaml by hand. The two halves of the workflow are decoupled — they share `spec.yaml` as the contract.
+
+### The source-image two-tier convention
+
+PNGs from modern image generators are 2–3 MB each. Shipping the masters in git would bloat any non-trivial game to tens of MB; not shipping anything at all leaves cloners staring at placeholder text on first launch. The convention solves both:
+
+| File | Tier | In git? | Purpose |
+|---|---|---|---|
+| `source.quality.png` | author master | **no** (gitignored) | high-res original from the generator; stays on author's machine + private backup branch; chafa re-renders from here |
+| `source.compressed.{webp,png,jpg,jpeg}` | distribution | **yes** | slimmed copy that travels with the repo; first-launch visual fallback; future web frontend's input |
+
+**Loader behavior** (`packages/cli/src/loader.ts`): prefers `source.quality.png` if present, falls back to `source.compressed.*` (webp > png > jpg > jpeg), falls back to undefined (TUI keeps working via `tui.*`). The engine never cares which tier won; downstream tools (chafa, future web renderer) just consume whatever path the loader hands them.
+
+**After you generate `source.quality.png`, also produce a distribution copy.** Engine doesn't hard-bind any specific compressor — use whatever you have:
+
+```bash
+# WebP (best size, ~70% smaller than PNG; cwebp from libwebp)
+cwebp -q 80 source.quality.png -o source.compressed.webp
+
+# PNG (lossy palette reduction, ~70% smaller, stays PNG; pngquant)
+pngquant --quality=65-85 --output source.compressed.png source.quality.png
+
+# PNG (lossless, ~20-40% smaller; oxipng / optipng)
+oxipng -o 4 source.quality.png --out source.compressed.png
+```
+
+Target size for `source.compressed.*` is ~300–500 KB per CG, ~50–150 KB per portrait. Commit the compressed file; `source.quality.png` is gitignored at `examples/**/*.quality.png` by default (extend to your game folder if your game lives outside `examples/`).
+
+If you skip the compression step entirely, the repo just won't have a distribution copy — cloners see placeholder text, the TUI still renders from `tui.*`. Graceful degradation all the way down.
 
 ## Map file format — `maps/*.yaml`
 

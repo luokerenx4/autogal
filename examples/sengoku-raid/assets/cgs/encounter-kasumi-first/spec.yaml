@@ -1,0 +1,26 @@
+kind: cg
+description: |
+  石畳の道で霞と初めて出会うCG。矢が主人公の鼻先を掠めて
+  石に刺さり、背後の鬼が倒れる。霞は樹上から軽く降りる。
+prompt: |
+  Cinematic anime visual novel CG, simplified colors, bold cel shading,
+  high contrast, large readable silhouettes for chafa/TUI conversion.
+  A dark stone mountain path under trees. An arrow has just struck the
+  stones in the foreground after passing the unseen protagonist. Kasumi,
+  a bright-eyed young hunter with a bow, drops lightly from a tree branch.
+  Behind her, an oni collapses as a large dark silhouette with an arrow in
+  its forehead, no gore. Strong diagonal action, moonlight, limited palette,
+  uncluttered foliage, 16:9.
+placeholder: "[CG] 霞の矢が石畳に刺さり、背後の鬼が崩れる"
+refs:
+  characters: [ kasumi, player ]
+  location: mt-houkyou
+  time: 夜
+size_hint:
+  tui: { cols: 80, rows: 30 }
+  web: { aspect: "16:9" }
+tags: [ chapter-1, character-intro, kasumi ]
+tui_render:
+  symbols: quad
+  colors: "16"
+  dither: ordered

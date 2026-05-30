@@ -65,7 +65,7 @@ export interface RenderResult {
   outFile: "tui.txt" | "tui.ans";
 }
 
-// Shell out to chafa to produce a TUI rendering of source.png.
+// Shell out to chafa to produce a TUI rendering of source.quality.png.
 // Output filename depends on the color mode — monochrome lands in
 // `tui.txt`, anything colored in `tui.ans` (ANSI SGR escapes).
 // Writes are atomic (tmp + rename) so a partial chafa run never

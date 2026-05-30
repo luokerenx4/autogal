@@ -41,7 +41,7 @@ export async function handle(req: Request, ctx: Ctx): Promise<Response> {
   }
 
   if (method === "POST") {
-    // /api/assets/<asset-path>/source       — upload source.png
+    // /api/assets/<asset-path>/source       — upload source.quality.png
     // /api/assets/<asset-path>/render-tui   — invoke chafa
     const m = pathname.match(/^\/api\/assets\/(.+)\/(source|render-tui)$/);
     if (m && m[1] && m[2]) {
@@ -165,9 +165,11 @@ function slotPath(
 // Accepts either multipart/form-data (field "file") OR a raw image/*
 // body. PNG only — v2 keeps the rendering pipeline to one format so
 // chafa input is predictable. The file is written as <asset-dir>/
-// source.png atomically (write to .tmp + rename) so a half-finished
-// upload never leaves a torn file that the next render-tui would
-// consume.
+// source.quality.png atomically (write to .tmp + rename) so a
+// half-finished upload never leaves a torn file that the next
+// render-tui would consume. (`source.quality.png` is the high-res
+// master tier; cf. the source.{quality,compressed}.* convention in
+// engine/types.ts AssetRenderings comment.)
 async function postSource(
   ctx: Ctx,
   assetPath: string,
@@ -187,7 +189,7 @@ async function postSource(
     return json({ error: "only image/png is accepted in v2" }, 415);
   }
 
-  const final = path.join(dir, "source.png");
+  const final = path.join(dir, "source.quality.png");
   const tmp = final + ".tmp";
   await writeFile(tmp, bytes);
   await rename(tmp, final).catch(async (err) => {
@@ -243,10 +245,10 @@ async function postRenderTui(
     );
   }
   if (!spec.renderings.source) {
-    // 412 (precondition failed) — caller needs to upload source.png
+    // 412 (precondition failed) — caller needs to upload source.quality.png
     // first. Distinct from 404 so the UI can wire "upload" as the
     // hint instead of "asset gone".
-    return json({ error: "no source.png — upload one first" }, 412);
+    return json({ error: "no source.quality.png — upload one first" }, 412);
   }
 
   const dir = await resolveAssetDir(ctx, assetPath);

@@ -1,0 +1,22 @@
+kind: cg
+description: |
+  地獄門の底のCG。火口の裂け目の奥で、主人公は自分と同じ顔の
+  先祖の鬼神と向き合う。妖刀はもう震えていない。
+prompt: |
+  Cinematic anime visual novel CG, simplified colors, extreme high contrast,
+  large readable silhouettes for chafa/TUI conversion. Inside a volcanic
+  hell gate under Mt. Houkyou, cracked black rock and red light from below
+  form a mouth-like fissure. The protagonist faces a ghostly oni-god ancestor
+  with the same silhouette and face shape, mirrored across the frame. Both
+  hold cursed blades. The protagonist's sword is completely still, glowing
+  red-black, and his shadow suggests he is becoming the blade's demon.
+  Black, lava red, and bone white palette, no gore, 16:9.
+placeholder: "[CG] 地獄門の赤光の中、主人公は同じ顔の鬼神と対峙する"
+refs:
+  characters: [player]
+  location: hell-gate
+  time: 終局
+size_hint:
+  tui: { cols: 80, rows: 30 }
+  web: { aspect: "16:9" }
+tags: [ending, oni, hell-gate]

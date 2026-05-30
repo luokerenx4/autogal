@@ -17,7 +17,7 @@ export default defineConfig({
     strictPort: true,
     proxy: {
       "/api": `http://localhost:${API_PORT}`,
-      // Asset bytes (source.png, tui.txt) live under /files/ on the API.
+      // Asset bytes (source.quality.png, tui.txt) live under /files/ on the API.
       // Same proxy so <img src="/files/source/..."> works without CORS.
       "/files": `http://localhost:${API_PORT}`,
     },

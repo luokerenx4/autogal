@@ -1,0 +1,22 @@
+kind: cg
+description: |
+  三花の盟のCG。深夜の大名府中庭で、篝・霞・澪が並び立ち、
+  主人公の刀の隣にいると誓う。
+prompt: |
+  Cinematic anime visual novel CG, simplified colors, bold cel shading,
+  high contrast, large readable silhouettes for chafa/TUI conversion.
+  Midnight daimyo residence courtyard under a low moon. Kagari with a spear
+  and black armor, Kasumi with a bow and hunter outfit, and Mio in deep
+  indigo with a wakizashi stand side by side facing the unseen protagonist.
+  The protagonist appears only as a dark foreground silhouette. Their
+  weapon silhouettes must be distinct: spear, bow, wakizashi/mirror motif.
+  Moon blue, black, indigo, muted red accents, uncluttered background, 16:9.
+placeholder: "[CG] 月下の中庭で、篝・霞・澪が三花の盟を立てる"
+refs:
+  characters: [kagari, kasumi, mio, player]
+  location: edo-castle
+  time: 深夜
+size_hint:
+  tui: { cols: 80, rows: 30 }
+  web: { aspect: "16:9" }
+tags: [bond, alliance, key-moment]

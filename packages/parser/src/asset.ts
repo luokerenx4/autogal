@@ -56,7 +56,7 @@ const KNOWN_KEYS = [
 // forward slashes (e.g. "assets/portraits/kagari-smile"). It becomes
 // `AssetSpec.path` — the key scripts use to reference this asset.
 //
-// Renderings (tui.txt/tui.ans/source.png/web.*) are NOT discovered
+// Renderings (tui.txt/tui.ans/source.{quality,compressed}.*/web.*) are NOT discovered
 // here — the loader walks the directory and fills them in. This
 // parser is pure: content in, spec out, no fs access.
 export function parseAssetSpec(

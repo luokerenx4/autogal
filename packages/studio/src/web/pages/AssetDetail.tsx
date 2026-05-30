@@ -132,7 +132,7 @@ const DITHER_OPTIONS: DitherOpt[] = [
 
 // Asset detail. Two-column layout:
 //   left  — spec metadata (kind, refs, size_hint, tags, placeholder)
-//   right — prompt (copyable) + previews (source.png, tui.txt)
+//   right — prompt (copyable) + previews (source.quality.png, tui.txt)
 //
 // The route path is `/asset/<asset-path>` where <asset-path> may
 // itself contain slashes (e.g. "assets/portraits/kagari-smile").
@@ -191,7 +191,7 @@ export function AssetDetail() {
 
   // After an upload or render, the asset's renderings flip on the
   // server — refetch + re-pull the preview so the UI mirrors disk.
-  // Reused by both upload and render handlers + the source.png
+  // Reused by both upload and render handlers + the source.quality.png
   // preview cache-busts on the new query string.
   const [cacheKey, setCacheKey] = useState(0);
 
@@ -419,7 +419,7 @@ export function AssetDetail() {
     try {
       await uploadSource(assetPath, file);
       setCacheKey((k) => k + 1);
-      showToast(setToast, "source.png uploaded");
+      showToast(setToast, "source.quality.png uploaded");
     } catch (e) {
       showToast(setToast, (e as Error).message);
     } finally {
@@ -465,7 +465,7 @@ export function AssetDetail() {
       if (status === 503) {
         showToast(setToast, "chafa not installed — try `brew install chafa`");
       } else if (status === 412) {
-        showToast(setToast, "upload a source.png first");
+        showToast(setToast, "upload a source.quality.png first");
       } else {
         showToast(setToast, (e as Error).message);
       }
@@ -725,7 +725,7 @@ export function AssetDetail() {
                 tui.txt
               </span>
               <span className={"flag" + (asset.renderings.source ? " present" : "")}>
-                source.png
+                source.quality.png
               </span>
               <span className={"flag" + (asset.renderings.web ? " present" : "")}>
                 web.*
@@ -759,7 +759,7 @@ export function AssetDetail() {
 
           <div className="detail-section" style={{ marginTop: 16 }}>
             <h2 style={{ display: "flex", justifyContent: "space-between" }}>
-              <span>source.png</span>
+              <span>source.quality.png</span>
               <button
                 className="btn"
                 onClick={() => fileInputRef.current?.click()}
@@ -809,7 +809,7 @@ export function AssetDetail() {
                 disabled={!canRender}
                 title={
                   !asset.renderings.source
-                    ? "upload source.png first"
+                    ? "upload source.quality.png first"
                     : !chafaPresent
                       ? "chafa not installed — brew install chafa"
                       : busy === "render"

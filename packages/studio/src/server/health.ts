@@ -1,5 +1,5 @@
 // Detect tools the studio's write operations depend on. Today that's
-// only chafa (for source.png → tui.txt rendering); cached at server
+// only chafa (for source.quality.png → tui.txt rendering); cached at server
 // boot so /api/health is a cheap lookup. If we ever ship other
 // "optional but recommended" tools (ffmpeg for audio, imagemagick
 // for thumbnails) they'd slot in here alongside chafa.

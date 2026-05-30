@@ -52,7 +52,8 @@ COMMANDS
 
   assets   <game-dir> list [--missing] [--format table|json]
       List visual assets declared under <game-dir>/assets/. Each row
-      shows which renderings (tui.ans, tui.txt, source.png, web.*) are
+      shows which renderings (tui.ans, tui.txt, source.quality.png /
+      source.compressed.{webp,png,jpg,jpeg}, web.*) are
       present and the spec's placeholder text. --missing narrows to
       assets without any TUI rendering — the worklist for the next
       round of art generation.

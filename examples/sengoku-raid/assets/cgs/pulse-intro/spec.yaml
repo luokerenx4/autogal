@@ -1,0 +1,26 @@
+kind: cg
+description: |
+  脈絡の口伝を読むCG。夜の縁側で主人公が妖刀の鞘の蒔絵を撫で、
+  口伝書の上に浄・凡・鬼の三脈が象徴的に立ち上る。
+prompt: |
+  Cinematic anime visual novel CG, simplified colors, bold cel shading,
+  high contrast, symbolic lighting for chafa/TUI conversion. A samurai
+  residence veranda at night after the first oni hunt. The unseen
+  protagonist's hands hold the scabbard of an ancestral cursed katana,
+  tracing its lacquer pattern. An old oral-tradition book lies open beside
+  the sword. Three broad spiritual streams rise from the blade: pure white,
+  ordinary warm gold, and demonic red-black. Use large arcs and clear
+  sword/book silhouettes, no readable text, 16:9.
+placeholder: "[CG] 妖刀と口伝書から、浄・凡・鬼の三脈が立ち上る"
+refs:
+  characters: [ player ]
+  location: edo-castle
+  time: 夜
+size_hint:
+  tui: { cols: 80, rows: 30 }
+  web: { aspect: "16:9" }
+tags: [ system, yaodao, pulse ]
+tui_render:
+  colors: "16"
+  symbols: half
+  dither: diffusion

@@ -386,8 +386,9 @@ export interface CharacterSpawnRule {
 
 // Visual asset registry. An asset is a directory under
 // <gameDir>/assets/{portraits,backgrounds,cgs}/<slug>/ containing a
-// spec.yaml plus any number of pre-rendered files (source.png,
-// tui.txt, tui.ans, web.webp). The engine never decodes images; it
+// spec.yaml plus any number of pre-rendered files (source.quality.png /
+// source.compressed.{webp,png,jpg,jpeg}, tui.txt, tui.ans, web.webp).
+// The engine never decodes images; it
 // only carries the spec + paths to those files so each frontend can
 // pick the best rendering it can display. Missing renderings degrade
 // to the spec's `placeholder` text — that text is also what AI/
@@ -464,9 +465,20 @@ export interface AssetRenderings {
   // tui.txt — plain text rendering (ASCII art). TUI fallback when
   // tui.ans is absent.
   tuiTxt?: string;
-  // source.png — author's source image. Not consumed by any built-in
-  // frontend; reserved for tooling that re-renders downstream
-  // variants from a single source.
+  // Source image, two-tier convention:
+  //   source.quality.png        — author's high-res master (gitignored,
+  //                                stays local; used by author-side
+  //                                tooling like chafa re-render)
+  //   source.compressed.{webp,png,jpg,jpeg}
+  //                              — slimmed distribution copy that ships
+  //                                with the repo; first-launch visual
+  //                                fallback for cloners
+  // Loader (cli/loader.ts) picks quality first, falls back to
+  // compressed (in webp/png/jpg/jpeg priority), populates this slot
+  // with whichever it found. Not currently consumed by any built-in
+  // frontend (TUI uses tui.*); reserved for the future web renderer
+  // and for tooling that re-renders downstream variants from a
+  // single source.
   source?: string;
   // web.webp / web.png — frontend-specific. Not currently consumed by
   // any built-in frontend; reserved for a future web renderer.

@@ -1,4 +1,4 @@
-import type { CharacterDef, CharacterStatDef } from "@autogal/engine";
+import type { CharacterDef, CharacterStatDef } from "@rpg-harness/engine";
 import { extractCustom, splitFrontmatter } from "./frontmatter";
 
 export class CharacterParseError extends Error {}

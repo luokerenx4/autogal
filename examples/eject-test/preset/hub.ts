@@ -1,7 +1,7 @@
 // Hub Output construction for training-mode games. Walks game.scripts
 // + game.actions, filters by slot/availability, builds a HubSnapshot.
 
-import { evaluateCondition } from "@autogal/engine";
+import { evaluateCondition } from "@rpg-harness/engine";
 import type {
   ComposedState,
   Game,
@@ -9,7 +9,7 @@ import type {
   HubSnapshot,
   Output,
   StateDelta,
-} from "@autogal/engine";
+} from "@rpg-harness/engine";
 
 export function buildHubSnapshot(state: ComposedState, game: Game): Output {
   const cfg = game.training!;

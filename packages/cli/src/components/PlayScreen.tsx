@@ -3,14 +3,14 @@ import { Box, Text, useInput } from "ink";
 import { useInkInstance } from "../ink-instance";
 import { watch } from "node:fs";
 import { sep } from "node:path";
-import { Engine } from "@autogal/engine";
+import { Engine } from "@rpg-harness/engine";
 import type {
   AssetSpec,
   ComposedState,
   Game,
   Input,
   Output,
-} from "@autogal/engine";
+} from "@rpg-harness/engine";
 import { loadGame } from "../loader";
 import { appendLog, loadSession, saveSession } from "../session";
 import {
@@ -166,13 +166,13 @@ export function PlayScreen({
   }, [gameDir]);
 
   // File watcher: rebuild engine on .md/.yaml changes so authors can
-  // hot-edit. Filters out the .autogal session directory (else our own
+  // hot-edit. Filters out the .rpg-harness session directory (else our own
   // saveSession would trigger an immediate reload loop).
   useEffect(() => {
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
     const watcher = watch(gameDir, { recursive: true }, (_evt, filename) => {
       if (!filename) return;
-      if (filename.startsWith(".autogal")) return;
+      if (filename.startsWith(".rpg-harness")) return;
       if (filename.startsWith("node_modules")) return;
       // Trigger on game source edits (.md/.yaml frontmatter, including
       // asset spec.yaml) AND on asset rendering files under assets/ —

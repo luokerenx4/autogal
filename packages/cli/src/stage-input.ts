@@ -1,4 +1,4 @@
-import type { Input } from "@autogal/engine";
+import type { Input } from "@rpg-harness/engine";
 import type { Stage, UiAction } from "./screen-model";
 import { getChoicePresenter } from "./presenters";
 

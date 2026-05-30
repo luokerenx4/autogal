@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Standalone Node runner for the `autogal screenshot` subcommand.
+// Standalone Node runner for the `rpgh screenshot` subcommand.
 //
 // Reason this is its own file (not part of screenshot.ts): node-pty's
 // native binding is currently incompatible with Bun's runtime — onExit

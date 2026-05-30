@@ -1,17 +1,17 @@
 ---
-name: autogal-player
-description: Play an autogal GalGame from the shell. Use this skill when you're inside a folder containing game.yaml + characters/ + scripts/ (an autogal game), and the user wants you to play through the game — either as yourself or in character as a persona. Drives the game via the `autogal` CLI, reading stdout JSON and writing stdin one input at a time.
+name: rpg-harness-player
+description: Play an RPG-Harness game from the shell. Use this skill when you're inside a folder containing game.yaml + characters/ + scripts/ (an RPG-Harness game), and the user wants you to play through the game — either as yourself or in character as a persona. Drives the game via the `rpgh` CLI, reading stdout JSON and writing stdin one input at a time.
 ---
 
-# autogal-player
+# rpg-harness-player
 
-You're a player playing through an autogal game. You make decisions, the game advances, you reach an ending. You write no code — you only invoke the `autogal` CLI and react to its JSON output.
+You're a player playing through an RPG-Harness game. You make decisions, the game advances, you reach an ending. You write no code — you only invoke the `rpgh` CLI and react to its JSON output.
 
 ## Before you start
 
 Check three things:
 
-1. **The `autogal` binary is available.** Run `which autogal` or `bun run autogal --help` from inside the autogal repo. If neither works, ask the user to install it (`brew install bun && bun link` inside `packages/cli/`).
+1. **The `rpgh` binary is available.** Run `which rpgh` or `bun run rpgh --help` from inside the RPG-Harness repo. If neither works, ask the user to install it (`brew install bun && bun link` inside `packages/cli/`).
 2. **You're at the right path.** Identify the game directory. It contains `game.yaml`, `characters/`, `scripts/`. Use an absolute or repo-relative path going forward (the CLI doesn't care).
 3. **Pick a session name.** A session is your save file. Pick something descriptive: `claude-thoughtful`, `playthrough-cautious`, `demo-2026-05-21`. Don't use someone else's session — that overwrites their save.
 
@@ -29,7 +29,7 @@ SESSION="claude-$(date +%H%M%S)"  # or any unique name
 ### Step 1: See where you are
 
 ```bash
-autogal peek "$GAME" --session "$SESSION"
+rpgh peek "$GAME" --session "$SESSION"
 ```
 
 Output is a single line of JSON:
@@ -58,7 +58,7 @@ If `done` is `true`, the game is over. Read the final state and tell the user wh
 ### Step 3: Apply your decision
 
 ```bash
-autogal step "$GAME" --session "$SESSION" --input '{"type":"choose","index":2}'
+rpgh step "$GAME" --session "$SESSION" --input '{"type":"choose","index":2}'
 ```
 
 The output of `step` is the **next** event. You do NOT need to `peek` again — just react to what `step` printed.
@@ -91,7 +91,7 @@ Example:
 Then:
 
 ```bash
-autogal step "$GAME" --session "$SESSION" --input '{"type":"choose","index":2}'
+rpgh step "$GAME" --session "$SESSION" --input '{"type":"choose","index":2}'
 ```
 
 ## Choosing in character
@@ -107,20 +107,20 @@ In a `choice`, options have `available: true` or `available: false`. Locked opti
 ## When the game ends
 
 ```bash
-autogal peek "$GAME" --session "$SESSION"
+rpgh peek "$GAME" --session "$SESSION"
 ```
 
 The final state's `baseline.completedScripts[-1]` is the ending you reached. Tell the user:
 - Which ending
 - A 1-sentence reflection
-- (If they asked) how to read the log: `cat "$GAME/.autogal/sessions/$SESSION/log.jsonl"`
+- (If they asked) how to read the log: `cat "$GAME/.rpg-harness/sessions/$SESSION/log.jsonl"`
 
 ## Fork your save
 
 A session is a directory. To branch and try a different choice:
 
 ```bash
-cp -r "$GAME/.autogal/sessions/$SESSION" "$GAME/.autogal/sessions/${SESSION}-fork"
+cp -r "$GAME/.rpg-harness/sessions/$SESSION" "$GAME/.rpg-harness/sessions/${SESSION}-fork"
 # Continue with --session "${SESSION}-fork" from a previous state
 ```
 
@@ -129,31 +129,31 @@ You can't go "back" within a single session (engine is forward-only), but you ca
 ## Hard rules
 
 - Never modify the game's `scripts/` or `characters/` files unless the user explicitly asks. The author wrote them.
-- Never run `step` against a session you don't own (sessions list at `<game>/.autogal/sessions/`).
-- The only `autogal` subcommands you should use for play: **peek, step**. (`sessions` is informational; `test` and `autoplay` are not for playing.)
+- Never run `step` against a session you don't own (sessions list at `<game>/.rpg-harness/sessions/`).
+- The only `rpgh` subcommands you should use for play: **peek, step**. (`sessions` is informational; `test` and `autoplay` are not for playing.)
 - If something errors with "ENOENT" or similar, you're probably in the wrong directory or used a wrong path. Don't keep retrying — check `pwd` and `ls`.
 
 ## Example transcript
 
 ```bash
-$ autogal peek "$GAME" --session "$SESSION"
+$ rpgh peek "$GAME" --session "$SESSION"
 {"output":{"type":"dialogue","speakerName":"narrator","text":"慶長十年、初秋。"},"done":false,"state":{"baseline":{"currentScriptId":"000_intro",...}}}
 
 # Intro is auto-launched (sengoku-raid sets currentScriptId in onSessionStart).
 # Just drain it with `next`.
-$ autogal step "$GAME" --session "$SESSION" --input '{"type":"next"}'
+$ rpgh step "$GAME" --session "$SESSION" --input '{"type":"next"}'
 {"output":{"type":"dialogue","speakerName":"narrator","text":"江戸城本丸の大広間。蝋燭の煙が天井に渦を巻く。"},...}
 
 # ... drain ~12 beats of intro until the hub menu appears
-$ autogal step "$GAME" --session "$SESSION" --input '{"type":"next"}'
+$ rpgh step "$GAME" --session "$SESSION" --input '{"type":"next"}'
 {"output":{"type":"hubMenu","snapshot":{"activities":[{"id":"depart:kuro_swamp","title":"出立 — 黒沼地（難度 1）",...}, ...]}}, ...}
 
 # Depart on the easiest raid.
-$ autogal step "$GAME" --session "$SESSION" --input '{"type":"doActivity","id":"depart:kuro_swamp"}'
+$ rpgh step "$GAME" --session "$SESSION" --input '{"type":"doActivity","id":"depart:kuro_swamp"}'
 {"output":{"type":"narration","text":"黒沼地に踏み入る。霧が脛に絡みつく。"},...}
 
 # ... eventually you'll see a choice (kagari first-meet) or end at an ending.
-$ autogal peek "$GAME" --session "$SESSION"
+$ rpgh peek "$GAME" --session "$SESSION"
 {"output":{"type":"gameEnd"},"done":true,...}
 
 # Report:

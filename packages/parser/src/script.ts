@@ -4,7 +4,7 @@ import type {
   ChoiceOption,
   Script,
   StateDelta,
-} from "@autogal/engine";
+} from "@rpg-harness/engine";
 import { splitFrontmatter } from "./frontmatter";
 import { parseCondition } from "./condition";
 import { parseInlineEffects } from "./inline-effects";

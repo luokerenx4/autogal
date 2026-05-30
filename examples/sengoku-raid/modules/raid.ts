@@ -1,5 +1,5 @@
 // sengoku-raid: the headless extraction-shooter module. Reference
-// implementation for "what an RPGMaker-native autogal module looks
+// implementation for "what an RPGMaker-native RPG-Harness module looks
 // like" after Phase 6.
 //
 // Owns:
@@ -28,7 +28,7 @@
 //   our onHubBuild to win first-wins. Skipping game.training avoids
 //   both.
 
-import { enterMap, evaluateCondition } from "@autogal/engine";
+import { enterMap, evaluateCondition } from "@rpg-harness/engine";
 import type {
   ActionContext,
   ActionHandler,
@@ -45,7 +45,7 @@ import type {
   StateDelta,
   StatSnapshot,
   Trigger,
-} from "@autogal/engine";
+} from "@rpg-harness/engine";
 
 // Most helpers take a minimal ctx (state + game + rng) so they work for
 // both PresetContext callers (the preset / onHubBuild) and ActionContext

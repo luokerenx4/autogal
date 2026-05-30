@@ -1,6 +1,6 @@
 import React from "react";
 import { Box, Text } from "ink";
-import type { ScriptInfo } from "@autogal/engine";
+import type { ScriptInfo } from "@rpg-harness/engine";
 
 interface ScriptPickerProps {
   completedId: string | null;

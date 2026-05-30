@@ -11,10 +11,10 @@ import { screenshotCommand } from "./commands/screenshot";
 import { assetsListCommand, assetsPromptsCommand } from "./commands/assets";
 import { studioCommand } from "./commands/studio";
 
-const HELP = `autogal — a headless RPG Maker for the terminal
+const HELP = `rpgh — RPG-Harness (the RH engine): a headless RPG Maker for the terminal
 
 USAGE
-  autogal <command> [args]
+  rpgh <command> [args]
 
 COMMANDS
   play     [<game-dir>]
@@ -28,7 +28,7 @@ COMMANDS
 
   step     <game-dir> --input JSON [--session NAME] [--pretty]
       Apply one Input and return the next Output. Persists state.
-      Example: autogal step ./my-game --input '{"type":"next"}'
+      Example: rpgh step ./my-game --input '{"type":"next"}'
 
   sessions <game-dir>
       List existing sessions (one per line, stdout). Empty status to stderr.
@@ -42,7 +42,7 @@ COMMANDS
       Without -v, only prints the final JSON summary to stdout.
 
   init     <dir> [--preset vn|training] [--eject] [--force]
-      Scaffold a minimal autogal game in <dir>. Creates game.yaml,
+      Scaffold a minimal RPG-Harness game in <dir>. Creates game.yaml,
       a sample character, a sample script, a test fixture, README, .gitignore.
       Refuses if <dir> is non-empty unless --force.
       --preset selects the game-loop shape: "vn" (default, pure visual
@@ -83,11 +83,11 @@ COMMANDS
       into a new game, advances two beats, then picks activity 2.
 
 FLAGS
-  --session NAME   Session id (folder under .autogal/sessions/). Default: "default"
+  --session NAME   Session id (folder under .rpg-harness/sessions/). Default: "default"
   --input JSON     Engine Input as JSON string (for "step")
   --pretty         Indent JSON output (for "peek" and "step")
 
-State is persisted at <game-dir>/.autogal/sessions/<name>/state.json.
+State is persisted at <game-dir>/.rpg-harness/sessions/<name>/state.json.
 A log of (input, output) pairs is appended to log.jsonl per session.
 `;
 
@@ -137,7 +137,7 @@ function requirePositional(positionals: string[], usage: string): string {
 async function runPlay(args: string[]): Promise<void> {
   const { positionals } = parseArgs({ args, allowPositionals: true });
   if (positionals.length > 1) {
-    process.stderr.write("Usage: autogal play [<game-dir>]\n");
+    process.stderr.write("Usage: rpgh play [<game-dir>]\n");
     process.exit(2);
   }
   const gameDir = positionals[0];
@@ -155,7 +155,7 @@ async function runPeek(args: string[]): Promise<void> {
   });
   const gameDir = requirePositional(
     positionals,
-    "autogal peek <game-dir> [--session NAME] [--pretty]",
+    "rpgh peek <game-dir> [--session NAME] [--pretty]",
   );
   await peekCommand({
     gameDir,
@@ -176,7 +176,7 @@ async function runStep(args: string[]): Promise<void> {
   });
   const gameDir = requirePositional(
     positionals,
-    "autogal step <game-dir> --input JSON [--session NAME] [--pretty]",
+    "rpgh step <game-dir> --input JSON [--session NAME] [--pretty]",
   );
   if (!values.input) {
     process.stderr.write("Missing required flag: --input\n");
@@ -192,13 +192,13 @@ async function runStep(args: string[]): Promise<void> {
 
 async function runSessions(args: string[]): Promise<void> {
   const { positionals } = parseArgs({ args, allowPositionals: true });
-  const gameDir = requirePositional(positionals, "autogal sessions <game-dir>");
+  const gameDir = requirePositional(positionals, "rpgh sessions <game-dir>");
   await sessionsCommand({ gameDir });
 }
 
 async function runTest(args: string[]): Promise<void> {
   const { positionals } = parseArgs({ args, allowPositionals: true });
-  const gameDir = requirePositional(positionals, "autogal test <game-dir>");
+  const gameDir = requirePositional(positionals, "rpgh test <game-dir>");
   await testCommand({ gameDir });
 }
 
@@ -214,7 +214,7 @@ async function runInit(args: string[]): Promise<void> {
   });
   const dir = requirePositional(
     positionals,
-    "autogal init <dir> [--preset vn|training] [--eject] [--force]",
+    "rpgh init <dir> [--preset vn|training] [--eject] [--force]",
   );
   await initCommand({
     dir,
@@ -237,7 +237,7 @@ async function runAutoplay(args: string[]): Promise<void> {
   });
   const gameDir = requirePositional(
     positionals,
-    "autogal autoplay <game-dir> [--persona NAME] [-v] [--max-steps N] [--seed N]",
+    "rpgh autoplay <game-dir> [--persona NAME] [-v] [--max-steps N] [--seed N]",
   );
   await autoplayCommand({
     gameDir,
@@ -263,7 +263,7 @@ async function runScreenshot(args: string[]): Promise<void> {
   });
   const gameDir = requirePositional(
     positionals,
-    "autogal screenshot <game-dir> [--keys ...] [--cols N] [--rows N] [--wait-ms N] [--out FILE]",
+    "rpgh screenshot <game-dir> [--keys ...] [--cols N] [--rows N] [--wait-ms N] [--out FILE]",
   );
   await screenshotCommand({
     gameDir,
@@ -282,8 +282,8 @@ async function runAssets(args: string[]): Promise<void> {
   if (sub === "prompts") return runAssetsPrompts(rest);
   process.stderr.write(
     "Usage:\n" +
-      "  autogal assets list    <game-dir> [--missing] [--format table|json]\n" +
-      "  autogal assets prompts <game-dir> [<asset-path>] [--missing] [--format text|json]\n",
+      "  rpgh assets list    <game-dir> [--missing] [--format table|json]\n" +
+      "  rpgh assets prompts <game-dir> [<asset-path>] [--missing] [--format text|json]\n",
   );
   process.exit(2);
 }
@@ -299,7 +299,7 @@ async function runAssetsList(rest: string[]): Promise<void> {
   });
   const gameDir = requirePositional(
     positionals,
-    "autogal assets list <game-dir> [--missing] [--format table|json]",
+    "rpgh assets list <game-dir> [--missing] [--format table|json]",
   );
   const fmt = values.format ?? "table";
   if (fmt !== "table" && fmt !== "json") {
@@ -327,7 +327,7 @@ async function runAssetsPrompts(rest: string[]): Promise<void> {
   //   <game-dir> <asset-path>             → single asset's prompt
   if (positionals.length < 1 || positionals.length > 2 || !positionals[0]) {
     process.stderr.write(
-      "Usage: autogal assets prompts <game-dir> [<asset-path>] [--missing] [--format text|json]\n",
+      "Usage: rpgh assets prompts <game-dir> [<asset-path>] [--missing] [--format text|json]\n",
     );
     process.exit(2);
   }
@@ -356,7 +356,7 @@ async function runStudio(args: string[]): Promise<void> {
   });
   const gameDir = requirePositional(
     positionals,
-    "autogal studio <game-dir> [--api-port N] [--web-port N] [--no-open]",
+    "rpgh studio <game-dir> [--api-port N] [--web-port N] [--no-open]",
   );
   await studioCommand({
     gameDir,

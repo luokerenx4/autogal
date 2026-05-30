@@ -4,11 +4,11 @@
 // scripts; the player picks one and the engine enters it.
 //
 // This is the file an AI / human author copies (via
-// `autogal init --preset vn --eject`) when they want to write their
+// `rpgh init --preset vn --eject`) when they want to write their
 // own VN loop semantics — e.g. add a save-point ritual between
 // scripts, gate progression by some flag, or insert a custom Output.
 // All engine primitives this file uses (drainNarrations, runScript,
-// fireOn*) are exported from `@autogal/engine` so an ejected copy of
+// fireOn*) are exported from `@rpg-harness/engine` so an ejected copy of
 // this file works unchanged outside the engine source tree.
 
 import { evaluateCondition } from "../../condition";

@@ -1,4 +1,4 @@
-import type { LoopResult, Output } from "@autogal/engine";
+import type { LoopResult, Output } from "@rpg-harness/engine";
 import type { Assertion } from "./fixture";
 
 export interface AssertionFailure {

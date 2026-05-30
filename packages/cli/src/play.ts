@@ -1,7 +1,7 @@
 import { render } from "ink";
 import type { Instance } from "ink";
 import React from "react";
-import type { Game } from "@autogal/engine";
+import type { Game } from "@rpg-harness/engine";
 import { App } from "./app";
 import { InkInstanceProvider } from "./ink-instance";
 

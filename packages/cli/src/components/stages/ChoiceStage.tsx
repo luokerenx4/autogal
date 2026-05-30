@@ -1,6 +1,6 @@
 import React from "react";
 import { Box } from "ink";
-import type { RenderedChoice } from "@autogal/engine";
+import type { RenderedChoice } from "@rpg-harness/engine";
 import { getChoicePresenter } from "../../presenters";
 
 interface Props {

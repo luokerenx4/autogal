@@ -33,7 +33,7 @@ export function GamePicker({ candidates, onSelect }: GamePickerProps) {
 
   const header = (
     <Box flexDirection="column" paddingX={2} paddingY={1}>
-      <Text bold>autogal · 选一个游戏</Text>
+      <Text bold>RPG-Harness · 选一个游戏</Text>
       <Text dimColor>headless RPG Maker</Text>
     </Box>
   );

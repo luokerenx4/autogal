@@ -1,5 +1,5 @@
 import { parse as parseYaml } from "yaml";
-import type { ComposedState, Input } from "@autogal/engine";
+import type { ComposedState, Input } from "@rpg-harness/engine";
 
 export type Assertion =
   | ReasonAssertion

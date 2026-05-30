@@ -1,5 +1,5 @@
-import { emptyVisualState, runLoop } from "@autogal/engine";
-import type { Output, VisualState } from "@autogal/engine";
+import { emptyVisualState, runLoop } from "@rpg-harness/engine";
+import type { Output, VisualState } from "@rpg-harness/engine";
 import { loadGame } from "../loader";
 import { diffVisualLines } from "../presenters/visualSummary";
 import { personaDescriptions, personas } from "../test/personas";

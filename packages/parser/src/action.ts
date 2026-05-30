@@ -1,5 +1,5 @@
 import { parse as parseYaml } from "yaml";
-import type { Action, StateDelta } from "@autogal/engine";
+import type { Action, StateDelta } from "@rpg-harness/engine";
 import { parseCondition } from "./condition";
 import { desugarAffectionMap, mergeCharacterStats } from "./script";
 

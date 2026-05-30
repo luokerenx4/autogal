@@ -1,4 +1,4 @@
-import type { WeaponDef } from "@autogal/engine";
+import type { WeaponDef } from "@rpg-harness/engine";
 import { extractCustom, splitFrontmatter } from "./frontmatter";
 
 export class WeaponParseError extends Error {}

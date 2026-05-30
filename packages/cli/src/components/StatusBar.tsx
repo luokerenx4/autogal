@@ -1,6 +1,6 @@
 import React from "react";
 import { Box, Text } from "ink";
-import type { ComposedState, Game } from "@autogal/engine";
+import type { ComposedState, Game } from "@rpg-harness/engine";
 
 interface StatusBarProps {
   game: Game;

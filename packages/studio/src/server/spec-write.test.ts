@@ -7,7 +7,7 @@ import { specYamlPath, updateSpec } from "./spec-write";
 let tmp: string;
 
 beforeEach(async () => {
-  tmp = await mkdtemp(path.join(os.tmpdir(), "autogal-spec-test-"));
+  tmp = await mkdtemp(path.join(os.tmpdir(), "rpgh-spec-test-"));
 });
 afterEach(async () => {
   await rm(tmp, { recursive: true, force: true });

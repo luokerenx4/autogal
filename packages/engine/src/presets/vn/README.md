@@ -8,15 +8,15 @@ This is what `examples/starter` runs on. To write your own VN-shaped
 game, scaffold via:
 
 ```bash
-autogal init my-vn --preset vn
+rpgh init my-vn --preset vn
 ```
 
 To eject the loop body so you can edit it directly:
 
 ```bash
-autogal init my-vn --preset vn --eject
+rpgh init my-vn --preset vn --eject
 # → my-vn/preset/run.ts copied from this file with imports rewritten
-#   to import from @autogal/engine
+#   to import from @rpg-harness/engine
 ```
 
 After ejecting, your `my-vn/game.yaml` will set `preset: ./preset/run.ts`

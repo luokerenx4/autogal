@@ -9,7 +9,7 @@ interface Args {
   open: boolean;
 }
 
-// `autogal studio <game-dir>` — boots the browser-based authoring
+// `rpgh studio <game-dir>` — boots the browser-based authoring
 // workbench. Two subprocesses run in parallel:
 //   1. Bun API server (packages/studio/src/server/index.ts) — reads
 //      the game dir, serves /api/* and /files/*
@@ -21,8 +21,8 @@ interface Args {
 // "studio start" mode is deferred until the v2 write-operations PR
 // when we'll also figure out packaging.
 export async function studioCommand(args: Args): Promise<void> {
-  // Studio package lives next to @autogal/cli in the monorepo. We
-  // resolve its path via the @autogal/studio package — the same
+  // Studio package lives next to @rpg-harness/cli in the monorepo. We
+  // resolve its path via the @rpg-harness/studio package — the same
   // technique the engine/parser packages use to import each other.
   const studioRoot = await resolveStudioRoot();
   const gameDir = path.resolve(args.gameDir);

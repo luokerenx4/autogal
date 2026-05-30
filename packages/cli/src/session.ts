@@ -1,13 +1,13 @@
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { createInitialState } from "@autogal/engine";
-import type { ComposedState, Game } from "@autogal/engine";
+import { createInitialState } from "@rpg-harness/engine";
+import type { ComposedState, Game } from "@rpg-harness/engine";
 
 const SESSION_FILE = "state.json";
 const LOG_FILE = "log.jsonl";
 
 export function sessionDir(gameDir: string, name: string): string {
-  return path.join(gameDir, ".autogal", "sessions", name);
+  return path.join(gameDir, ".rpg-harness", "sessions", name);
 }
 
 export async function loadSession(
@@ -56,7 +56,7 @@ export async function appendLog(
 }
 
 export async function listSessions(gameDir: string): Promise<string[]> {
-  const root = path.join(gameDir, ".autogal", "sessions");
+  const root = path.join(gameDir, ".rpg-harness", "sessions");
   try {
     return (await readdir(root, { withFileTypes: true }))
       .filter((d) => d.isDirectory())

@@ -1,5 +1,5 @@
 # Player saves — local only
-.autogal/
+.rpg-harness/
 
 node_modules
 .DS_Store

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { HubSnapshot, Output } from "@autogal/engine";
+import type { HubSnapshot, Output } from "@rpg-harness/engine";
 import {
   BACKLOG_CAP,
   applyOutput,

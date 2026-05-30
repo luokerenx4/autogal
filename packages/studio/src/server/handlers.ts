@@ -1,7 +1,7 @@
 import { readFile, rename, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { AssetSpec, TuiRenderPrefs } from "@autogal/engine";
-import { loadGame } from "@autogal/cli/loader";
+import type { AssetSpec, TuiRenderPrefs } from "@rpg-harness/engine";
+import { loadGame } from "@rpg-harness/cli/loader";
 import { getHealth } from "./health";
 import { parseRenderOptions, renderSourceToTuiTxt } from "./render";
 import { parsePatchBody, specYamlPath, updateSpec } from "./spec-write";

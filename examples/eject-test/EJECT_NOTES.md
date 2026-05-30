@@ -1,12 +1,12 @@
 # Eject smoke test
 
-This folder is an artifact of `autogal init examples/eject-test --preset training --eject`.
+This folder is an artifact of `rpgh init examples/eject-test --preset training --eject`.
 The `preset/` directory is a copy of `packages/engine/src/presets/training/`
 with imports rewritten from `../../primitives` / `../../types` etc. to
-`@autogal/engine`.
+`@rpg-harness/engine`.
 
-CI runs `bun run autogal test .` against this folder to catch regressions
-in the eject mechanism — e.g. if `@autogal/engine` stops exporting a
+CI runs `bun run rpgh test .` against this folder to catch regressions
+in the eject mechanism — e.g. if `@rpg-harness/engine` stops exporting a
 symbol that ejected presets need, the fixture here will fail.
 
 ## Regenerating
@@ -15,7 +15,7 @@ If the engine's preset source changes meaningfully:
 
 ```bash
 rm -rf examples/eject-test
-bun run autogal init examples/eject-test --preset training --eject --force
+bun run rpgh init examples/eject-test --preset training --eject --force
 ```
 
 Then `bun run test` to verify.

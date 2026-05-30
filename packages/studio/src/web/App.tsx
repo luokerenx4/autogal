@@ -24,7 +24,7 @@ export function App() {
     <div className="app">
       <header className="header">
         <div>
-          <span className="title">{game?.title ?? "autogal studio"}</span>
+          <span className="title">{game?.title ?? "rpgh studio"}</span>
           {loc.pathname !== "/" && (
             <span className="muted"> &nbsp;·&nbsp; assets</span>
           )}

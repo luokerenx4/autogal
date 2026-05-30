@@ -1,14 +1,14 @@
-# 我的 autogal 游戏
+# 我的 RPG-Harness 游戏
 
-一个用 [autogal](https://github.com/luokerenx4/autogal) 引擎做的 GalGame。
+一个用 [RPG-Harness](https://github.com/luokerenx4/rpg-harness) 引擎做的 GalGame。
 
 这是一个 training 模式游戏 — hub + day/slot + 数值。
 
 ## 玩
 
 ```bash
-autogal play .                          # 人玩（ink TUI）
-autogal autoplay . --persona greedy -v  # AI 玩
+rpgh play .                          # 人玩（ink TUI）
+rpgh autoplay . --persona greedy -v  # AI 玩
 ```
 
 ## 写
@@ -24,9 +24,9 @@ autogal autoplay . --persona greedy -v  # AI 玩
 ## 测试
 
 ```bash
-autogal test .
+rpgh test .
 ```
 
 ## AI 协作
 
-把 autogal 仓库的 `.claude/skills/` 拷过来；AI 自动知道怎么玩这个游戏（`autogal-player` skill）和怎么帮你写新内容（`autogal-author` skill）。
+把 RPG-Harness 仓库的 `.claude/skills/` 拷过来；AI 自动知道怎么玩这个游戏（`rpg-harness-player` skill）和怎么帮你写新内容（`rpg-harness-author` skill）。

@@ -29,7 +29,7 @@
 // All issues are aggregated and reported in one GameValidationError so
 // authors fix everything in one pass rather than playing whack-a-mole.
 
-import type { Condition, Game, Module, StateDelta } from "@autogal/engine";
+import type { Condition, Game, Module, StateDelta } from "@rpg-harness/engine";
 
 export class GameValidationError extends Error {}
 

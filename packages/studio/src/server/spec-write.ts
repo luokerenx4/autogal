@@ -14,7 +14,7 @@
 import { readFile, rename, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { parseDocument, type Document } from "yaml";
-import type { AssetSpec, TuiRenderPrefs } from "@autogal/engine";
+import type { AssetSpec, TuiRenderPrefs } from "@rpg-harness/engine";
 
 // Subset of AssetSpec the studio is allowed to mutate. `kind`, `path`,
 // `custom`, `renderings` deliberately excluded — they're either

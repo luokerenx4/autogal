@@ -12,7 +12,7 @@ interface Props {
 const ITEMS: Array<{ label: string; action: InGameMenuAction }> = [
   { label: "继续游戏", action: "continue" },
   { label: "回到主菜单", action: "hub" },
-  { label: "退出 autogal", action: "quit" },
+  { label: "退出 RPG-Harness", action: "quit" },
 ];
 
 export function InGameMenu({ sessionName, onAction }: Props) {

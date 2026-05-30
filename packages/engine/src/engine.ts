@@ -179,7 +179,7 @@ export class Engine {
 
   // Delegate to the preset's run function. To customize the main loop
   // for a specific game, eject the preset and edit its run.ts directly
-  // (see autogal init --eject).
+  // (see rpgh init --eject).
   async *run(): AsyncGenerator<Output, void, Input> {
     yield* this.runFn(this.ctx);
   }

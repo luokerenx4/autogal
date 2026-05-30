@@ -16,7 +16,7 @@ interface AssetRow {
   placeholder: string;
 }
 
-// `autogal assets list [--missing] [--format json]`
+// `rpgh assets list [--missing] [--format json]`
 //
 // Surfaces the asset manifest for a game so an author (or AI helper)
 // can see which slots still need art. With --missing, narrows to
@@ -91,14 +91,14 @@ interface PromptsArgs {
   gameDir: string;
   // Optional specific asset path. When given, print just that asset's
   // prompt (no separators, no header) — designed to be piped:
-  //   autogal assets prompts ./game assets/portraits/k-smile | pbcopy
+  //   rpgh assets prompts ./game assets/portraits/k-smile | pbcopy
   // When omitted, print all assets' prompts with delimiters.
   assetPath?: string;
   missing: boolean;
   format: "text" | "json";
 }
 
-// `autogal assets prompts <game-dir> [<asset-path>] [--missing] [--format text|json]`
+// `rpgh assets prompts <game-dir> [<asset-path>] [--missing] [--format text|json]`
 //
 // Surfaces the generation prompt(s) for asset specs so authors can
 // pipe them into an image generator (Midjourney, SD, Claude, etc.)

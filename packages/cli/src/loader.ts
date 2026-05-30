@@ -15,7 +15,7 @@ import type {
   Script,
   SkillDef,
   WeaponDef,
-} from "@autogal/engine";
+} from "@rpg-harness/engine";
 import {
   buildGame,
   parseAction,
@@ -28,7 +28,7 @@ import {
   parseScript,
   parseSkill,
   parseWeapon,
-} from "@autogal/parser";
+} from "@rpg-harness/parser";
 
 export async function loadGame(dir: string): Promise<Game> {
   const manifestPath = path.join(dir, "game.yaml");

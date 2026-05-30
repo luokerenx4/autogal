@@ -6,7 +6,7 @@
 //   - action dispatch (via dispatchActivity primitive)
 //
 // All engine primitives this file uses are exported from
-// `@autogal/engine`, so an ejected copy of this file works unchanged
+// `@rpg-harness/engine`, so an ejected copy of this file works unchanged
 // outside the engine source tree.
 
 import { markScriptCompleted } from "../../state";

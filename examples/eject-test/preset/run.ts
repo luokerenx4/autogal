@@ -6,7 +6,7 @@
 //   - action dispatch (via dispatchActivity primitive)
 //
 // All engine primitives this file uses are exported from
-// `@autogal/engine`, so an ejected copy of this file works unchanged
+// `@rpg-harness/engine`, so an ejected copy of this file works unchanged
 // outside the engine source tree.
 
 import {
@@ -20,8 +20,8 @@ import {
   fireOnSessionStart,
   markScriptCompleted,
   runScript,
-} from "@autogal/engine";
-import type { Action, Input, Output, PresetContext } from "@autogal/engine";
+} from "@rpg-harness/engine";
+import type { Action, Input, Output, PresetContext } from "@rpg-harness/engine";
 
 // Default export is the RunFunction itself — this is what the CLI
 // loader picks up when game.yaml says `preset: ./preset/run.ts`

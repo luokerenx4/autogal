@@ -10,7 +10,7 @@ import type {
   Script,
   SkillDef,
   WeaponDef,
-} from "@autogal/engine";
+} from "@rpg-harness/engine";
 import type { Manifest } from "./manifest";
 import { validateGame } from "./validate";
 

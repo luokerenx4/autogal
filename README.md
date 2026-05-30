@@ -1,4 +1,4 @@
-# autogal
+# RPG-Harness
 
 A headless RPG Maker — an AI-first coding harness for GalGame-shaped games.
 
@@ -23,62 +23,62 @@ Or in another terminal, **edit `scripts/001_intro.md` while the game is running*
 
 ## Install (experimental — only when you need it)
 
-The canonical way to run anything in this repo is `bun packages/cli/src/bin.ts <command>` or `bun run autogal <command>` from the repo root. That covers nearly every dev workflow.
+The canonical way to run anything in this repo is `bun packages/cli/src/bin.ts <command>` or `bun run rpgh <command>` from the repo root. That covers nearly every dev workflow.
 
-The one case it doesn't cover is **running `autogal studio` against a game directory that lives outside this repo** — `studio` is a browser workbench (PR-stage; see `packages/studio/`) and you'll want a global `autogal` command for that. There's no distribution / upgrade story yet, so treat this as a self-serve symlink:
+The one case it doesn't cover is **running `rpgh studio` against a game directory that lives outside this repo** — `studio` is a browser workbench (PR-stage; see `packages/studio/`) and you'll want a global `rpgh` command for that. There's no distribution / upgrade story yet, so treat this as a self-serve symlink:
 
 ```bash
 # 1. confirm ~/.local/bin is on your PATH (or pick another PATH dir):
 echo "$PATH" | tr ':' '\n' | grep -q "$HOME/.local/bin" && echo OK
 
 # 2. symlink the CLI entrypoint:
-ln -sf "$(pwd)/packages/cli/src/bin.ts" ~/.local/bin/autogal
+ln -sf "$(pwd)/packages/cli/src/bin.ts" ~/.local/bin/rpgh
 
 # 3. verify:
-autogal --help
+rpgh --help
 ```
 
 Caveats:
 - Requires `bun` on PATH — the symlink target is a `.ts` file with `#!/usr/bin/env bun` as the shebang.
-- The symlink is pinned to this clone's absolute path. Move the repo and `autogal` breaks.
+- The symlink is pinned to this clone's absolute path. Move the repo and `rpgh` breaks.
 - No upgrade mechanism. Pull the repo to update.
 - `bun link --global` doesn't work cleanly for monorepo workspace packages (1.3.14) — it leaves a broken symlink. Use the manual `ln -sf` above instead.
 
-When/if autogal stabilizes and we ship a real distribution (npm publish or a single-binary release), the install story becomes one line and this section gets folded into the main quick-start.
+When/if RPG-Harness stabilizes and we ship a real distribution (npm publish or a single-binary release), the install story becomes one line and this section gets folded into the main quick-start.
 
-To uninstall: `rm ~/.local/bin/autogal`.
+To uninstall: `rm ~/.local/bin/rpgh`.
 
 ## Let an AI play (or write)
 
 Two skills ship with the repo:
 
-- **[`autogal-player`](.claude/skills/autogal-player/SKILL.md)** — read this and an AI knows how to play autogal games by running `autogal peek` / `autogal step` in a shell loop. No SDK, no API key.
-- **[`autogal-author`](.claude/skills/autogal-author/SKILL.md)** — read this and an AI knows how to extend an autogal game: new scripts, new characters, new branches, new tests. The full DSL is documented inline.
+- **[`rpg-harness-player`](.claude/skills/rpg-harness-player/SKILL.md)** — read this and an AI knows how to play RPG-Harness games by running `rpgh peek` / `rpgh step` in a shell loop. No SDK, no API key.
+- **[`rpg-harness-author`](.claude/skills/rpg-harness-author/SKILL.md)** — read this and an AI knows how to extend an RPG-Harness game: new scripts, new characters, new branches, new tests. The full DSL is documented inline.
 
-Drop into Claude Code inside any autogal game folder containing `.claude/skills/`:
+Drop into Claude Code inside any RPG-Harness game folder containing `.claude/skills/`:
 
 ```
-> Read .claude/skills/autogal-player/SKILL.md and play through this game
+> Read .claude/skills/rpg-harness-player/SKILL.md and play through this game
 > as a thoughtful character who's curious but doesn't oversell themselves.
 ```
 
 or
 
 ```
-> Read .claude/skills/autogal-author/SKILL.md, then add a third character
+> Read .claude/skills/rpg-harness-author/SKILL.md, then add a third character
 > named "凉" who shows up in script 003 as a wild card.
 ```
 
-The AI discovers the format on its own. To enable this in a game folder created via `autogal init`, copy `.claude/` from the autogal repo into your game folder.
+The AI discovers the format on its own. To enable this in a game folder created via `rpgh init`, copy `.claude/` from the RPG-Harness repo into your game folder.
 
 ## What's in the box
 
 ```
-autogal/
+rpg-harness/
 ├── packages/
 │   ├── engine/    Pure state-machine runtime. No DOM, no Node-specific APIs.
 │   ├── parser/    Markdown + frontmatter + YAML fence → engine AST.
-│   ├── cli/       The `autogal` binary: init / play / step / peek / autoplay / test / sessions / assets / studio.
+│   ├── cli/       The `rpgh` binary: init / play / step / peek / autoplay / test / sessions / assets / studio.
 │   └── studio/    Browser-based asset workbench (chafa render loop, spec editor).
 ├── examples/
 │   ├── sengoku-raid/    "妖刀奇譚" — bundled flagship. Extraction-shooter raid loop +
@@ -89,8 +89,8 @@ autogal/
 │   ├── eject-test/      (hidden) engine fixture — training preset eject reference
 │   └── _invalid_typo/   (hidden) negative fixture — validator must reject
 └── .claude/skills/
-    ├── autogal-player/SKILL.md   for AIs that play
-    └── autogal-author/SKILL.md   for AIs that write content
+    ├── rpg-harness-player/SKILL.md   for AIs that play
+    └── rpg-harness-author/SKILL.md   for AIs that write content
 ```
 
 The three `(hidden)` directories declare `hidden: true` in their `game.yaml`;
@@ -128,11 +128,11 @@ See `examples/sengoku-raid/README.md` for the flagship's full design.
 
 ## How a play session is structured
 
-`autogal play <game-dir>` boots into a **Hub** where you pick what to do:
+`rpgh play <game-dir>` boots into a **Hub** where you pick what to do:
 
 ```
 樱花季 / Cherry Blossom Season
-autogal · headless RPG Maker
+RPG-Harness · headless RPG Maker
 
 ▸ 新游戏
   继续: play-20260521-143012    进行中 · 003_invitation · 2 完成
@@ -146,26 +146,26 @@ autogal · headless RPG Maker
 - **继续: X** resumes that save (autosaves after every advance).
 - **Esc** during play opens an in-game menu (Continue / Return to Hub / Quit).
 
-Saves live at `<game-dir>/.autogal/sessions/<name>/state.json` — plain JSON, `git diff`-able, copyable between machines.
+Saves live at `<game-dir>/.rpg-harness/sessions/<name>/state.json` — plain JSON, `git diff`-able, copyable between machines.
 
 ## The nine modes
 
 ```bash
-autogal init     <dir> [--force]                                  # scaffold a new game
-autogal play     <game-dir>                                       # interactive TUI (ink, hot-reloading)
-autogal step     <game-dir> --input <json> [--session NAME]       # headless, stateless step
-autogal peek     <game-dir> [--session NAME]                      # inspect current state
-autogal autoplay <game-dir> --persona NAME [-v]                   # built-in AI plays through
-autogal test     <game-dir>                                       # run fixtures
-autogal sessions <game-dir>                                       # list save sessions
-autogal assets   <game-dir> list|prompts [--missing]              # asset manifest / prompt copy
-autogal studio   <game-dir>                                       # browser asset workbench
+rpgh init     <dir> [--force]                                  # scaffold a new game
+rpgh play     <game-dir>                                       # interactive TUI (ink, hot-reloading)
+rpgh step     <game-dir> --input <json> [--session NAME]       # headless, stateless step
+rpgh peek     <game-dir> [--session NAME]                      # inspect current state
+rpgh autoplay <game-dir> --persona NAME [-v]                   # built-in AI plays through
+rpgh test     <game-dir>                                       # run fixtures
+rpgh sessions <game-dir>                                       # list save sessions
+rpgh assets   <game-dir> list|prompts [--missing]              # asset manifest / prompt copy
+rpgh studio   <game-dir>                                       # browser asset workbench
 ```
 
 Every mode runs on the same engine and the same content. `step` and `play` produce
 identical state files. `autoplay` is just `step` with a built-in persona deciding
 the input. `test` is `step` with assertions on the resulting trace. An AI agent
-playing via the `autogal-player` skill is just `step` with the LLM deciding the input.
+playing via the `rpg-harness-player` skill is just `step` with the LLM deciding the input.
 `assets` and `studio` are authoring-side tools — they help humans (or AI) fill in
 visual art for the spec.yaml entries scripts reference.
 
@@ -267,7 +267,7 @@ defaultPortraits:
 [end]
 ```
 
-Backgrounds, portraits, and CGs are **visual assets** — each lives in `assets/<kind>/<id>/` with a `spec.yaml` describing what it depicts plus optional pre-rendered files (ASCII art `tui.txt` for terminals, `tui.ans` for color terminals, `source.png` for image generators). Missing renderings degrade to the spec's placeholder text, which is also what AI players see in the headless JSON event stream. See the [autogal-author skill](.claude/skills/autogal-author/SKILL.md) for the full asset spec format.
+Backgrounds, portraits, and CGs are **visual assets** — each lives in `assets/<kind>/<id>/` with a `spec.yaml` describing what it depicts plus optional pre-rendered files (ASCII art `tui.txt` for terminals, `tui.ans` for color terminals, `source.png` for image generators). Missing renderings degrade to the spec's placeholder text, which is also what AI players see in the headless JSON event stream. See the [rpg-harness-author skill](.claude/skills/rpg-harness-author/SKILL.md) for the full asset spec format.
 
 ## Headless step API
 
@@ -281,12 +281,12 @@ Pure function. Stateless. Persistable. So:
 
 ```bash
 # Session "claude" plays one step at a time
-autogal step ./my-game --session claude --input '{"type":"select","scriptId":"001_meeting"}'
-autogal step ./my-game --session claude --input '{"type":"next"}'
-autogal step ./my-game --session claude --input '{"type":"choose","index":2}'
+rpgh step ./my-game --session claude --input '{"type":"select","scriptId":"001_meeting"}'
+rpgh step ./my-game --session claude --input '{"type":"next"}'
+rpgh step ./my-game --session claude --input '{"type":"choose","index":2}'
 ```
 
-State persists to `<game-dir>/.autogal/sessions/<name>/state.json` between calls.
+State persists to `<game-dir>/.rpg-harness/sessions/<name>/state.json` between calls.
 Each `step` also appends `(input, output)` to `log.jsonl` for replay.
 
 ## Test injection
@@ -320,14 +320,14 @@ here to gameplay regression.
 ## Built-in personas (no API key)
 
 ```bash
-autogal autoplay ./examples/sengoku-raid --persona extractor -v   # always extract / flee / sell
-autogal autoplay ./examples/sengoku-raid --persona delver    -v   # always attack / push deepest
+rpgh autoplay ./examples/sengoku-raid --persona extractor -v   # always extract / flee / sell
+rpgh autoplay ./examples/sengoku-raid --persona delver    -v   # always attack / push deepest
 ```
 
 Generic personas — `greedy`, `charmer`, `rude`, `random`, `hunter` — also ship
 for any game (always-first / always-last / always-second / uniform-random /
 training-aware). They're useful for fuzz-testing path coverage. For LLM-driven
-personas use the [`autogal-player` skill](.claude/skills/autogal-player/SKILL.md).
+personas use the [`rpg-harness-player` skill](.claude/skills/rpg-harness-player/SKILL.md).
 
 ## Architecture in one paragraph
 
@@ -339,14 +339,14 @@ The same generator is wrapped as `step()` for headless, `runLoop()` for batch
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the long version,
 [`docs/CLAUDE.md`](docs/CLAUDE.md) if you're an AI co-authoring on this codebase,
-and [`.claude/skills/autogal-player/SKILL.md`](.claude/skills/autogal-player/SKILL.md)
+and [`.claude/skills/rpg-harness-player/SKILL.md`](.claude/skills/rpg-harness-player/SKILL.md)
 if you're an AI playing the games.
 
 ## Status
 
 Pre-alpha. Works end-to-end. Hub-mode TUI with multi-save and live hot-reload,
 markdown content authoring, headless step API, fixture testing, built-in autoplay
-personas, AI player + author skills, and a scaffold command (`autogal init`) are
+personas, AI player + author skills, and a scaffold command (`rpgh init`) are
 all landed. Combat/training modules, web frontend, and plugin registry are next.
 
 ## License

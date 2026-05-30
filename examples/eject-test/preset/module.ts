@@ -1,10 +1,10 @@
-import { mutateState } from "@autogal/engine";
+import { mutateState } from "@rpg-harness/engine";
 import type {
   Module,
   PresetContext,
   TrainingConfig,
   TrainingState,
-} from "@autogal/engine";
+} from "@rpg-harness/engine";
 import { buildHubSnapshot } from "./hub";
 import { sleepHandler } from "./sleepHandler";
 

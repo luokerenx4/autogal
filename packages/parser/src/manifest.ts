@@ -6,7 +6,7 @@ import type {
   SwitchDef,
   TrainingConfig,
   VariableDef,
-} from "@autogal/engine";
+} from "@rpg-harness/engine";
 import { parseCondition } from "./condition";
 
 export interface Manifest {
@@ -22,9 +22,9 @@ export interface Manifest {
   modules?: string[];
   // Optional preset selector. Built-in: "vn" / "training". Path-based:
   // a relative path the loader resolves via dynamic import (the
-  // ejected-preset case from `autogal init --eject`).
+  // ejected-preset case from `rpgh init --eject`).
   preset?: string;
-  // Default-hide from `bun run play` / `autogal play` interactive
+  // Default-hide from `bun run play` / `rpgh play` interactive
   // picker. Engine fixtures and test-only games set this true so
   // they don't pollute the candidate list. They're still loadable by
   // explicit path; this only affects discovery.

@@ -1,4 +1,4 @@
-import type { EnemyDef } from "@autogal/engine";
+import type { EnemyDef } from "@rpg-harness/engine";
 import { extractCustom, splitFrontmatter } from "./frontmatter";
 
 export class EnemyParseError extends Error {}

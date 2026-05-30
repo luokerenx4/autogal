@@ -5,7 +5,7 @@ import type {
   HubSnapshot,
   StatSnapshot,
   StatThreshold,
-} from "@autogal/engine";
+} from "@rpg-harness/engine";
 
 interface HubMenuProps {
   snapshot: HubSnapshot;

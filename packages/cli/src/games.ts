@@ -1,6 +1,6 @@
 import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
-import { parseManifest } from "@autogal/parser";
+import { parseManifest } from "@rpg-harness/parser";
 
 export interface GameCandidate {
   dir: string;
@@ -8,7 +8,7 @@ export interface GameCandidate {
   title: string;
   // Mirrors the manifest's `hidden:` flag. `discoverGames` filters
   // hidden candidates out by default; callers that want to show
-  // everything (e.g. `autogal sessions --all`) pass includeHidden.
+  // everything (e.g. `rpgh sessions --all`) pass includeHidden.
   hidden: boolean;
 }
 
@@ -20,7 +20,7 @@ export interface DiscoverOptions {
 const SKIP_DIRS = new Set([
   "node_modules",
   ".git",
-  ".autogal",
+  ".rpg-harness",
   "dist",
   "build",
   ".cache",

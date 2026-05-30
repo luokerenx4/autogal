@@ -10,9 +10,9 @@ import { discoverGames } from "./games";
 //   - fixture      (hidden: true   → filtered by default)
 async function makeFixtureRoot(): Promise<string> {
   const root = await mkdir(
-    path.join(tmpdir(), `autogal-games-test-${Date.now()}-${Math.random()}`),
+    path.join(tmpdir(), `rpgh-games-test-${Date.now()}-${Math.random()}`),
     { recursive: true },
-  ).then(() => path.join(tmpdir(), `autogal-games-test-${Date.now()}`));
+  ).then(() => path.join(tmpdir(), `rpgh-games-test-${Date.now()}`));
   // Re-mkdir to ensure root exists (path was reused above)
   await mkdir(root, { recursive: true });
   for (const [name, manifest] of [

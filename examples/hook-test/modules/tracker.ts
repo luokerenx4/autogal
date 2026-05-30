@@ -5,7 +5,7 @@
 // declared variables / switches so different fixtures can opt into
 // different transformer behaviors without needing separate modules.
 
-import type { Module, PresetContext } from "@autogal/engine";
+import type { Module, PresetContext } from "@rpg-harness/engine";
 
 const NS = "hook-tracker";
 

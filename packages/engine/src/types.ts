@@ -770,7 +770,7 @@ export interface Trigger {
   // active / fired state across step() boundaries.
   id: string;
   // Reuse the existing Condition AST (alice.affection >= 5, day >= 8,
-  // etc.). evaluateCondition() is exported from @autogal/engine.
+  // etc.). evaluateCondition() is exported from @rpg-harness/engine.
   when: Condition;
   // Returns an ActionResult to apply atomically when the trigger fires.
   // Receives the full PresetContext (state + game + rng + modules).

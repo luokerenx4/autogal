@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import type { AssetKind, AssetRow } from "../api";
 import { fetchAssets, sourceImageUrl } from "../api";
 
-// Asset gallery. Single grid, no pagination — autogal games are
+// Asset gallery. Single grid, no pagination — RPG-Harness games are
 // small enough that "scroll through all your assets" is the natural
 // browse mode. Sort: kind (bg → cg → portrait), then path. The user
 // can override with the filter chips at the top.

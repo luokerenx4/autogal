@@ -1,15 +1,15 @@
 ---
-name: autogal-author
-description: Author content for an autogal GalGame — write or extend scripts (台本), add characters, design branching, add tests. Use this skill when you're inside an autogal game folder (one with game.yaml + characters/ + scripts/) and the user wants you to write story content, add a new scene, design an ending, balance affection numbers, or add a test fixture.
+name: rpg-harness-author
+description: Author content for an RPG-Harness game — write or extend scripts (台本), add characters, design branching, add tests. Use this skill when you're inside an RPG-Harness game folder (one with game.yaml + characters/ + scripts/) and the user wants you to write story content, add a new scene, design an ending, balance affection numbers, or add a test fixture.
 ---
 
-# autogal-author
+# rpg-harness-author
 
-You're authoring a game on top of **autogal — a headless RPG Maker**. The engine in `packages/engine` owns the universal pieces: typed resources (characters / items / enemies / weapons / skills / scripts / actions), a Condition DSL, 15 lifecycle hooks, reactive triggers, and one write path (`mutateState`). **Everything game-specific is yours to write.** That means:
+You're authoring a game on top of **RPG-Harness — a headless RPG Maker**. The engine in `packages/engine` owns the universal pieces: typed resources (characters / items / enemies / weapons / skills / scripts / actions), a Condition DSL, 15 lifecycle hooks, reactive triggers, and one write path (`mutateState`). **Everything game-specific is yours to write.** That means:
 
 - Pure VN-shaped games: write only markdown + yaml. The engine's bundled `vn` and `training` presets cover the main loop.
 - Anything more interesting (custom combat, hub mode switches, raid loops, reactive milestones, state machines): drop into `modules/*.ts`. Action handlers, triggers, hook implementations, and a private state namespace are all yours.
-- Want to change the main loop itself (daybreak narrations, custom mode routing, novel hub patterns)? `autogal init --eject` copies the preset's `run.ts` into the game folder; you own it from there.
+- Want to change the main loop itself (daybreak narrations, custom mode routing, novel hub patterns)? `rpgh init --eject` copies the preset's `run.ts` into the game folder; you own it from there.
 
 What you **don't** touch is the engine itself — `packages/engine`, `packages/parser`, `packages/cli` are off-limits from inside a game folder. See `examples/sengoku-raid/modules/raid.ts` for the canonical shape of a "the game's logic lives here" module: ~20 action handlers, 13/15 hooks, composite triggers, its own state namespace.
 
@@ -28,7 +28,7 @@ And optionally:
 - `preset/` — ejected main-loop source (`run.ts` + supporting files)
 - `tests/` — fixture-based regression tests
 
-If `game.yaml` / `characters/` / `scripts/` is missing entirely, the user is starting from scratch — suggest `autogal init` to scaffold a template.
+If `game.yaml` / `characters/` / `scripts/` is missing entirely, the user is starting from scratch — suggest `rpgh init` to scaffold a template.
 
 ## The script (.md) format
 
@@ -480,11 +480,11 @@ The TUI's `selectRendering` picks the best file the terminal can display:
 2. `tui.txt` (any terminal) → plain
 3. `placeholder` text → fallback when no rendering files exist
 
-`NO_COLOR=1`, `TERM=dumb`, or `FORCE_COLOR=0` force a skip past `.ans` straight to `.txt`. Headless flows (`autogal autoplay`, `peek`, `step` JSON) always see `placeholder` regardless of files present — they don't need image bytes, just semantic descriptions.
+`NO_COLOR=1`, `TERM=dumb`, or `FORCE_COLOR=0` force a skip past `.ans` straight to `.txt`. Headless flows (`rpgh autoplay`, `peek`, `step` JSON) always see `placeholder` regardless of files present — they don't need image bytes, just semantic descriptions.
 
 ### The studio workflow (browser, optional)
 
-`autogal studio <game-dir>` boots a local web workbench at `http://localhost:5173` for visual asset management. v3 capabilities:
+`rpgh studio <game-dir>` boots a local web workbench at `http://localhost:5173` for visual asset management. v3 capabilities:
 
 - **Gallery** — grid of all asset specs, filter by kind / missing-rendering, color-coded badges
 - **Detail page** — view spec, copy prompt to clipboard, upload PNG to `source.png` slot, render `source.png → tui.txt`/`tui.ans` via chafa with options (symbols / dither / colors / size), preview the rendered output (ANSI colors render correctly in browser)
@@ -500,7 +500,7 @@ The "AI generates game, human fills in art" flow is the canonical one:
 1. AI writes `spec.yaml` for every visual asset the game needs — including detailed `placeholder` and `prompt` fields. **No image files needed yet** — the game is fully playable in placeholder mode.
 2. AI references those assets from scripts (`bg:` frontmatter, `:cg ...` directives, character `portraits` map + `@speaker emotion` syntax).
 3. Headless / AI playthroughs work end-to-end. The JSON event stream carries `placeholder` text wherever there'd be an image.
-4. **Later**, a human (or another AI step) runs `autogal assets list <game-dir> --missing` to see what art is needed, then `autogal assets prompts <game-dir> <asset-path>` to copy the prompt into an image generator, drops the resulting PNG into `<asset-dir>/source.png`, and runs the chafa render in studio. The TUI hot-reloads the new rendering on next beat.
+4. **Later**, a human (or another AI step) runs `rpgh assets list <game-dir> --missing` to see what art is needed, then `rpgh assets prompts <game-dir> <asset-path>` to copy the prompt into an image generator, drops the resulting PNG into `<asset-dir>/source.png`, and runs the chafa render in studio. The TUI hot-reloads the new rendering on next beat.
 
 This separation means AI doesn't have to generate images itself, and humans don't have to write spec.yaml by hand. The two halves of the workflow are decoupled — they share `spec.yaml` as the contract.
 
@@ -728,7 +728,7 @@ assertions:
   - { kind: output, type: gameEnd, present: true }
 ```
 
-After writing or changing scripts, run `autogal test .` to check fixtures still pass.
+After writing or changing scripts, run `rpgh test .` to check fixtures still pass.
 
 ## When you need custom mechanics — `modules/*.ts`
 
@@ -753,14 +753,14 @@ modules:
   - ./modules/raid.ts
 ```
 
-For the special case of customizing the **main loop itself** (e.g. add a daybreak narration at the start of each new day, route activities across multiple modes), eject the preset: `autogal init <dir> --preset training --eject`. That copies `run.ts` + supporting files into `<dir>/preset/` and rewrites imports to `@autogal/engine`'s public surface. After ejection, you own the loop; engine updates don't flow in automatically.
+For the special case of customizing the **main loop itself** (e.g. add a daybreak narration at the start of each new day, route activities across multiple modes), eject the preset: `rpgh init <dir> --preset training --eject`. That copies `run.ts` + supporting files into `<dir>/preset/` and rewrites imports to `@rpg-harness/engine`'s public surface. After ejection, you own the loop; engine updates don't flow in automatically.
 
 ## How to make changes
 
 1. **Understand the existing flow first.** Read `game.yaml`, all `characters/*.md`, all `scripts/*.md`. Note which scripts gate which (via `requires`). Build a mental map of the routes and endings.
 2. **Identify what's being asked.** Is it: add a new branch? Polish dialogue? Balance affection thresholds? Add a new character?
 3. **Make the change in the smallest viable scope.** One new script is better than three. Edit existing text in-place when polishing.
-4. **Test.** Run `autogal autoplay . --persona greedy` and `--persona charmer` and `--persona rude`. Each should still reach a defined ending. Then `autogal test .` to verify fixtures.
+4. **Test.** Run `rpgh autoplay . --persona greedy` and `--persona charmer` and `--persona rude`. Each should still reach a defined ending. Then `rpgh test .` to verify fixtures.
 5. **If a fixture is now wrong** (the design changed legitimately), update the fixture rather than the design — and tell the user what changed.
 
 ## Where to make changes
@@ -768,7 +768,7 @@ For the special case of customizing the **main loop itself** (e.g. add a daybrea
 - **DO** edit `scripts/`, `characters/`, `items/`, `enemies/`, `weapons/`, `skills/`, `actions/`, `maps/`, `assets/`, `tests/`, `game.yaml` — that's content.
 - **DO** edit `modules/*.ts` (and `preset/*.ts`, if ejected) when the game needs mechanics the engine doesn't already provide. New action `kind`s, new triggers, new private state, custom hub builds — they belong in a module, not in engine.
 - **DON'T** edit `packages/engine`, `packages/parser`, `packages/cli` source — that's the engine itself, off-limits from inside a game folder.
-- **DON'T** touch `.autogal/sessions/` — those are the player's saves.
+- **DON'T** touch `.rpg-harness/sessions/` — those are the player's saves.
 - **DON'T** change a character's `id` once scripts reference it. Add a new character if you need a new name.
 - **DON'T** invent new engine-level Beat types, `Condition` operators, `StateDelta` slots, `Output` / `Input` variants, or `Module` hooks — those need engine PRs. You CAN add new action `kind`s, new triggers, and new module-private state freely inside your own `modules/*.ts`.
 

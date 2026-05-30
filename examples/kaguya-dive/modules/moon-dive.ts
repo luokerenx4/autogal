@@ -26,7 +26,7 @@ import type {
   PresetContext,
   StateDelta,
   Trigger,
-} from "@autogal/engine";
+} from "@rpg-harness/engine";
 
 const MODULE_ID = "moon-dive";
 

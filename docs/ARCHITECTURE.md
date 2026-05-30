@@ -1,12 +1,12 @@
 # Architecture
 
-autogal is a "headless RPGMaker" — a small engine that runs games defined as folders of markdown + YAML. The engine yields semantic events; a frontend renders them. The same game folder runs in a terminal, in a browser, and inside a headless test harness.
+RPG-Harness is a "headless RPGMaker" — a small engine that runs games defined as folders of markdown + YAML. The engine yields semantic events; a frontend renders them. The same game folder runs in a terminal, in a browser, and inside a headless test harness.
 
 ## The three layers
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│  Engine  (@autogal/engine)                                │
+│  Engine  (@rpg-harness/engine)                                │
 │  ─ Owns standard resource schemas (characters, items,     │
 │    enemies, weapons, skills) and standard state slots.    │
 │  ─ Owns primitives: runScript, dispatchActivity,          │
@@ -21,7 +21,7 @@ autogal is a "headless RPGMaker" — a small engine that runs games defined as f
 └────────────────────────┬─────────────────────────────────┘
                          │ Output / Input via AsyncGenerator
 ┌────────────────────────┴─────────────────────────────────┐
-│  Preset  (@autogal/engine/presets OR ./preset/run.ts)     │
+│  Preset  (@rpg-harness/engine/presets OR ./preset/run.ts)     │
 │  ─ Owns the main loop. Composes engine primitives into a  │
 │    genre-shaped play flow.                                │
 │  ─ Two are bundled: `vn` (visual-novel, linear scripts)   │
@@ -68,7 +68,7 @@ Both modes go through the same engine, but they wrap it differently:
 
 | Mode      | Where                              | Generator lifetime           | Use                           |
 | --------- | ---------------------------------- | ---------------------------- | ----------------------------- |
-| `runLoop` | `autogal play`, fixtures, autoplay | One engine, many `.next()`s  | Interactive / scripted replay |
+| `runLoop` | `rpgh play`, fixtures, autoplay | One engine, many `.next()`s  | Interactive / scripted replay |
 | `step`    | AI playtester, batch evaluators    | Fresh engine per call        | Stateless query: state in, output(s) + state out |
 
 `step` mode is why **ActionHandlers must resolve atomically** (see "Invariants" below) — if a handler yielded mid-resolution, the second call would create a fresh generator and lose the in-flight state.
@@ -311,7 +311,7 @@ preset: ./preset/run.ts     # ejected: ship your own run.ts
 
 ### Ejection
 
-`autogal init --preset training --eject` copies the bundled training preset (`run.ts`, `module.ts`, `hub.ts`, `sleepHandler.ts`, `index.ts`) into the game's `preset/` directory and rewrites imports to depend only on `@autogal/engine`'s public surface. After ejection, authors can edit the loop without touching engine source.
+`rpgh init --preset training --eject` copies the bundled training preset (`run.ts`, `module.ts`, `hub.ts`, `sleepHandler.ts`, `index.ts`) into the game's `preset/` directory and rewrites imports to depend only on `@rpg-harness/engine`'s public surface. After ejection, authors can edit the loop without touching engine source.
 
 `examples/eject-test` ships ejected — its `preset/run.ts` adds a daybreak narration at the start of each new day's morning slot. Pure cosmetic; demonstrates the surface is real.
 

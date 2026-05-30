@@ -5,7 +5,7 @@ import type {
   AssetSize,
   AssetSpec,
   TuiRenderPrefs,
-} from "@autogal/engine";
+} from "@rpg-harness/engine";
 import { extractCustom } from "./frontmatter";
 
 // Whitelists for tui_render. Mirrored from packages/studio/src/server/

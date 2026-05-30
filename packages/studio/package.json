@@ -1,7 +1,7 @@
 {
-  "name": "@autogal/studio",
+  "name": "@rpg-harness/studio",
   "version": "0.0.0",
-  "description": "Browser-based authoring workbench for autogal — drag assets, copy prompts, manage spec.yaml visually.",
+  "description": "Browser-based authoring workbench for RPG-Harness — drag assets, copy prompts, manage spec.yaml visually.",
   "type": "module",
   "main": "src/server/index.ts",
   "types": "src/server/index.ts",
@@ -14,9 +14,9 @@
     "build": "vite build"
   },
   "dependencies": {
-    "@autogal/cli": "workspace:*",
-    "@autogal/engine": "workspace:*",
-    "@autogal/parser": "workspace:*",
+    "@rpg-harness/cli": "workspace:*",
+    "@rpg-harness/engine": "workspace:*",
+    "@rpg-harness/parser": "workspace:*",
     "ansi-to-html": "^0.7.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

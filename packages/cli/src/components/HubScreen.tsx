@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Box, Text, useInput } from "ink";
-import type { Game } from "@autogal/engine";
+import type { Game } from "@rpg-harness/engine";
 import { listSessionsWithMeta, type SessionMeta } from "../session";
 import { GameLayout } from "./GameLayout";
 
@@ -62,7 +62,7 @@ export function HubScreen({ game, gameDir, onAction }: HubScreenProps) {
   const header = (
     <Box flexDirection="column" paddingX={2} paddingY={1}>
       <Text bold>{game.title}</Text>
-      <Text dimColor>autogal · headless RPG Maker</Text>
+      <Text dimColor>RPG-Harness · headless RPG Maker</Text>
     </Box>
   );
   const footer = (

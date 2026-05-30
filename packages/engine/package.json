@@ -1,7 +1,7 @@
 {
-  "name": "@autogal/engine",
+  "name": "@rpg-harness/engine",
   "version": "0.0.0",
-  "description": "Pure state-machine engine for autogal.",
+  "description": "Pure state-machine engine for RPG-Harness.",
   "type": "module",
   "main": "src/index.ts",
   "types": "src/index.ts",

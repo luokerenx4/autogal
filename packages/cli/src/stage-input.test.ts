@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { HubSnapshot, RenderedChoice } from "@autogal/engine";
+import type { HubSnapshot, RenderedChoice } from "@rpg-harness/engine";
 import { dispatchStageInput, type KeyEvent } from "./stage-input";
 import type { Stage } from "./screen-model";
 

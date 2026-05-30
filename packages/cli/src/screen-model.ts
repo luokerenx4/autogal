@@ -13,8 +13,8 @@ import type {
   RenderedChoice,
   ScriptInfo,
   VisualState,
-} from "@autogal/engine";
-import { emptyVisualState } from "@autogal/engine";
+} from "@rpg-harness/engine";
+import { emptyVisualState } from "@rpg-harness/engine";
 
 // `cursor` on selectable stages: the row the player has currently
 // highlighted. Owned by the TUI, not the engine — Up/Down move it,

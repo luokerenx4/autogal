@@ -1,4 +1,4 @@
-// Custom preset for 妖刀奇譚 — an extraction-shooter loop on autogal.
+// Custom preset for 妖刀奇譚 — an extraction-shooter loop on RPG-Harness.
 //
 // Architecturally distinct from the bundled `training` and `vn` presets:
 // no calendar, no day/slot, no end-conditions. Just two modes managed by
@@ -28,8 +28,8 @@ import {
   fireOnSessionStart,
   markScriptCompleted,
   runScript,
-} from "@autogal/engine";
-import type { Action, Input, Output, PresetContext } from "@autogal/engine";
+} from "@rpg-harness/engine";
+import type { Action, Input, Output, PresetContext } from "@rpg-harness/engine";
 
 
 export default raidRun;

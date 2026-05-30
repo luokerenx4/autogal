@@ -1,4 +1,4 @@
-import type { ActionHandler } from "@autogal/engine";
+import type { ActionHandler } from "@rpg-harness/engine";
 
 // "Sleep" action kind handler. Restore physical-family stats to their
 // max + apply the action's other effects from yaml (mental/spectral

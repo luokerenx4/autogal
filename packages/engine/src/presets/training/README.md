@@ -44,9 +44,9 @@ preset's run function and includes the `trainingPreset` Module.
 To eject and customize the loop:
 
 ```bash
-autogal init my-game --preset training --eject
+rpgh init my-game --preset training --eject
 # → copies run.ts (+ module.ts / hub.ts / sleepHandler.ts) into
-#   my-game/preset/, with imports rewritten to @autogal/engine.
+#   my-game/preset/, with imports rewritten to @rpg-harness/engine.
 #   my-game/game.yaml sets `preset: ./preset/run.ts`.
 ```
 

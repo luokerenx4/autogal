@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import type { AssetSpec } from "@autogal/engine";
+import type { AssetSpec } from "@rpg-harness/engine";
 import { getColorLevel } from "./terminalCaps";
 
 // Selection result for one TUI-bound asset rendering. `kind` discriminates

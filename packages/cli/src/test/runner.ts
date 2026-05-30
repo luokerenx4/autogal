@@ -1,7 +1,7 @@
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import { createInitialState, runLoop } from "@autogal/engine";
-import type { Game } from "@autogal/engine";
+import { createInitialState, runLoop } from "@rpg-harness/engine";
+import type { Game } from "@rpg-harness/engine";
 import { type Assertion, type Fixture, mergeState, parseFixture } from "./fixture";
 import { type AssertionFailure, runAssertions } from "./assertions";
 

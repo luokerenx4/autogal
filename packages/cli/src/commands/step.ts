@@ -1,5 +1,5 @@
-import { step } from "@autogal/engine";
-import type { Input } from "@autogal/engine";
+import { step } from "@rpg-harness/engine";
+import type { Input } from "@rpg-harness/engine";
 import { loadGame } from "../loader";
 import { joinVisualState } from "../presenters/visualSummary";
 import { appendLog, loadSession, saveSession } from "../session";

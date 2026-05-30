@@ -1,4 +1,4 @@
-// `autogal screenshot` — drive the TUI inside a real PTY, replay a key
+// `rpgh screenshot` — drive the TUI inside a real PTY, replay a key
 // sequence, then dump the rendered terminal as plain text. Closes the
 // CLI rendering test loop: engine + step + peek cover JSON output;
 // this covers what the user actually SEES on screen.

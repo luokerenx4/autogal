@@ -1,4 +1,4 @@
-import type { Condition, VariableValue } from "@autogal/engine";
+import type { Condition, VariableValue } from "@rpg-harness/engine";
 
 export class ConditionParseError extends Error {}
 

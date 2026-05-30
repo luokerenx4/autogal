@@ -22,16 +22,16 @@ interface PresetScaffold {
 
 // ============ shared (cross-preset) ============
 
-const README = (gameLine: string): string => `# 我的 autogal 游戏
+const README = (gameLine: string): string => `# 我的 RPG-Harness 游戏
 
-一个用 [autogal](https://github.com/luokerenx4/autogal) —— headless RPG Maker —— 做的游戏。引擎只管通用的资产 + state machine + lifecycle hook；游戏特有的玩法逻辑你自己写 \`modules/*.ts\`（或 eject 后改 \`preset/run.ts\`）。纯叙事 GalGame 只用 markdown 也能跑。
+一个用 [RPG-Harness](https://github.com/luokerenx4/rpg-harness) —— headless RPG Maker —— 做的游戏。引擎只管通用的资产 + state machine + lifecycle hook；游戏特有的玩法逻辑你自己写 \`modules/*.ts\`（或 eject 后改 \`preset/run.ts\`）。纯叙事 GalGame 只用 markdown 也能跑。
 ${gameLine}
 
 ## 玩
 
 \`\`\`bash
-autogal play .                          # 人玩（ink TUI）
-autogal autoplay . --persona greedy -v  # AI 玩
+rpgh play .                          # 人玩（ink TUI）
+rpgh autoplay . --persona greedy -v  # AI 玩
 \`\`\`
 
 ## 写
@@ -44,22 +44,22 @@ autogal autoplay . --persona greedy -v  # AI 玩
 - \`actions/\` — hub 上的动作（training 模式或自定义 module 用）
 - \`items/\` \`enemies/\` \`weapons/\` \`skills/\` — 可选的引擎资产
 - \`modules/\` — 可选的 ts module，写复杂玩法（action handler / trigger / lifecycle hook）
-- \`preset/\` — 可选，\`autogal init --eject\` 后落地的主循环
+- \`preset/\` — 可选，\`rpgh init --eject\` 后落地的主循环
 - \`tests/\` — 回归测试
 
 ## 测试
 
 \`\`\`bash
-autogal test .
+rpgh test .
 \`\`\`
 
 ## AI 协作
 
-把 autogal 仓库的 \`.claude/skills/\` 拷过来；AI 自动知道怎么玩这个游戏（\`autogal-player\` skill）和怎么帮你写新内容（\`autogal-author\` skill）。
+把 RPG-Harness 仓库的 \`.claude/skills/\` 拷过来；AI 自动知道怎么玩这个游戏（\`rpg-harness-player\` skill）和怎么帮你写新内容（\`rpg-harness-author\` skill）。
 `;
 
 const GITIGNORE = `# Player saves — local only
-.autogal/
+.rpg-harness/
 
 node_modules
 .DS_Store
@@ -77,7 +77,7 @@ defaultAffection: 0
 
 // ============ vn preset scaffold ============
 
-const VN_GAME_YAML = `title: 我的第一个 autogal 游戏
+const VN_GAME_YAML = `title: 我的第一个 RPG-Harness 游戏
 preset: vn
 `;
 
@@ -296,15 +296,15 @@ export async function initCommand(args: Args): Promise<void> {
 
   const display = args.dir;
   process.stdout.write(
-    `✓ created autogal game at ${display} (preset: ${args.preset}${args.eject ? ", ejected" : ""})\n\n` +
+    `✓ created RPG-Harness game at ${display} (preset: ${args.preset}${args.eject ? ", ejected" : ""})\n\n` +
       `  ${display}/\n` +
       scaffold.files.map((f) => `  ├── ${f.path}\n`).join("") +
       ejectNote +
       `\nnext:\n` +
       `  cd ${display}\n` +
-      `  autogal play .\n\n` +
+      `  rpgh play .\n\n` +
       `to enable AI co-authoring/playing in this folder:\n` +
-      `  cp -r <autogal-repo>/.claude .\n`,
+      `  cp -r <rpg-harness-repo>/.claude .\n`,
   );
 }
 
@@ -343,14 +343,14 @@ function locateEnginePresetDir(presetName: string): string {
 }
 
 // Rewrite `from "../../<anything>"` and `from "../../../<anything>"`
-// imports to `from "@autogal/engine"`. Sibling imports (`./xxx`) and
+// imports to `from "@rpg-harness/engine"`. Sibling imports (`./xxx`) and
 // existing package imports are left alone. The engine package
 // re-exports everything ejected presets need (primitives, types,
 // condition helpers, state utilities).
 function rewriteImportsForEject(source: string): string {
   return source
-    .replace(/from\s+"\.\.\/\.\.\/[^"]+"/g, 'from "@autogal/engine"')
-    .replace(/from\s+"\.\.\/\.\.\/\.\.\/[^"]+"/g, 'from "@autogal/engine"');
+    .replace(/from\s+"\.\.\/\.\.\/[^"]+"/g, 'from "@rpg-harness/engine"')
+    .replace(/from\s+"\.\.\/\.\.\/\.\.\/[^"]+"/g, 'from "@rpg-harness/engine"');
 }
 
 async function ensureEmpty(target: string, force: boolean): Promise<void> {

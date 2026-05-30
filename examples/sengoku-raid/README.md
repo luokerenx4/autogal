@@ -1,8 +1,8 @@
 # 妖刀奇譚 / Sengoku Raid
 
-一个用 [autogal](https://github.com/luokerenx4/autogal) 引擎做的**搜打撤 + GalGame**。日本战国时代，主角は家伝の妖刀使い、灵体化に追われながら鬼を斬る。
+一个用 [RPG-Harness](https://github.com/luokerenx4/rpg-harness) 引擎做的**搜打撤 + GalGame**。日本战国时代，主角は家伝の妖刀使い、灵体化に追われながら鬼を斬る。
 
-**autogal の旗艦サンプル**：本ゲームは引擎の主要 surface を**8割以上**実際に消費する — `Module` の 15 hook のうち 13 個、Condition AST 14 種のうち 12 種、`once: true` trigger、composite `all/any/not`、`selfSwitch`、`weapon.custom`、string variable、3 composite hook（reducer / first-wins / observer）。AI 作家がこのゲームを読めば、対応する引擎特性の「自然な使い方」が手に入る。
+**RPG-Harness の旗艦サンプル**：本ゲームは引擎の主要 surface を**8割以上**実際に消費する — `Module` の 15 hook のうち 13 個、Condition AST 14 種のうち 12 種、`once: true` trigger、composite `all/any/not`、`selfSwitch`、`weapon.custom`、string variable、3 composite hook（reducer / first-wins / observer）。AI 作家がこのゲームを読めば、対応する引擎特性の「自然な使い方」が手に入る。
 
 **Headless RPGMaker 形態**：游戏 loop 在 `preset/run.ts`（ejected）；地图 / 角色 / 道具 / 武器 / 技能 / 敌人 是 typed databases（6 種すべて使用）；戦闘 + raid 状態機 + module hook 都在 `modules/raid.ts`。**引擎 0 修改**。
 
@@ -11,10 +11,10 @@
 ## 玩
 
 ```bash
-autogal play .                                  # 自分で遊ぶ
-autogal autoplay . --persona extractor -v       # AI が「逃げ撤退」路線で遊ぶ
-autogal autoplay . --persona delver    -v       # AI が「直推 boss」路線で遊ぶ
-autogal test .                                  # fixture 回帰（31 個）
+rpgh play .                                  # 自分で遊ぶ
+rpgh autoplay . --persona extractor -v       # AI が「逃げ撤退」路線で遊ぶ
+rpgh autoplay . --persona delver    -v       # AI が「直推 boss」路線で遊ぶ
+rpgh test .                                  # fixture 回帰（31 個）
 ```
 
 ## 世界観 + 三つの軸

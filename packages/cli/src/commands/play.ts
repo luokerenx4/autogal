@@ -16,14 +16,14 @@ export async function playCommand(args: Args): Promise<void> {
     const candidates = await discoverGames(["./", "./examples"]);
     if (candidates.length === 0) {
       process.stderr.write(
-        "没找到任何 autogal 游戏（需要含 game.yaml 的目录）。\n用法: autogal play <game-dir>\n",
+        "没找到任何 RPG-Harness 游戏（需要含 game.yaml 的目录）。\n用法: rpgh play <game-dir>\n",
       );
       process.exit(2);
     }
     // Always show the picker, even for a single candidate — the picker
     // surface also exposes save sessions, so auto-picking robs the
     // player of the "新游戏 / 继续" choice. Explicit-path invocation
-    // (`autogal play <dir>`) skips the picker as before.
+    // (`rpgh play <dir>`) skips the picker as before.
     const picked = await pickGame(candidates);
     if (!picked) return;
     gameDir = picked.dir;

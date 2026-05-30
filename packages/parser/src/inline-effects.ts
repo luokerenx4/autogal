@@ -1,4 +1,4 @@
-import type { StateDelta } from "@autogal/engine";
+import type { StateDelta } from "@rpg-harness/engine";
 
 // Inline token grammar:
 //   +alice              → +1 alice.affection

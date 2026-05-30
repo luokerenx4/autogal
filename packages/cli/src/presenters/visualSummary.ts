@@ -1,4 +1,4 @@
-import type { AssetSpec, VisualState } from "@autogal/engine";
+import type { AssetSpec, VisualState } from "@rpg-harness/engine";
 
 // One resolved slot — the asset's path plus its placeholder text.
 // Placeholder is what headless consumers (AI players, CI scripts,

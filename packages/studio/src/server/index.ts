@@ -8,7 +8,7 @@
 // alongside these handlers.
 
 import path from "node:path";
-import { loadGame } from "@autogal/cli/loader";
+import { loadGame } from "@rpg-harness/cli/loader";
 import { handle } from "./handlers";
 
 interface StartArgs {

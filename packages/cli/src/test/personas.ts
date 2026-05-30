@@ -1,4 +1,4 @@
-import type { ComposedState, Input, Output } from "@autogal/engine";
+import type { ComposedState, Input, Output } from "@rpg-harness/engine";
 
 export type Persona = (
   output: Output,

@@ -1,4 +1,4 @@
-import type { SkillDef, StateDelta } from "@autogal/engine";
+import type { SkillDef, StateDelta } from "@rpg-harness/engine";
 import { extractCustom, splitFrontmatter } from "./frontmatter";
 import { parseCondition } from "./condition";
 import { desugarAffectionMap } from "./script";

@@ -5,8 +5,8 @@
     "": {
       "name": "autogal",
       "devDependencies": {
-        "@autogal/cli": "workspace:*",
-        "@autogal/engine": "workspace:*",
+        "@rpg-harness/cli": "workspace:*",
+        "@rpg-harness/engine": "workspace:*",
         "@types/bun": "latest",
         "@types/react": "^18.3.12",
         "@xterm/headless": "^6.0.0",
@@ -17,14 +17,14 @@
       },
     },
     "packages/cli": {
-      "name": "@autogal/cli",
+      "name": "@rpg-harness/cli",
       "version": "0.0.0",
       "bin": {
-        "autogal": "./src/bin.ts",
+        "rpgh": "./src/bin.ts",
       },
       "dependencies": {
-        "@autogal/engine": "workspace:*",
-        "@autogal/parser": "workspace:*",
+        "@rpg-harness/engine": "workspace:*",
+        "@rpg-harness/parser": "workspace:*",
         "ink": "^5.0.1",
         "react": "^18.3.1",
         "yaml": "^2.6.1",
@@ -34,25 +34,25 @@
       },
     },
     "packages/engine": {
-      "name": "@autogal/engine",
+      "name": "@rpg-harness/engine",
       "version": "0.0.0",
     },
     "packages/parser": {
-      "name": "@autogal/parser",
+      "name": "@rpg-harness/parser",
       "version": "0.0.0",
       "dependencies": {
-        "@autogal/engine": "workspace:*",
+        "@rpg-harness/engine": "workspace:*",
         "gray-matter": "^4.0.3",
         "yaml": "^2.6.1",
       },
     },
     "packages/studio": {
-      "name": "@autogal/studio",
+      "name": "@rpg-harness/studio",
       "version": "0.0.0",
       "dependencies": {
-        "@autogal/cli": "workspace:*",
-        "@autogal/engine": "workspace:*",
-        "@autogal/parser": "workspace:*",
+        "@rpg-harness/cli": "workspace:*",
+        "@rpg-harness/engine": "workspace:*",
+        "@rpg-harness/parser": "workspace:*",
         "ansi-to-html": "^0.7.2",
         "react": "^18.3.1",
         "react-dom": "^18.3.1",
@@ -68,14 +68,6 @@
   },
   "packages": {
     "@alcalzone/ansi-tokenize": ["@alcalzone/ansi-tokenize@0.1.3", "", { "dependencies": { "ansi-styles": "^6.2.1", "is-fullwidth-code-point": "^4.0.0" } }, "sha512-3yWxPTq3UQ/FY9p1ErPxIyfT64elWaMvM9lIHnaqpyft63tkxodF5aUElYHrdisWve5cETkh1+KBw1yJuW0aRw=="],
-
-    "@autogal/cli": ["@autogal/cli@workspace:packages/cli"],
-
-    "@autogal/engine": ["@autogal/engine@workspace:packages/engine"],
-
-    "@autogal/parser": ["@autogal/parser@workspace:packages/parser"],
-
-    "@autogal/studio": ["@autogal/studio@workspace:packages/studio"],
 
     "@babel/code-frame": ["@babel/code-frame@7.29.7", "", { "dependencies": { "@babel/helper-validator-identifier": "^7.29.7", "js-tokens": "^4.0.0", "picocolors": "^1.1.1" } }, "sha512-Aup7aUOfpbAUg2ROOJN6Iw5f9DMBlzu0mIkm/malLQFN/YQgO48wCj0Kxa3sEHJvPVFg7siR+qRInwXd2qhQKw=="],
 
@@ -224,6 +216,14 @@
     "@rollup/rollup-win32-x64-gnu": ["@rollup/rollup-win32-x64-gnu@4.60.4", "", { "os": "win32", "cpu": "x64" }, "sha512-DRS4G7mi9lJxqEDezIkKCaUIKCrLUUDCUaCsTPCi/rtqaC6D/jjwslMQyiDU50Ka0JKpeXeRBFBAXwArY52vBw=="],
 
     "@rollup/rollup-win32-x64-msvc": ["@rollup/rollup-win32-x64-msvc@4.60.4", "", { "os": "win32", "cpu": "x64" }, "sha512-QVTUovf40zgTqlFVrKA1uXMVvU2QWEFWfAH8Wdc48IxLvrJMQVMBRjuQyUpzZCDkakImib9eVazbWlC6ksWtJw=="],
+
+    "@rpg-harness/cli": ["@rpg-harness/cli@workspace:packages/cli"],
+
+    "@rpg-harness/engine": ["@rpg-harness/engine@workspace:packages/engine"],
+
+    "@rpg-harness/parser": ["@rpg-harness/parser@workspace:packages/parser"],
+
+    "@rpg-harness/studio": ["@rpg-harness/studio@workspace:packages/studio"],
 
     "@types/babel__core": ["@types/babel__core@7.20.5", "", { "dependencies": { "@babel/parser": "^7.20.7", "@babel/types": "^7.20.7", "@types/babel__generator": "*", "@types/babel__template": "*", "@types/babel__traverse": "*" } }, "sha512-qoQprZvz5wQFJwMDqeseRXWv3rqMvhgpbXFfVyWhbx9X47POIA6i/+dXefEmZKoAgOaTdaIgNSMqMIU61yRyzA=="],
 

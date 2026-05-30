@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { Game } from "@autogal/engine";
+import type { Game } from "@rpg-harness/engine";
 import { GameValidationError, validateGame } from "./validate";
 
 // Minimal valid Game scaffold for validator tests. Each test layers on

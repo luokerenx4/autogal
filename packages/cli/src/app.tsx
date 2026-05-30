@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useApp } from "ink";
-import type { Game } from "@autogal/engine";
+import type { Game } from "@rpg-harness/engine";
 import { HubScreen } from "./components/HubScreen";
 import { PlayScreen } from "./components/PlayScreen";
 import { InGameMenu } from "./components/InGameMenu";

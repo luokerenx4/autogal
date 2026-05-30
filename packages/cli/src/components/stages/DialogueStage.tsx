@@ -1,6 +1,6 @@
 import React from "react";
 import { Box, Text } from "ink";
-import type { AssetSpec, VisualState } from "@autogal/engine";
+import type { AssetSpec, VisualState } from "@rpg-harness/engine";
 import { Stage } from "./visual/Stage";
 
 interface Props {

@@ -1,5 +1,5 @@
 {
-  "name": "@autogal/parser",
+  "name": "@rpg-harness/parser",
   "version": "0.0.0",
   "description": "Markdown + YAML → Engine AST. Pure, no filesystem.",
   "type": "module",
@@ -9,7 +9,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@autogal/engine": "workspace:*",
+    "@rpg-harness/engine": "workspace:*",
     "gray-matter": "^4.0.3",
     "yaml": "^2.6.1"
   },

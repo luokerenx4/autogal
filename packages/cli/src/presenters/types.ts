@@ -11,7 +11,7 @@
 // the view string through.
 
 import type { ReactNode } from "react";
-import type { RenderedChoice } from "@autogal/engine";
+import type { RenderedChoice } from "@rpg-harness/engine";
 import type { KeyEvent, KeyResult } from "../stage-input";
 
 export interface ChoicePresenterProps {

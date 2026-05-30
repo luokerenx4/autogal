@@ -5,7 +5,7 @@ import type {
   Condition,
   MapConnection,
   MapDef,
-} from "@autogal/engine";
+} from "@rpg-harness/engine";
 import { parseActionSpec } from "./action";
 
 export class MapParseError extends Error {}

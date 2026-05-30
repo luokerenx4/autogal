@@ -1,4 +1,4 @@
-import type { ItemDef, StateDelta } from "@autogal/engine";
+import type { ItemDef, StateDelta } from "@rpg-harness/engine";
 import { extractCustom, splitFrontmatter } from "./frontmatter";
 import { desugarAffectionMap, mergeCharacterStats } from "./script";
 

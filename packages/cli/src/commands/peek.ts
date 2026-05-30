@@ -1,4 +1,4 @@
-import { peek } from "@autogal/engine";
+import { peek } from "@rpg-harness/engine";
 import { loadGame } from "../loader";
 import { joinVisualState } from "../presenters/visualSummary";
 import { loadSession } from "../session";

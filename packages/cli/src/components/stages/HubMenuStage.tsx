@@ -1,6 +1,6 @@
 import React from "react";
 import { Box } from "ink";
-import type { HubSnapshot } from "@autogal/engine";
+import type { HubSnapshot } from "@rpg-harness/engine";
 import { HubMenu } from "../HubMenu";
 
 interface Props {

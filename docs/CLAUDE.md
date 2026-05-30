@@ -1,4 +1,4 @@
-# Working on autogal
+# Working on RPG-Harness
 
 This file is for AI co-authors (Claude Code, Cursor, …) picking up this codebase. For human-facing architectural context, read `docs/ARCHITECTURE.md` first — it gives you the layering, the resource database, and the lifecycle hooks. This file is operational: where things live, what the hard rules are, how to extend without breaking.
 
@@ -8,9 +8,9 @@ A headless RPG Maker — an AI-first coding harness for GalGame-shaped games. A 
 
 Three packages, never cross-import internals:
 
-- `@autogal/engine` — pure state machine. No React, no DOM, no Node-specific APIs (no `fs`, no `process`). Pure data in, pure events out. Owns the standard resource schemas (characters / items / enemies / weapons / skills), the Condition DSL, StateDelta, the Module interface (action handlers + 15 lifecycle hooks + reactive triggers), and the primitives that compose into preset loops.
-- `@autogal/parser` — markdown + YAML frontmatter → Game AST. One file per resource type.
-- `@autogal/cli` — terminal frontend (ink) + loader + test harness + `init --eject`.
+- `@rpg-harness/engine` — pure state machine. No React, no DOM, no Node-specific APIs (no `fs`, no `process`). Pure data in, pure events out. Owns the standard resource schemas (characters / items / enemies / weapons / skills), the Condition DSL, StateDelta, the Module interface (action handlers + 15 lifecycle hooks + reactive triggers), and the primitives that compose into preset loops.
+- `@rpg-harness/parser` — markdown + YAML frontmatter → Game AST. One file per resource type.
+- `@rpg-harness/cli` — terminal frontend (ink) + loader + test harness + `init --eject`.
 
 ## Hard rules
 
@@ -29,10 +29,10 @@ Three packages, never cross-import internals:
 Engine/parser/schema changes outrun docs by default — readers and future AI co-authors then work from stale information. When a PR changes behavior or shape, the docs update ships in the **same** PR, not as follow-up. Checklist:
 
 1. **Engine schema** (new field on a `Def`, new `StateDelta` slot, new `Output` / `Input` variant, new `Condition` operator) → update `docs/ARCHITECTURE.md` resource table / relevant section.
-2. **New frontmatter convention** (new fields in an asset format, new beat syntax, new effect shape) → update `.claude/skills/autogal-author/SKILL.md` so AI authors discover it.
+2. **New frontmatter convention** (new fields in an asset format, new beat syntax, new effect shape) → update `.claude/skills/rpg-harness-author/SKILL.md` so AI authors discover it.
 3. **New game-mode shape** (a fundamentally different preset / hub pattern, like sengoku-raid's raid-as-mode) → add `examples/<game>/README.md` AND extend the "game modes" section of top-level `README.md`.
 4. **New hard rule or repeating pattern** (something other modules should copy, like the `.custom` field passthrough) → add to this file's "Hard rules" or "Common tasks".
-5. Run the full fixture suite (`bun run autogal test examples/<each>`) and typecheck for every package before opening the PR.
+5. Run the full fixture suite (`bun run rpgh test examples/<each>`) and typecheck for every package before opening the PR.
 
 Precedents to imitate: commit `cd02df8` ("docs: sediment architecture + co-author docs to reflect post-PR-#7 reality") updated three docs in one go after PR #7. PR #12 (sengoku-raid + custom field + dispatcher hygiene) was the exception this checklist exists to prevent.
 
@@ -78,11 +78,11 @@ packages/parser/src/
   inline-effects.ts     effects: blocks inside scripts / actions
 
 packages/cli/src/
-  index.ts              `autogal` binary entry — argv routing
+  index.ts              `rpgh` binary entry — argv routing
   loader.ts             game-folder → Game (calls parsers, dynamic-imports modules + preset)
   app.tsx               ink root component
   interactor.ts         ink events → engine Input
-  init.ts               `autogal init --preset --eject`
+  init.ts               `rpgh init --preset --eject`
   test.ts               fixture runner
   autoplay.ts           persona-driven headless playthrough
   components/           ink widgets
@@ -128,7 +128,7 @@ Follow the pattern established by `Item` / `Enemy` / `Weapon` / `Skill`:
 11. **`packages/parser/src/index.ts`** — extend `buildGame` signature.
 12. **`packages/cli/src/loader.ts`** — scan the new directory.
 13. **`examples/sengoku-raid/`** — add demo content + at least one fixture exercising the read AND write paths.
-14. **`.claude/skills/autogal-author/SKILL.md`** — document the file format for AI authors.
+14. **`.claude/skills/rpg-harness-author/SKILL.md`** — document the file format for AI authors.
 
 Recent precedents: read the diffs for commits `cb7b9f3` (items), `0220799` (enemies), `6470ff8` (weapons), `c2efdb5` (skills). They're the template.
 
@@ -184,7 +184,7 @@ See `examples/sengoku-raid/modules/raid.ts` for the canonical pattern: action ha
 
 ## Testing
 
-`bun test` runs the in-tree unit tests. `bun run autogal test <game-folder>` runs all `tests/*.yaml` fixtures. CI runs both for `sengoku-raid`, `hook-test`, and `eject-test` on every PR, plus `scripts/test-validate-negative.sh` for `_invalid_typo`.
+`bun test` runs the in-tree unit tests. `bun run rpgh test <game-folder>` runs all `tests/*.yaml` fixtures. CI runs both for `sengoku-raid`, `hook-test`, and `eject-test` on every PR, plus `scripts/test-validate-negative.sh` for `_invalid_typo`.
 
 The engine is testable without ink: instantiate `new Engine(game)`, push synthetic inputs, assert on yielded outputs. Fixture infrastructure does exactly that.
 

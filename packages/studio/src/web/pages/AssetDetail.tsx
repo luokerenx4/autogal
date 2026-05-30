@@ -16,7 +16,8 @@ import {
   fetchTuiTxt,
   patchSpec,
   renderTui,
-  sourceImageUrl,
+  sourceCompressedImageUrl,
+  sourceQualityImageUrl,
   uploadSource,
 } from "../api";
 import type { PatchableSpecFields } from "../api";
@@ -130,9 +131,17 @@ const DITHER_OPTIONS: DitherOpt[] = [
   },
 ];
 
+// Human-readable bytes formatter for the source-tier size labels.
+// Picks B / KB / MB at the natural breakpoints; one decimal for K/M.
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 // Asset detail. Two-column layout:
 //   left  — spec metadata (kind, refs, size_hint, tags, placeholder)
-//   right — prompt (copyable) + previews (source.quality.png, tui.txt)
+//   right — prompt (copyable) + tier-aware source previews + tui.txt
 //
 // The route path is `/asset/<asset-path>` where <asset-path> may
 // itself contain slashes (e.g. "assets/portraits/kagari-smile").
@@ -475,7 +484,12 @@ export function AssetDetail() {
   };
 
   const chafaPresent = health?.chafa.present ?? false;
-  const canRender = asset.renderings.source && chafaPresent && busy === null;
+  // chafa wants the high-res master, not the lossy compressed copy.
+  // If the author has only a compressed file (e.g. cloned the repo
+  // without ever generating their own quality master), regenerating
+  // tui.* from it would lock in compression artifacts.
+  const canRender =
+    asset.renderings.sourceQuality && chafaPresent && busy === null;
 
   return (
     <Layout backTo="/">
@@ -724,8 +738,11 @@ export function AssetDetail() {
               <span className={"flag" + (asset.renderings.tuiTxt ? " present" : "")}>
                 tui.txt
               </span>
-              <span className={"flag" + (asset.renderings.source ? " present" : "")}>
+              <span className={"flag" + (asset.renderings.sourceQuality ? " present" : "")}>
                 source.quality.png
+              </span>
+              <span className={"flag" + (asset.renderings.sourceCompressed ? " present" : "")}>
+                source.compressed.*
               </span>
               <span className={"flag" + (asset.renderings.web ? " present" : "")}>
                 web.*
@@ -757,17 +774,29 @@ export function AssetDetail() {
             )}
           </div>
 
+          {/* source.quality.png — author's high-res master (gitignored).
+              Uploadable; chafa renders TUI from here.                 */}
           <div className="detail-section" style={{ marginTop: 16 }}>
-            <h2 style={{ display: "flex", justifyContent: "space-between" }}>
-              <span>source.quality.png</span>
+            <h2 style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+              <span>
+                source.quality.png
+                {asset.sourceQualityBytes !== undefined && (
+                  <span className="muted" style={{ marginLeft: 8, fontSize: 12 }}>
+                    {formatBytes(asset.sourceQualityBytes)}
+                  </span>
+                )}
+              </span>
               <button
                 className="btn"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={busy !== null}
               >
-                {asset.renderings.source ? "replace" : "upload"}
+                {asset.renderings.sourceQuality ? "replace" : "upload"}
               </button>
             </h2>
+            <div className="muted" style={{ fontSize: 12, marginBottom: 8 }}>
+              author master · gitignored · local + personal backup only · chafa input
+            </div>
             <input
               ref={fileInputRef}
               type="file"
@@ -782,11 +811,11 @@ export function AssetDetail() {
               onDragOver={(e) => e.preventDefault()}
               onDrop={onDrop}
             >
-              {asset.renderings.source ? (
+              {asset.renderings.sourceQuality ? (
                 <img
                   // Cache-bust on cacheKey so a re-upload of the same
                   // path doesn't show the stale browser-cached image.
-                  src={`${sourceImageUrl(asset.path)}?v=${cacheKey}`}
+                  src={`${sourceQualityImageUrl(asset.path)}?v=${cacheKey}`}
                   alt={asset.placeholder}
                 />
               ) : (
@@ -800,6 +829,48 @@ export function AssetDetail() {
             </div>
           </div>
 
+          {/* source.compressed.* — distribution copy that travels with
+              the repo. Read-only here for now; produced offline via
+              cwebp / pngquant per skill convention.                   */}
+          <div className="detail-section" style={{ marginTop: 16 }}>
+            <h2 style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+              <span>
+                source.compressed.*
+                {asset.sourceCompressedBytes !== undefined && (
+                  <span className="muted" style={{ marginLeft: 8, fontSize: 12 }}>
+                    {formatBytes(asset.sourceCompressedBytes)}
+                    {asset.sourceQualityBytes !== undefined && (
+                      <>
+                        {" · "}
+                        {(
+                          (asset.sourceCompressedBytes / asset.sourceQualityBytes) *
+                          100
+                        ).toFixed(1)}
+                        % of master
+                      </>
+                    )}
+                  </span>
+                )}
+              </span>
+            </h2>
+            <div className="muted" style={{ fontSize: 12, marginBottom: 8 }}>
+              distribution copy · tracked in git · cwebp / pngquant output · web frontend input
+            </div>
+            <div className="preview-img">
+              {asset.renderings.sourceCompressed ? (
+                <img
+                  src={`${sourceCompressedImageUrl(asset.path)}?v=${cacheKey}`}
+                  alt={asset.placeholder + " (compressed)"}
+                />
+              ) : (
+                <div className="empty" style={{ padding: 32 }}>
+                  no compressed copy. run{" "}
+                  <code>cwebp -q 80 source.quality.png -o source.compressed.webp</code>
+                </div>
+              )}
+            </div>
+          </div>
+
           <div className="detail-section" style={{ marginTop: 16 }}>
             <h2 style={{ display: "flex", justifyContent: "space-between" }}>
               <span>tui.txt</span>
@@ -808,7 +879,7 @@ export function AssetDetail() {
                 onClick={handleRender}
                 disabled={!canRender}
                 title={
-                  !asset.renderings.source
+                  !asset.renderings.sourceQuality
                     ? "upload source.quality.png first"
                     : !chafaPresent
                       ? "chafa not installed — brew install chafa"

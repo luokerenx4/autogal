@@ -1,4 +1,4 @@
-import { readFile, rename, unlink, writeFile } from "node:fs/promises";
+import { readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { AssetSpec, TuiRenderPrefs } from "@rpg-harness/engine";
 import { loadGame } from "@rpg-harness/cli/loader";
@@ -33,7 +33,7 @@ export async function handle(req: Request, ctx: Ctx): Promise<Response> {
     // arbitrary fs paths here — only what an AssetSpec.renderings field
     // resolves to.
     const fileMatch = pathname.match(
-      /^\/files\/(source|tui-txt|tui-ans|web)\/(.+)$/,
+      /^\/files\/(source|source-quality|source-compressed|tui-txt|tui-ans|web)\/(.+)$/,
     );
     if (fileMatch && fileMatch[1] && fileMatch[2]) {
       return getFile(ctx, fileMatch[1], fileMatch[2]);
@@ -82,7 +82,9 @@ async function getAssets(ctx: Ctx): Promise<Response> {
   // simple availability map — the web client doesn't need absolute
   // file paths (those are server-internal). For actual bytes, the
   // client GETs /files/<slot>/<asset-path>.
-  const rows = (game.assets ?? []).map((a) => projectAsset(a));
+  const rows = await Promise.all(
+    (game.assets ?? []).map((a) => projectAsset(a)),
+  );
   return json(rows);
 }
 
@@ -90,10 +92,17 @@ async function getAssetSpec(ctx: Ctx, assetPath: string): Promise<Response> {
   const game = await loadGame(ctx.gameDir);
   const spec = (game.assets ?? []).find((a) => a.path === assetPath);
   if (!spec) return json({ error: "asset not found" }, 404);
-  return json(projectAsset(spec));
+  return json(await projectAsset(spec));
 }
 
-function projectAsset(a: AssetSpec) {
+async function projectAsset(a: AssetSpec) {
+  // Tier file sizes for studio's compression-comparison UI. fs.stat
+  // is cheap; we already touched these files during the loader walk
+  // so the OS cache is warm. Missing slot → undefined size.
+  const [qBytes, cBytes] = await Promise.all([
+    statBytes(a.renderings.sourceQuality),
+    statBytes(a.renderings.sourceCompressed),
+  ]);
   return {
     path: a.path,
     kind: a.kind,
@@ -107,11 +116,24 @@ function projectAsset(a: AssetSpec) {
     ...(a.tuiRender !== undefined ? { tuiRender: a.tuiRender } : {}),
     renderings: {
       source: a.renderings.source !== undefined,
+      sourceQuality: a.renderings.sourceQuality !== undefined,
+      sourceCompressed: a.renderings.sourceCompressed !== undefined,
       tuiTxt: a.renderings.tuiTxt !== undefined,
       tuiAns: a.renderings.tuiAns !== undefined,
       web: a.renderings.web !== undefined,
     },
+    ...(qBytes !== undefined ? { sourceQualityBytes: qBytes } : {}),
+    ...(cBytes !== undefined ? { sourceCompressedBytes: cBytes } : {}),
   };
+}
+
+async function statBytes(abs: string | undefined): Promise<number | undefined> {
+  if (!abs) return undefined;
+  try {
+    return (await stat(abs)).size;
+  } catch {
+    return undefined;
+  }
 }
 
 async function getFile(
@@ -150,6 +172,8 @@ function slotPath(
   slot: string,
 ): string | undefined {
   if (slot === "source") return spec.renderings.source;
+  if (slot === "source-quality") return spec.renderings.sourceQuality;
+  if (slot === "source-compressed") return spec.renderings.sourceCompressed;
   if (slot === "tui-txt") return spec.renderings.tuiTxt;
   if (slot === "tui-ans") return spec.renderings.tuiAns;
   if (slot === "web") return spec.renderings.web;
@@ -369,7 +393,7 @@ async function projectedAssetResponse(
   const game = await loadGame(ctx.gameDir);
   const spec = (game.assets ?? []).find((a) => a.path === assetPath);
   if (!spec) return json({ error: "asset disappeared" }, 500);
-  return json(projectAsset(spec));
+  return json(await projectAsset(spec));
 }
 
 async function readUploadedImage(req: Request): Promise<Uint8Array | null> {

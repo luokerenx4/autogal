@@ -38,10 +38,16 @@ export interface AssetRow {
   tuiRender?: TuiRenderPrefs;
   renderings: {
     source: boolean;
+    sourceQuality: boolean;
+    sourceCompressed: boolean;
     tuiTxt: boolean;
     tuiAns: boolean;
     web: boolean;
   };
+  // File sizes for source tier slots — used to show compression
+  // ratio in studio's dual preview. Undefined when slot empty.
+  sourceQualityBytes?: number;
+  sourceCompressedBytes?: number;
 }
 
 // Subset of AssetRow the studio is allowed to mutate via PATCH.
@@ -80,8 +86,20 @@ export async function fetchAsset(assetPath: string): Promise<AssetRow> {
 // PNG. The browser's image cache + content-type handling does the
 // rest. Returns undefined for assets with no source file (caller
 // falls back to a placeholder UI).
+//
+// `sourceImageUrl` is the "best pick" (quality > compressed) — kept
+// for callers that just want one image. The tier-specific helpers
+// below are what studio's dual-preview uses.
 export function sourceImageUrl(assetPath: string): string {
   return `/files/source/${assetPath}`;
+}
+
+export function sourceQualityImageUrl(assetPath: string): string {
+  return `/files/source-quality/${assetPath}`;
+}
+
+export function sourceCompressedImageUrl(assetPath: string): string {
+  return `/files/source-compressed/${assetPath}`;
 }
 
 export async function fetchTuiTxt(assetPath: string): Promise<string> {

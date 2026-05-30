@@ -465,7 +465,7 @@ export interface AssetRenderings {
   // tui.txt — plain text rendering (ASCII art). TUI fallback when
   // tui.ans is absent.
   tuiTxt?: string;
-  // Source image, two-tier convention:
+  // Source image — three slots for one tier convention:
   //   source.quality.png        — author's high-res master (gitignored,
   //                                stays local; used by author-side
   //                                tooling like chafa re-render)
@@ -473,13 +473,18 @@ export interface AssetRenderings {
   //                              — slimmed distribution copy that ships
   //                                with the repo; first-launch visual
   //                                fallback for cloners
-  // Loader (cli/loader.ts) picks quality first, falls back to
-  // compressed (in webp/png/jpg/jpeg priority), populates this slot
-  // with whichever it found. Not currently consumed by any built-in
-  // frontend (TUI uses tui.*); reserved for the future web renderer
-  // and for tooling that re-renders downstream variants from a
-  // single source.
+  // Loader populates the two tier-specific slots independently with
+  // whichever file(s) it finds, then sets `source` to the "best pick"
+  // (sourceQuality if present, else sourceCompressed) for callers that
+  // just want "give me an image, any image" — chafa render and the
+  // existing renderings.source consumers fall into that category.
+  // The future web renderer + studio's tier-aware preview consume
+  // `sourceQuality` and `sourceCompressed` directly so they can show
+  // both side by side and let the author compare compression loss.
+  // Not consumed by the TUI (which uses tui.*).
   source?: string;
+  sourceQuality?: string;
+  sourceCompressed?: string;
   // web.webp / web.png — frontend-specific. Not currently consumed by
   // any built-in frontend; reserved for a future web renderer.
   web?: string;

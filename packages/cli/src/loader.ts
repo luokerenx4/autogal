@@ -247,24 +247,26 @@ async function discoverRenderings(assetDir: string): Promise<AssetRenderings> {
   // by default; lives on the author's machine and on their private
   // backup branch). The `*.compressed.*` file is the slimmed-down
   // distribution copy that travels with the repo so cloners get a
-  // working out-of-the-box visual experience. Loader prefers quality
-  // when present, falls back to compressed, falls back to undefined
-  // (TUI still works via tui.*; placeholder text covers the rest).
-  // Both tiers accept multiple formats — PNG for masters (lossless
-  // generator output) and any of webp/png/jpg for compressed (mirror
-  // of the existing web.* slot's format flexibility).
+  // working out-of-the-box visual experience. Loader populates the
+  // two tier slots independently so studio / a future web renderer
+  // can show both side-by-side and compare; `out.source` is set to
+  // the "best pick" (quality > compressed) for legacy consumers that
+  // just want "give me an image, any image" (chafa render, etc.).
+  // Both tiers fall back to undefined when absent — TUI still works
+  // via tui.*; placeholder text covers the rest.
+  // Compressed tier accepts multiple formats — PNG for masters
+  // (lossless generator output) and any of webp/png/jpg for
+  // compressed (mirror of the existing web.* slot's format flexibility).
   const quality = await tryFile("source.quality.png");
-  if (quality) {
-    out.source = quality;
-  } else {
-    for (const ext of ["webp", "png", "jpg", "jpeg"]) {
-      const c = await tryFile(`source.compressed.${ext}`);
-      if (c) {
-        out.source = c;
-        break;
-      }
+  if (quality) out.sourceQuality = quality;
+  for (const ext of ["webp", "png", "jpg", "jpeg"]) {
+    const c = await tryFile(`source.compressed.${ext}`);
+    if (c) {
+      out.sourceCompressed = c;
+      break;
     }
   }
+  out.source = out.sourceQuality ?? out.sourceCompressed;
   // Web slot accepts any of webp/png/jpg, in that priority. First match wins.
   for (const ext of ["webp", "png", "jpg", "jpeg"]) {
     const w = await tryFile(`web.${ext}`);

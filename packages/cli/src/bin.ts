@@ -68,9 +68,11 @@ COMMANDS
   studio   <game-dir> [--api-port N] [--web-port N] [--no-open]
       Launch the browser-based authoring workbench. Boots an API
       server + Vite dev server, opens the browser to the asset
-      gallery. v1 is read-only: browse specs, see thumbnails, copy
-      generation prompts. Write operations (upload PNG, chafa →
-      tui.txt) land in a future iteration.
+      gallery. Browse specs, view thumbnails, copy generation
+      prompts, upload source PNGs, regenerate tui.{ans,txt} via
+      chafa, inline-edit spec.yaml. Ports default to 4174 (api) /
+      5173 (web); both auto-fall-back to the next free slot if the
+      default is occupied.
 
   screenshot <game-dir> [--keys "K1,K2,..."] [--cols N] [--rows N]
              [--wait-ms N] [--out FILE]

@@ -1,11 +1,12 @@
 // Studio backend. Plain Bun.serve — no Express, no framework. The
 // surface is small (a handful of GET endpoints reading game data
-// off disk + a couple of static file serves) and the runtime is
-// already bun, so a framework would be pure overhead.
+// off disk + a couple of file write/serve routes) and the runtime
+// is already bun, so a framework would be pure overhead.
 //
-// v1 is read-only: nothing here mutates the game directory. Write
-// operations (upload, chafa render) belong to v2 and will live
-// alongside these handlers.
+// Mutates the game directory: POST /api/assets/<path>/source writes
+// source.quality.png; POST .../render-tui shells out to chafa to
+// regenerate tui.{ans,txt}; POST .../spec writes spec.yaml via the
+// YAML Document API so author-side comments + key ordering survive.
 
 import path from "node:path";
 import { loadGame } from "@rpg-harness/cli/loader";

@@ -13,10 +13,12 @@ prompt: |
   Moon blue, black, indigo, muted red accents, uncluttered background, 16:9.
 placeholder: "[CG] 月下の中庭で、篝・霞・澪が三花の盟を立てる"
 refs:
-  characters: [kagari, kasumi, mio, player]
+  characters: [ kagari, kasumi, mio, player ]
   location: edo-castle
   time: 深夜
 size_hint:
   tui: { cols: 80, rows: 30 }
   web: { aspect: "16:9" }
-tags: [bond, alliance, key-moment]
+tags: [ bond, alliance, key-moment ]
+tui_render:
+  colors: "16"

@@ -13,10 +13,13 @@ prompt: |
   Candlelight from above, deep shadows.
 placeholder: "[CG] 巻物が解かれ、最初の任地'黒沼地'の札が露わになる瞬間"
 refs:
-  characters: [player]
+  characters: [ player ]
   location: edo-castle
   time: 黄昏
 size_hint:
   tui: { cols: 80, rows: 30 }
   web: { aspect: "16:9" }
-tags: [chapter-1, key-moment]
+tags: [ chapter-1, key-moment ]
+tui_render:
+  symbols: half
+  colors: "16"

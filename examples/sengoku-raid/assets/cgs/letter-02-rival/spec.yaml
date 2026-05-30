@@ -13,10 +13,13 @@ prompt: |
   16:9.
 placeholder: "[CG] 深い藍の打掛の澪が、中庭で査問のため顔を上げる"
 refs:
-  characters: [mio, player]
+  characters: [ mio, player ]
   location: edo-castle
   time: 夕刻
 size_hint:
   tui: { cols: 80, rows: 30 }
   web: { aspect: "16:9" }
-tags: [chapter-2, character-intro, mio]
+tags: [ chapter-2, character-intro, mio ]
+tui_render:
+  symbols: half
+  colors: "16"
